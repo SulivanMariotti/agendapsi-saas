@@ -1,24 +1,14 @@
-# Próximos passos — backlog imediato (a partir do Passo 14)
+# Próximos passos — checklist rápido
 
-## Passo 14 — Logs de falha com slot/campanha
-Objetivo: falhas não caírem em “Sem slot” no agrupamento do Histórico.
-Ações:
-- No ponto onde o sistema registra `push_reminder_failed`, incluir:
-  - `reminderType` (ex.: `slot1_48h`, `slot2_24h`, `slot3_manha` ou equivalente),
-  - e/ou `slot` padronizado (`slot1|slot2|slot3`),
-  - e campos auxiliares úteis: `appointmentId`, `patientId`, `phoneCanonical`.
-Resultado: agrupamento “Campanhas” fiel e auditável.
+## A) Produção (essencial)
+- Confirmar `config/global` com mensagens msg1/msg2/msg3 e títulos.
+- Validar `firebase-messaging-sw.js` atualizado (desregistrar SW no browser e recarregar).
+- Rodar limpeza de testes (apenas se for necessário):
+  - attendance: `node scripts/purgeAttendanceLogs.cjs --yes`
+  - histórico: `node scripts/purgeAttendanceLogs.cjs --collection=history --yes`
+  - auditoria: `node scripts/purgeAttendanceLogs.cjs --collection=audit_logs --yes`
 
-## Passo 15 — Histórico server-side (opcional, se crescer muito)
-Objetivo: filtros e paginação no servidor (menos payload).
-Ações:
-- Endpoint com cursor + filtros (período/tipo/status/canal), retornando batches.
-- UI consome batches e mantém rolagem interna.
-
-## Passo 16 — Polimento visual final Admin
-Objetivo: consistência do Design System.
-Ações:
-- revisar espaçamentos e tamanhos de chips/badges,
-- manter padrão lilás/alertas,
-- revisar responsividade.
-
+## B) Robustez (recomendado)
+- Idempotência por sessão+slot:
+  - gravar `appointments/{{id}}.reminders.slotX.sentAt` ao enviar, e checar antes de reenviar.
+- Melhorar preview no Admin para indicar “já enviado/ignorando”.

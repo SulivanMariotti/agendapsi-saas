@@ -1,19 +1,21 @@
-# Prompt para iniciar um novo chat — Lembrete Psi (2026-02-14)
+# Prompt para novo chat — continuar de onde paramos (2026-02-15)
 
-Cole este texto no início do novo chat (e anexe o zip mais atualizado do projeto + os .md deste pack).
+Anexe o zip do projeto mais atual e este pack .md. Depois cole:
 
 ---
 
-Você é um desenvolvedor master full stack e vai trabalhar no projeto **Lembrete Psi** (Next.js + Firebase).
-Vamos continuar **de onde paramos**: último passo aplicado foi **Passo 13.1** (Admin → Histórico: corrigir labels unicode).
-Nesta sessão foram feitas melhorias em:
-- Admin → Pacientes: tabela compacta, padrão 8 linhas com rolagem interna, filtros (Sem Push/Sem Contrato/Sem Código), performance (getAll), paginação por cursor, filtros server-side, busca inteligente.
-- Admin → Histórico: rolagem interna, filtros e busca, modal de detalhes com copiar JSON, paginação (200 por vez), filtro “Falhas de envio” e agrupamento por “Campanhas” (48h/24h/Hoje etc.), e correção de acentos.
+Você é um desenvolvedor master full stack. Vamos continuar o projeto **Lembrete Psi** (Next.js + Firebase).
+Siga o método “um passo por vez” e só avance quando eu disser **ok**.
+Entregue somente os arquivos alterados (100% do arquivo), em zip, para eu substituir.
 
-Diretriz clínica/UX do produto: o painel do paciente é para **lembrar** e **conscientizar** sobre presença/constância; evitar CTAs que facilitem cancelamento/remarcação.
+Estado atual:
+- Admin → Pacientes: tabela compacta, rolagem interna (8 linhas), filtros server-side, paginação cursor, busca inteligente.
+- Admin → Histórico: rolagem, filtros, modal de detalhes, paginação, “Falhas de envio” e “Campanhas” por slot.
+- Disparo de lembretes: corrigido push duplicado via SW + `webpush.notification` com tag/dedupeKey; placeholders PT/EN suportados.
+- Import de agenda: reconciliação por janela (sessão que some do upload diário é marcada como cancelled/missing_in_upload).
+- Script para limpar sujeira de testes: `scripts/purgeAttendanceLogs.cjs` (v3 ASCII).
 
-**Agora quero seguir com o Passo 14**:
-- Garantir que logs de falha individual (`push_reminder_failed`) carreguem `reminderType/slot` (48h/24h/Hoje) para o agrupamento “Campanhas” ficar 100% fiel.
-- Entregar apenas os arquivos alterados (100% do conteúdo do arquivo), em zip, para eu substituir.
-
-Siga o método “um passo por vez” e só avance quando eu disser “ok”.
+Agora quero:
+1) Confirmar que o pipeline 48h/24h/12h não duplica e sempre preenche {nome}/{profissional}/{data}/{hora}.
+2) Se necessário, implementar idempotência por sessão+slot em `appointments/{id}.reminders.slotX.sentAt` (evitar duplicidade em retries).
+---
