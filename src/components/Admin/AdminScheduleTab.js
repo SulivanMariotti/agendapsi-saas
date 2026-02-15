@@ -802,7 +802,7 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
       showToast(
         `Disparo concluído: ${data?.sentCount || 0} enviados, ${data?.failCount || 0} falharam, ${
           data?.skippedNoToken || 0
-        } sem push.`,
+        } sem push, ${data?.skippedAlreadySent || 0} já enviados.`,
         'success'
       );
 

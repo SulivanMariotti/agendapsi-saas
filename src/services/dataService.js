@@ -117,7 +117,52 @@ const normalizeService = (raw, fallbackText = "") => {
   return "Sessão";
 };
 
+const escapeRegExp = (str) => String(str || "").replace(/[.*+?^${}()|[\[\]\\]/g, "\\$&");
+
+// Template com placeholders PT/EN + suporte a {chave} e {{chave}} (replace global)
+// Objetivo: garantir que {nome}/{profissional}/{data}/{hora} SEMPRE sejam preenchidos (inclusive no preview).
+const applyTemplate = (tpl, vars = {}) => {
+  const template = String(tpl || "");
+  if (!template) return "";
+
+  const nameFull = String(vars.nameFull || vars.nomeCompleto || vars.nome || vars.name || "").trim();
+  const firstName = nameFull ? nameFull.split(" ")[0] : "";
+
+  const map = {
+    nome: firstName,
+    name: firstName,
+    nomecompleto: nameFull,
+    fullname: nameFull,
+
+    data: String(vars.date || vars.data || ""),
+    date: String(vars.date || vars.data || ""),
+    hora: String(vars.time || vars.hora || ""),
+    time: String(vars.time || vars.hora || ""),
+
+    profissional: String(vars.professional || vars.profissional || ""),
+    professional: String(vars.professional || vars.profissional || ""),
+    terapeuta: String(vars.professional || vars.profissional || ""),
+
+    servicotype: String(vars.serviceType || vars.servico || "Sessão"),
+    servico: String(vars.serviceType || vars.servico || "Sessão"),
+    service: String(vars.serviceType || vars.servico || "Sessão"),
+
+    location: String(vars.location || vars.local || "Clínica"),
+    local: String(vars.location || vars.local || "Clínica"),
+  };
+
+  let out = template;
+  for (const [k, v] of Object.entries(map)) {
+    const key = escapeRegExp(k);
+    const re = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}|\\{\\s*${key}\\s*\\}`, "gi");
+    out = out.replace(re, String(v ?? ""));
+  }
+
+  return out;
+};
+
 // Processamento de CSV (aceita formato antigo e novo)
+
 // Antigo: nome, tel, data, hora, profissional
 // Novo:   id, nome, tel, data, hora, profissional, serviço, local
 export const parseCSV = (inputText, subscribers, msgConfig = {}) => {
@@ -318,27 +363,36 @@ export const parseCSV = (inputText, subscribers, msgConfig = {}) => {
             if (diffHours <= (offset3 + tol)) {
               timeLabel = `Faltam ~${offset3}h`;
               reminderType = "slot3";
-              messageBody = (msgConfig.msg12h || "")
-                .replace("{nome}", String(nome).split(" ")[0])
-                .replace("{data}", dataStr)
-                .replace("{hora}", time)
-                .replace("{profissional}", nomeProfissional);
+              messageBody = applyTemplate(msgConfig.msg12h || "", {
+                nameFull: nome,
+                professional: nomeProfissional,
+                date: dataStr,
+                time,
+                serviceType: service,
+                location: place,
+              });
             } else if (diffHours <= (offset2 + tol)) {
               timeLabel = `Faltam ~${offset2}h`;
               reminderType = "slot2";
-              messageBody = (msgConfig.msg24h || "")
-                .replace("{nome}", String(nome).split(" ")[0])
-                .replace("{data}", dataStr)
-                .replace("{hora}", time)
-                .replace("{profissional}", nomeProfissional);
+              messageBody = applyTemplate(msgConfig.msg24h || "", {
+                nameFull: nome,
+                professional: nomeProfissional,
+                date: dataStr,
+                time,
+                serviceType: service,
+                location: place,
+              });
             } else if (diffHours <= (offset1 + tol)) {
               timeLabel = `Faltam ~${offset1}h`;
               reminderType = "slot1";
-              messageBody = (msgConfig.msg48h || "")
-                .replace("{nome}", String(nome).split(" ")[0])
-                .replace("{data}", dataStr)
-                .replace("{hora}", time)
-                .replace("{profissional}", nomeProfissional);
+              messageBody = applyTemplate(msgConfig.msg48h || "", {
+                nameFull: nome,
+                professional: nomeProfissional,
+                date: dataStr,
+                time,
+                serviceType: service,
+                location: place,
+              });
             } else {
               timeLabel = `Faltam ${Math.round(diffHours / 24)} dias`;
             }

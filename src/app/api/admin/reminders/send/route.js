@@ -258,6 +258,38 @@ export async function POST(req) {
     const db = admin.firestore();
     const now = admin.firestore.FieldValue.serverTimestamp();
 
+    // Idempotência persistida por sessão+slot (appointments/{id}.reminders.slotX.sentAt)
+    // - Evita duplicidade em retries/múltiplos disparos dentro da mesma janela
+    // - Mantém a lógica do pipeline 48h/24h/12h: cada slot pode ser enviado 1x por sessão
+    const apptIds = Array.from(
+      new Set(
+        reminders
+          .map((r) => (r?.appointmentId ? String(r.appointmentId) : ""))
+          .filter(Boolean)
+      )
+    );
+
+    const sentByAppt = {};
+    if (apptIds.length) {
+      const chunkSizeAppt = 200;
+      for (let i = 0; i < apptIds.length; i += chunkSizeAppt) {
+        const chunk = apptIds.slice(i, i + chunkSizeAppt);
+        const refs = chunk.map((id) => db.collection("appointments").doc(id));
+        const snaps = await db.getAll(...refs);
+        snaps.forEach((snap, idx) => {
+          const id = chunk[idx];
+          if (!snap.exists) return;
+          const data = snap.data() || {};
+          const rem = data.reminders || {};
+          sentByAppt[id] = {
+            slot1: Boolean(rem?.slot1?.sentAt),
+            slot2: Boolean(rem?.slot2?.sentAt),
+            slot3: Boolean(rem?.slot3?.sentAt),
+          };
+        });
+      }
+    }
+
     const cfgSnap = await db.collection("config").doc("global").get();
     const cfg = cfgSnap.exists ? cfgSnap.data() : {};
 
@@ -311,6 +343,7 @@ export async function POST(req) {
     let skippedInactiveSubscriber = 0;
     let skippedInactivePatient = 0;
     let skippedNoToken = 0;
+    let skippedAlreadySent = 0;
 
     const clickUrl = "https://agenda.msgflow.app.br";
 
@@ -332,6 +365,7 @@ export async function POST(req) {
       }
 
       // Dedup local por appointmentId+slot (mesma chamada)
+      // + Idempotência persistida: se appointments/{id}.reminders.slotX.sentAt já existe, não reenviar.
       const seen = new Set();
       const items = [];
       for (const it of itemsRaw) {
@@ -339,6 +373,13 @@ export async function POST(req) {
         const key = `${it.appointmentId || "noid"}:${slot || "noslot"}`;
         if (seen.has(key)) continue;
         seen.add(key);
+
+        const apptId = it.appointmentId ? String(it.appointmentId) : "";
+        if (apptId && slot && sentByAppt[apptId]?.[slot]) {
+          skippedAlreadySent += 1;
+          continue;
+        }
+
         items.push({ ...it, _slot: slot });
       }
       if (!items.length) continue;
@@ -371,6 +412,17 @@ export async function POST(req) {
           time || "hora agendada"
         }.`;
       }
+
+      // Garantia: placeholders {nome}/{profissional}/{data}/{hora} (PT/EN e {{ }}) sempre processados no server.
+      // Mesmo se messageBody já veio preenchido do parseCSV, isso elimina casos de repetição, {{chaves}} e variações.
+      bodyText = applyTemplate(bodyText, {
+        nameFull: first.patientName,
+        professional: first.professionalName,
+        date,
+        time,
+        serviceType: first.serviceType,
+        location: first.location,
+      });
 
       const extraCount = items.length - 1;
       const finalBody = extraCount > 0 ? `${bodyText}\n\nVocê tem mais ${extraCount} lembrete(s) nesta seleção.` : bodyText;
@@ -424,6 +476,7 @@ export async function POST(req) {
         skippedInactiveSubscriber,
         skippedInactivePatient,
         skippedNoToken,
+        skippedAlreadySent,
         createdAt: now,
       });
 
@@ -435,6 +488,7 @@ export async function POST(req) {
         skippedInactiveSubscriber,
         skippedInactivePatient,
         skippedNoToken,
+        skippedAlreadySent,
       });
     }
 
@@ -455,6 +509,9 @@ export async function POST(req) {
     let sentCount = 0;
     let failCount = 0;
 
+    // Para persistir idempotência por sessão+slot apenas quando o envio for bem-sucedido
+    const markByAppt = new Map();
+
     for (let i = 0; i < sendResponses.length; i++) {
       const r = sendResponses[i];
       const { phone, items, uniqSlots } = perPhoneMeta[i];
@@ -471,6 +528,16 @@ export async function POST(req) {
           reminderTypes: uniqSlots,
           createdAt: now,
         });
+
+        // Marcar idempotência por sessão+slot (somente se o envio foi sucesso)
+        for (const it of items) {
+          const apptId = it.appointmentId ? String(it.appointmentId) : "";
+          const slot = it._slot ? String(it._slot) : "";
+          if (!apptId || !slot) continue;
+          const setSlots = markByAppt.get(apptId) || new Set();
+          setSlots.add(slot);
+          markByAppt.set(apptId, setSlots);
+        }
       } else {
         failCount += 1;
         db.collection("history").add({
@@ -486,6 +553,28 @@ export async function POST(req) {
       }
     }
 
+    // Persistir idempotência por sessão+slot em appointments/{id}.reminders.slotX.sentAt
+    // - Usa batch para não estourar limites
+    // - Cada appointmentId vira 1 operação (mesmo com múltiplos slots)
+    const apptEntries = Array.from(markByAppt.entries());
+    if (apptEntries.length) {
+      const BATCH_LIMIT = 450; // margem segura (< 500)
+      for (let i = 0; i < apptEntries.length; i += BATCH_LIMIT) {
+        const slice = apptEntries.slice(i, i + BATCH_LIMIT);
+        const batch = db.batch();
+        for (const [apptId, slotsSet] of slice) {
+          const remindersMap = {};
+          for (const slot of Array.from(slotsSet || [])) {
+            remindersMap[slot] = { sentAt: now };
+          }
+          const ref = db.collection("appointments").doc(apptId);
+          batch.set(ref, { reminders: remindersMap }, { merge: true });
+        }
+        await batch.commit();
+      }
+    }
+
+
     await db.collection("history").add({
       type: "push_reminder_send_summary",
       uploadId: uploadId || null,
@@ -496,6 +585,7 @@ export async function POST(req) {
       skippedInactiveSubscriber,
       skippedInactivePatient,
       skippedNoToken,
+      skippedAlreadySent,
       createdAt: now,
     });
 
@@ -514,6 +604,7 @@ export async function POST(req) {
         skippedInactiveSubscriber,
         skippedInactivePatient,
         skippedNoToken,
+        skippedAlreadySent,
       },
     });
 
@@ -525,6 +616,7 @@ export async function POST(req) {
       skippedInactiveSubscriber,
       skippedInactivePatient,
       skippedNoToken,
+      skippedAlreadySent,
     });
   } catch (e) {
     return adminError({ req, auth: auth?.ok ? auth : null, action: "reminders_send", err: e });
