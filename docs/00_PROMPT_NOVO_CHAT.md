@@ -1,32 +1,55 @@
-# Prompt para Novo Chat — Lembrete Psi (continuidade)
+# Lembrete Psi — Handoff para novo chat (2026-02-15)
 
-Cole este texto no início do novo chat.
+## Contexto rápido
+Projeto **Lembrete Psi** (Next.js + Firebase) focado em **sustentar vínculo terapêutico** via lembretes de sessão e psicoeducação de constância.  
+Diretriz UX: **não facilitar cancelamento/remarcação** (sem botão de cancelar e sem CTA de WhatsApp para cancelar).
 
----
+## Estado do sistema (antes das alterações desta rodada)
+- Admin → Pacientes: tabela compacta com rolagem interna (8 linhas), filtros server-side, paginação por cursor, busca inteligente.
+- Admin → Histórico: rolagem, filtros, modal de detalhes, paginação, visão “Falhas de envio” e “Campanhas” por slot.
+- Disparo push: corrigida duplicidade via SW (service worker) + envio `webpush.notification` com `tag/dedupeKey`; placeholders PT/EN suportados.
+- Import agenda: reconciliação por janela; sessão que some do upload diário é marcada `cancelled/missing_in_upload`.
+- Script limpeza: `scripts/purgeAttendanceLogs.cjs` (v3 ASCII).
 
-Você é um **dev master full stack** (Next.js App Router + Firebase/Firestore + Firebase Admin) e também pensa como um **psicólogo** com foco em **conscientizar o paciente**: terapia funciona na **continuidade**; faltar interrompe processo; presença é responsabilidade e cuidado.
+## Objetivo desta rodada
+1) Confirmar que o pipeline **48h / 24h / 12h** não duplica e sempre preenche placeholders `{nome}/{profissional}/{data}/{hora}`.  
+2) Implementar idempotência persistida por **sessão+slot** em:
+   - `appointments/{id}.reminders.slotX.sentAt`  
+   para evitar duplicidade em retries/clique duplo/re-disparo.
 
-## Método obrigatório
-1) **Passo a passo (1 por resposta)** — só avance quando eu disser **ok/próximo**.  
-2) Quando houver alteração de código: **arquivo completo + link para download** (não colar código/diff no chat).  
-3) Se faltar contexto: pedir **upload do ZIP mais atual**.
+## Implementações feitas
+### A) Idempotência persistida por sessão+slot
+- Endpoint `POST /api/admin/reminders/send` agora:
+  - **verifica no Firestore** se `appointments/{id}.reminders.slotX.sentAt` já existe antes de enviar.
+  - se existe, **pula** e contabiliza `skippedAlreadySent`.
+  - se envia com sucesso, grava `sentAt` com `serverTimestamp()` no slot correspondente.
 
-## Onde paramos (status atual)
-✅ **Admin Dashboard**: bloco de **Constância Terapêutica** centralizado (7/30/90 dias), top faltas e alerta de risco.  
-✅ **Login/Pareamento do paciente**: custom token com claim `phoneCanonical`.  
-✅ **Hotfix (Rules / agenda do paciente)**: `appointments/*` permite leitura também por claim `request.auth.token.phoneCanonical` na janela do primeiro acesso (evita `permission-denied` antes de `users/{uid}.phoneCanonical` persistir).  
-✅ Docs sem merge markers nos principais arquivos de continuidade.
+### B) Placeholders garantidos (client + server)
+- Client (preview/parse): substituição passou a ser **global** e compatível com `{chave}` e `{{chave}}`, PT/EN.
+- Server (envio real): mesmo quando `messageBody` já vem preenchido do client, o server aplica `applyTemplate()` para **garantir** que nenhum placeholder “escape”.
 
-## Arquivos-chave para continuidade
-- `docs/00_ONDE_PARAMOS.md` (resumo do dia)
-- `docs/15_HANDOFF_2026-02-14.md` (handoff completo)
-- `docs/18_TROUBLESHOOTING_COMMON_ERRORS.md` (erros recorrentes)
-- `docs/25_FIRESTORE_RULES_GUIDE.md` (guia prático de rules)
+### C) Hardening (auditoria por slot)
+No mesmo endpoint, para cada `appointments/{id}.reminders.slotX`:
+- `attempts` (incrementa a cada tentativa)
+- `lastAttemptAt`
+- `lastResult`: `"success"` / `"failure"`
+- `lastError` / `lastErrorCode` (somente em falha)
+- `lastMessageId` (se retornado pelo FCM)
+- `dedupeKey`: `{appointmentId}:{slotX}` (estável por sessão+slot)
 
-## Próximo passo sugerido (1/1)
-Validar end-to-end após publicar as Rules:
-- paciente: entrar → agenda carrega sem `permission-denied` (primeiro acesso e acessos seguintes)
-- admin: dashboard/constância OK
-- smoke checks do painel do paciente
+> Observação: `sentAt` continua sendo gravado **somente em sucesso**, preservando idempotência.
 
-Comece propondo **1 passo único** (e peça ZIP atualizado se necessário).
+## Arquivos alterados (final)
+1) `src/app/api/admin/reminders/send/route.js` *(versão “hardening” é a mais recente)*  
+2) `src/services/dataService.js`  
+3) `src/components/Admin/AdminScheduleTab.js`
+
+## Como validar rapidamente
+- Fazer um disparo e confirmar que grava `appointments/{id}.reminders.slotX.sentAt`.
+- Repetir disparo: deve retornar `sentCount: 0` e `skippedAlreadySent > 0`.
+- Conferir que `messageBody` não contém `{nome}` / `{{nome}}` etc (Preview / Histórico).
+- Ver `attempts` e `lastResult` mudando em caso de falha.
+
+## Próximas melhorias possíveis (se houver continuação)
+- (Opcional) Registrar também `reminders.slotX.templateKey`/`templateVersion` para auditoria clínica (sem expor “cancelamento”).
+- (Opcional) Job/cron seguro para envio automático (se ainda estiver manual), usando a mesma idempotência por slot.
