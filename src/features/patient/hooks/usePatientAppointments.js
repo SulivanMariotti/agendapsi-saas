@@ -1,11 +1,12 @@
 // src/features/patient/hooks/usePatientAppointments.js
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { collection, limit, onSnapshot, orderBy, query, where } from "firebase/firestore";
 
 /**
- * Carrega a agenda do paciente (client-side via Firestore) com fallback por e-mail.
- * Mantém o comportamento atual do PatientFlow.
+ * Carrega a agenda do paciente via API (server-side / Admin SDK).
+ *
+ * Motivo clínico (UX): elimina "permission-denied" e garante que o paciente
+ * sempre visualize a agenda — reduzir fricção aumenta constância.
  */
 export function usePatientAppointments({ db, user, effectivePhone, loadingProfile, onToast }) {
   const [appointmentsRaw, setAppointmentsRaw] = useState([]);
@@ -22,36 +23,46 @@ export function usePatientAppointments({ db, user, effectivePhone, loadingProfil
 
     setLoadingAppointments(true);
 
-    const colRef = collection(db, "appointments");
-    const phone = effectivePhone;
+    let cancelled = false;
 
-    let q = null;
-    if (phone) {
-      q = query(colRef, where("phone", "==", phone), orderBy("isoDate", "asc"), limit(250));
-    } else if (user?.email) {
-      q = query(colRef, where("email", "==", (user.email || "").toLowerCase()), orderBy("isoDate", "asc"), limit(250));
-    } else {
-      setAppointmentsRaw([]);
-      setLoadingAppointments(false);
-      return;
-    }
+    (async () => {
+      try {
+        const idToken = await user.getIdToken();
 
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setAppointmentsRaw(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoadingAppointments(false);
-      },
-      (err) => {
+        // DEV: o effectivePhone pode ser um telefone "impersonado" no painel dev.
+        // O server ignora em produção; fora de produção, ajuda a testar sem mexer em regras.
+        const qs = effectivePhone ? `?phone=${encodeURIComponent(String(effectivePhone))}` : "";
+
+        const res = await fetch(`/api/patient/appointments${qs}`, {
+          method: "GET",
+          headers: { authorization: `Bearer ${idToken}` },
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+
+        if (!res.ok || !data?.ok) {
+          setAppointmentsRaw([]);
+          toastRef.current?.("Erro ao carregar agenda.", "error");
+        } else {
+          const list = Array.isArray(data.appointments) ? data.appointments : [];
+          setAppointmentsRaw(list);
+        }
+      } catch (err) {
         console.error(err);
-        setAppointmentsRaw([]);
-        setLoadingAppointments(false);
-        toastRef.current?.("Erro ao carregar agenda.", "error");
+        if (!cancelled) {
+          setAppointmentsRaw([]);
+          toastRef.current?.("Erro ao carregar agenda.", "error");
+        }
+      } finally {
+        if (!cancelled) setLoadingAppointments(false);
       }
-    );
+    })();
 
-    return () => unsub();
-  }, [db, user?.uid, user?.email, loadingProfile, effectivePhone]);
+    return () => {
+      cancelled = true;
+    };
+  }, [db, user?.uid, loadingProfile, effectivePhone]);
 
   const appointments = useMemo(() => {
     return (appointmentsRaw || []).filter((a) => String(a.status || "").toLowerCase() !== "cancelled");

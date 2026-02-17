@@ -24,36 +24,10 @@ service cloud.firestore {
 
     // ========= APPOINTMENTS =========
     match /appointments/{appointmentId} {
-      // Admin lê tudo.
-      // Paciente lê apenas seus agendamentos:
-      // - por phone == users/{uid}.phone
-      // - ou por phone == users/{uid}.phoneCanonical
-      // - ou por email == request.auth.token.email (fallback do PatientFlow.js)
-      allow read: if isAdmin()
-        || (
-          signedIn()
-          && (
-            (
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.phone != null
-              && resource.data.phone
-                 == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.phone
-            )
-            || (
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.phoneCanonical != null
-              && resource.data.phone
-                 == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.phoneCanonical
-            )
-
-            || (
-              request.auth.token.phoneCanonical != null
-              && resource.data.phone == request.auth.token.phoneCanonical
-            )
-            || (
-              request.auth.token.email != null
-              && resource.data.email == request.auth.token.email
-            )
-          )
-        );
+      // ✅ Segurança + constância:
+      // O painel do paciente NÃO lê `appointments` direto do Firestore (client).
+      // Ele usa API server-side (Admin SDK) para evitar `permission-denied` e reduzir superfície.
+      allow read: if isAdmin();
 
       allow write: if isAdmin(); // só admin sobe agenda
     }

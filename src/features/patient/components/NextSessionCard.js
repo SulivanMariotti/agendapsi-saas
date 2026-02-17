@@ -159,9 +159,9 @@ export default function NextSessionCard({
 
         {/* Nota clínica */}
         <div className="text-[12px] text-slate-500 leading-snug">
-          Este botão é apenas para <b>confirmar presença</b>. Reagendamentos são tratados diretamente com a clínica.
+          Este botão é apenas para <b>confirmar presença</b>. Seu horário está reservado para você.
           <div className="text-[11px] text-slate-400 mt-1">
-            A constância sustenta seu processo — faltar quebra a sequência que você está construindo.
+            A constância sustenta seu processo — e a vontade de faltar também pode dizer algo importante. Vale levar para a terapia.
           </div>
         </div>
       </div>

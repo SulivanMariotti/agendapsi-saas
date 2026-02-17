@@ -55,9 +55,11 @@ No client, sempre que permitir leitura, condicione a:
 
 ### 3.3 `appointments/*`
 - Patient:
-  - leitura apenas dos seus horários (filtrados por `phoneCanonical`)
-  - **fallback seguro (primeiro acesso):** aceitar também `request.auth.token.phoneCanonical` (claim emitida server-side no pareamento) enquanto `users/{uid}` ainda não foi persistido
-  - escrita: normalmente **negada**
+  - **não lê direto do Firestore (client)**
+  - lê via **API server-side** (`/api/patient/appointments`, Admin SDK)
+  - motivo clínico: evita `permission-denied`/tela vazia (quebra de continuidade)
+  - motivo técnico: reduz superfície de ataque e centraliza regras críticas no server-side
+  - escrita: **negada** (agenda é sempre importada/sincronizada pelo admin)
 - Admin:
   - leitura/escrita para import/sincronização
 

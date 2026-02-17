@@ -4,7 +4,9 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+
 export const runtime = "nodejs";
+
 /**
  * POST /api/admin/attendance/send-followups
  *
@@ -86,19 +88,26 @@ async function loadTemplates(db) {
   const snap = await db.collection("config").doc("global").get();
   const cfg = snap.exists ? snap.data() : {};
 
+  // Importante (diretriz clínica do produto):
+  // - Sem CTAs de cancelar/remarcar.
+  // - O texto deve sustentar vínculo e constância, sem facilitar fuga do compromisso.
   const tpl = {
     presentTitle: "💜 Permittá • Lembrete Psi — Parabéns pela presença",
     presentBody:
       "Olá {nome}. Sua presença em {data} às {hora} é um passo de cuidado. A continuidade fortalece o processo.",
     absentTitle: "💜 Permittá • Lembrete Psi — Senti sua falta hoje",
     absentBody:
-      "Olá {nome}. Percebemos sua ausência em {data} às {hora}. Quando você retorna, o processo continua. Se precisar, fale com a clínica.",
+      "Olá {nome}. Registramos sua ausência em {data} às {hora}. A terapia acontece na continuidade — quando você retorna, o processo segue.",
   };
 
-  if (cfg.attendanceFollowupPresentTitle) tpl.presentTitle = String(cfg.attendanceFollowupPresentTitle);
-  if (cfg.attendanceFollowupPresentBody) tpl.presentBody = String(cfg.attendanceFollowupPresentBody);
-  if (cfg.attendanceFollowupAbsentTitle) tpl.absentTitle = String(cfg.attendanceFollowupAbsentTitle);
-  if (cfg.attendanceFollowupAbsentBody) tpl.absentBody = String(cfg.attendanceFollowupAbsentBody);
+  if (cfg.attendanceFollowupPresentTitle)
+    tpl.presentTitle = String(cfg.attendanceFollowupPresentTitle);
+  if (cfg.attendanceFollowupPresentBody)
+    tpl.presentBody = String(cfg.attendanceFollowupPresentBody);
+  if (cfg.attendanceFollowupAbsentTitle)
+    tpl.absentTitle = String(cfg.attendanceFollowupAbsentTitle);
+  if (cfg.attendanceFollowupAbsentBody)
+    tpl.absentBody = String(cfg.attendanceFollowupAbsentBody);
 
   return tpl;
 }
@@ -120,6 +129,34 @@ function parseBodyRange(body) {
   return { fromIsoDate: iso(start), toIsoDate: iso(end), days };
 }
 
+function safeErrMessage(err) {
+  const msg = String(err?.message || err || "").trim();
+  if (!msg) return "unknown_error";
+  return msg.length > 500 ? `${msg.slice(0, 500)}…` : msg;
+}
+
+function toMillis(ts) {
+  if (!ts) return 0;
+  if (typeof ts === "number") return ts;
+  if (typeof ts.toMillis === "function") return ts.toMillis();
+  if (typeof ts.seconds === "number") return ts.seconds * 1000;
+  return 0;
+}
+
+function compareByRecent(a, b) {
+  const da = String(a?.isoDate || "");
+  const db = String(b?.isoDate || "");
+  if (da !== db) return db.localeCompare(da);
+
+  const ta = String(a?.time || "");
+  const tb = String(b?.time || "");
+  if (ta !== tb) return tb.localeCompare(ta);
+
+  const ua = toMillis(a?.updatedAt);
+  const ub = toMillis(b?.updatedAt);
+  return ub - ua;
+}
+
 export async function POST(req) {
   let auth = null;
   try {
@@ -134,7 +171,6 @@ export async function POST(req) {
     });
     if (!rl.ok) return rl.res;
 
-
     initAdmin();
     const db = admin.firestore();
 
@@ -142,6 +178,7 @@ export async function POST(req) {
     const dryRun = !!body.dryRun;
 
     const { fromIsoDate, toIsoDate, days } = parseBodyRange(body);
+    const limit = Math.min(1000, Math.max(1, Number(body?.limit || 200)));
 
     const tpl = await loadTemplates(db);
 
@@ -154,20 +191,18 @@ export async function POST(req) {
 
     const totalLogs = logsSnap.size;
 
-    // Dedup por chave (patientId + isoDate + time + profissional) quando existe docId composto,
-    // mas como já está gravado em docId composto, basta iterar.
+    // Dedup por chave (patientId + isoDate + time + profissional)
     const logs = [];
     logsSnap.forEach((d) => logs.push({ id: d.id, ...d.data() }));
 
-    // Agrupar por patientId+isoDate (mais recente por updatedAt) — se vier duplicado
     const keyOf = (x) =>
       `${String(x.patientId || "")}__${String(x.isoDate || "")}__${String(x.time || "")}__${String(
         x.profissional || x.professional || ""
       )}`;
 
     const pickNewest = (a, b) => {
-      const ta = a?.updatedAt?.toMillis ? a.updatedAt.toMillis() : Number(a?.updatedAt || 0);
-      const tb = b?.updatedAt?.toMillis ? b.updatedAt.toMillis() : Number(b?.updatedAt || 0);
+      const ta = toMillis(a?.updatedAt);
+      const tb = toMillis(b?.updatedAt);
       return tb >= ta ? b : a;
     };
 
@@ -178,7 +213,9 @@ export async function POST(req) {
       byKey.set(k, byKey.has(k) ? pickNewest(byKey.get(k), l) : l);
     }
 
-    const candidatesList = Array.from(byKey.values());
+    const candidatesAll = Array.from(byKey.values()).sort(compareByRecent);
+    const candidatesTotal = candidatesAll.length;
+    const candidatesList = candidatesAll.slice(0, limit);
     const candidates = candidatesList.length;
 
     const out = {
@@ -187,21 +224,24 @@ export async function POST(req) {
       fromIsoDate,
       toIsoDate,
       days: days ?? null,
+      limit,
       totalLogs,
+      candidatesTotal,
       candidates,
       sent: 0,
       blocked: 0,
+      blockedAlreadySent: 0,
       blockedNoToken: 0,
       blockedNoPhone: 0,
       blockedInactive: 0,
       blockedInactivePatient: 0,
       blockedInactiveSubscriber: 0,
+      blockedErrors: 0,
       byStatus: { present: 0, absent: 0 },
       sample: [],
     };
 
-    // Pré-carregar users por phoneCanonical para reduzir reads
-    // (como é volume pequeno, faremos lookup individual com cache)
+    // Cache users/subscribers para reduzir reads
     const userCache = new Map();
     const subCache = new Map();
 
@@ -217,7 +257,6 @@ export async function POST(req) {
       userCache.set(phone, doc);
       return doc;
     }
-
 
     const userByIdCache = new Map();
 
@@ -280,8 +319,7 @@ export async function POST(req) {
         if (fromUser) phone = fromUser;
       }
 
-      // 3) Se achou phone via users mas ainda não tinha userDoc por phone, mantém userDoc existente.
-      // (Se userDoc veio nulo pelo PID mas phone existe, tenta por phone)
+      // 3) Se achou phone via users mas ainda não tinha userDoc por phone, tenta por phone
       if (phone && !userDoc) {
         userDoc = await getUserByPhone(phone);
       }
@@ -306,8 +344,13 @@ export async function POST(req) {
       // Verifica bloqueios (mas ainda assim devolve amostra em dryRun)
       let blockedReason = null;
 
+      // Idempotência: se já enviou follow-up para esse log, não reenviar
+      if (current?.followup?.sentAt) {
+        blockedReason = "already_sent";
+      }
+
       // Sem telefone (dados legados / incompletos)
-      if (!phone) {
+      if (!blockedReason && !phone) {
         blockedReason = "no_phone";
       }
 
@@ -340,6 +383,12 @@ export async function POST(req) {
       }
 
       // Contadores de bloqueio/fluxo
+      if (blockedReason === "already_sent") {
+        out.blocked += 1;
+        out.blockedAlreadySent += 1;
+        continue;
+      }
+
       if (blockedReason === "no_phone") {
         out.blocked += 1;
         out.blockedNoPhone += 1;
@@ -366,6 +415,24 @@ export async function POST(req) {
 
       if (dryRun) continue;
 
+      const logId = current?.id ? String(current.id) : null;
+      const logRef = logId ? db.collection("attendance_logs").doc(logId) : null;
+
+      // Marca tentativa (para diagnóstico e rastreabilidade)
+      if (logRef) {
+        await logRef.set(
+          {
+            followup: {
+              lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+              status,
+              lastResult: "sending",
+              lastError: null,
+            },
+          },
+          { merge: true }
+        );
+      }
+
       // Envio real
       const message = {
         token,
@@ -378,14 +445,45 @@ export async function POST(req) {
           status,
           phoneCanonical: phone,
           isoDate: String(current.isoDate || ""),
+          logId: logId || "",
         },
       };
 
       try {
         await admin.messaging().send(message);
         out.sent += 1;
+
+        // Marca enviado (idempotência)
+        if (logRef) {
+          await logRef.set(
+            {
+              followup: {
+                sentAt: admin.firestore.FieldValue.serverTimestamp(),
+                status,
+                lastResult: "sent",
+                lastError: null,
+              },
+            },
+            { merge: true }
+          );
+        }
       } catch (e) {
         out.blocked += 1;
+        out.blockedErrors += 1;
+
+        if (logRef) {
+          await logRef.set(
+            {
+              followup: {
+                lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+                status,
+                lastResult: "error",
+                lastError: safeErrMessage(e),
+              },
+            },
+            { merge: true }
+          );
+        }
       }
     }
 
@@ -399,19 +497,28 @@ export async function POST(req) {
         fromIsoDate,
         toIsoDate,
         days: days ?? null,
+        limit,
         totalLogs,
+        candidatesTotal,
         candidates,
         sent: out.sent,
         blocked: out.blocked,
+        blockedAlreadySent: out.blockedAlreadySent,
         blockedNoToken: out.blockedNoToken,
         blockedNoPhone: out.blockedNoPhone,
         blockedInactive: out.blockedInactive,
+        blockedErrors: out.blockedErrors,
         byStatus: out.byStatus,
       },
     });
 
     return NextResponse.json(out);
   } catch (e) {
-    return adminError({ req, auth: auth?.ok ? auth : null, action: "attendance_send_followups", err: e });
+    return adminError({
+      req,
+      auth: auth?.ok ? auth : null,
+      action: "attendance_send_followups",
+      err: e,
+    });
   }
 }

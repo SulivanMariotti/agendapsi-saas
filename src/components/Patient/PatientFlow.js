@@ -7,6 +7,7 @@ import PatientNotificationsCard from "../../features/patient/components/PatientN
 import PatientNotesCard from "../../features/patient/components/PatientNotesCard";
 import ContractStatusCard from "../../features/patient/components/ContractStatusCard";
 import PatientTopMantraBar from "../../features/patient/components/PatientTopMantraBar";
+import PatientMantraCard from "../../features/patient/components/PatientMantraCard";
 import {
   app,
   db } from "../../app/firebase";
@@ -490,6 +491,9 @@ useEffect(() => {
 
           {/* Mantra fixo (topo) */}
           <PatientTopMantraBar />
+
+          {/* Cards rotativos de reflexão (psicoeducação passiva) */}
+          <PatientMantraCard />
 
           {/* Sessões (prioridade: próxima sessão + agenda) */}
           <PatientSessionsCard

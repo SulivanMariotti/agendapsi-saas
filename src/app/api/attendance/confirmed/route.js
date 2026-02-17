@@ -1,24 +1,27 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import { requireAuth } from "@/lib/server/requireAuth";
+
 export const runtime = "nodejs";
+
 /**
  * GET /api/attendance/confirmed
  *
- * Objetivo:
- * - Evitar 404 no PatientFlow.
- * - Responder de forma segura se existe confirmação de presença para uma sessão.
+ * Objetivo clínico (UX):
+ * - Mostrar ao paciente o status de "confirmação" de presença (para reforçar compromisso)
+ *   sem depender de leituras client-side que gerem permission-denied.
+ * - Evitar cliques repetidos e sustentar constância.
  *
  * Como usar (query params):
- * - appointmentId: string (recomendado)
- * - phoneCanonical: string (opcional; padrão do projeto: DDD+número, sem 55)
+ * - (opcional) appointmentId: retorna confirmed (boolean) para esse id.
  *
  * Retorno:
- * { ok: true, confirmed: boolean, reason?: string }
+ * - Sem appointmentId: { ok: true, appointmentIds: string[] }
+ * - Com appointmentId: { ok: true, confirmed: boolean, appointmentIds: string[] }
  *
  * Observação clínica/produto:
  * - Não cria reagendamento/cancelamento.
- * - Apenas informa status de presença.
+ * - Apenas reflete confirmações registradas em attendance_logs (eventType=patient_confirmed).
  */
 
 function getServiceAccount() {
@@ -45,67 +48,58 @@ export async function GET(req) {
     const auth = await requireAuth(req);
     if (!auth.ok) return auth.res;
 
-    const { searchParams } = new URL(req.url);
-    const appointmentId = (searchParams.get("appointmentId") || "").trim();
-    const phoneCanonical = (searchParams.get("phoneCanonical") || "").trim();
-
-    // ✅ Se o front ainda não envia params, não quebrar o fluxo (evita loops/erros)
-    if (!appointmentId && !phoneCanonical) {
+    const uid = String(auth.decoded?.uid || "").trim();
+    if (!uid) {
       return NextResponse.json(
-        { ok: true, confirmed: false, reason: "missing_params" },
-        { status: 200 }
+        { ok: false, confirmed: false, appointmentIds: [], error: "Invalid token." },
+        { status: 401 }
       );
     }
 
+    const { searchParams } = new URL(req.url);
+    const appointmentId = (searchParams.get("appointmentId") || "").trim();
+
     const db = admin.firestore();
 
-    // Estratégia:
-    // 1) Se tiver appointmentId, procurar logs por appointmentId (mais preciso).
-    // 2) Se não tiver, mas tiver phoneCanonical, procurar por último status "present/confirmed".
-    //    (depende do seu modelo; aqui é um fallback seguro).
-    let confirmed = false;
-
+    // 1) Checagem pontual (próxima sessão)
     if (appointmentId) {
-      // Tentativas de campos comuns (suporta variações sem quebrar)
-      const q1 = await db
+      const snap = await db
         .collection("attendance_logs")
+        .where("eventType", "==", "patient_confirmed")
+        .where("patientId", "==", uid)
         .where("appointmentId", "==", appointmentId)
         .limit(1)
         .get();
 
-      if (!q1.empty) {
-        const data = q1.docs[0].data() || {};
-        const status = String(data.status || data.state || "").toLowerCase();
-        confirmed = status === "present" || status === "confirmed" || status === "attended" || status === "ok";
-      } else {
-        // fallback: alguns modelos guardam em "appointments" com flag de presença
-        const apptSnap = await db.collection("appointments").doc(appointmentId).get();
-        if (apptSnap.exists) {
-          const data = apptSnap.data() || {};
-          confirmed = Boolean(data.attendanceConfirmed || data.confirmed || data.present);
-        }
-      }
-    } else if (phoneCanonical) {
-      const q2 = await db
-        .collection("attendance_logs")
-        .where("phoneCanonical", "==", phoneCanonical)
-        .orderBy("createdAt", "desc")
-        .limit(1)
-        .get();
-
-      if (!q2.empty) {
-        const data = q2.docs[0].data() || {};
-        const status = String(data.status || data.state || "").toLowerCase();
-        confirmed = status === "present" || status === "confirmed" || status === "attended" || status === "ok";
-      }
+      const confirmed = !snap.empty;
+      return NextResponse.json(
+        { ok: true, confirmed, appointmentIds: confirmed ? [appointmentId] : [] },
+        { status: 200 }
+      );
     }
 
-    return NextResponse.json({ ok: true, confirmed }, { status: 200 });
+    // 2) Lista (para chips na agenda)
+    // Evita orderBy para não exigir índice composto; limit protege custo.
+    const snap = await db
+      .collection("attendance_logs")
+      .where("eventType", "==", "patient_confirmed")
+      .where("patientId", "==", uid)
+      .limit(250)
+      .get();
+
+    const uniq = new Set();
+    snap.forEach((d) => {
+      const data = d.data() || {};
+      const id = String(data.appointmentId || "").trim();
+      if (id) uniq.add(id);
+    });
+
+    return NextResponse.json({ ok: true, appointmentIds: Array.from(uniq) }, { status: 200 });
   } catch (e) {
     console.error("GET /api/attendance/confirmed error:", e);
     // Retornar 200 com ok:false evita loops no client e mantém UX estável.
     return NextResponse.json(
-      { ok: false, confirmed: false, error: e?.message || "Erro" },
+      { ok: false, confirmed: false, appointmentIds: [], error: e?.message || "Erro" },
       { status: 200 }
     );
   }

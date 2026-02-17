@@ -114,7 +114,7 @@ export default function AdminConfigTab({
             placeholder="5511..."
           />
           <p className="text-xs text-slate-400 mt-2">
-            Usado para o botão de contato no painel do paciente.
+            Usado no botão de confirmação de presença (WhatsApp) no painel do paciente.
           </p>
         </div>
 
