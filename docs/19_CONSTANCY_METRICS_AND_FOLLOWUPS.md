@@ -1,126 +1,110 @@
 # 19_CONSTANCY_METRICS_AND_FOLLOWUPS
 
-Este documento descreve como medir **constância terapêutica** (presença/faltas) e como usar esses dados para sustentar o vínculo — sem julgamento, com firmeza e cuidado.
+Como medir **constância terapêutica** (presença/faltas) e usar isso para sustentar vínculo — sem julgamento, com firmeza.
 
-> Princípio clínico: **comparecer é parte do tratamento**.  
-> A falta não é “só perder uma hora”; é uma interrupção do processo.
+> Princípio clínico: **comparecer é parte do tratamento**.
 
 ---
 
-## 1) Fontes de dados
+## 1) Fonte de dados (canônica)
 
-### 1.1 `attendance_logs` (recomendado)
+### 1.1 `attendance_logs/*`
 Coleção para registrar presença/falta por sessão (importada por planilha ou lançada no Admin).
 
-**Documento (exemplo)**
-- `attendance_logs/{autoId}`:
-  - `patientPhoneCanonical` (string) ✅ chave do paciente
-  - `patientName` (string) *(opcional; denormalizado para exibição)*
-  - `sessionDate` (timestamp) ✅ data da sessão
-  - `sessionDateIso` (string `YYYY-MM-DD`) *(opcional)*
+**Campos (alinhado com o endpoint atual)**
+- `attendance_logs/{id}`:
+  - `patientId` (string) ✅ chave externa (se existir)
+  - `patientPhoneCanonical` (string) ✅ chave operacional (preferido)
+  - `name` (string) *(opcional; denormalizado para UI)*
+  - `isoDate` (string `YYYY-MM-DD`) ✅ data da sessão
+  - `time` (string `HH:mm`) *(opcional)*
+  - `profissional` / `professional` (string) *(opcional)*
   - `status` (string: `"present" | "absent"`)
   - `source` (string: `"import" | "manual"`)
   - `createdAt` (timestamp)
-  - `payload` (map) *(opcional: dados originais do import, sem sensíveis)*
+  - `updatedAt` (timestamp) *(recomendado para dedup/merge do import)*
+  - `payload` (map) *(opcional; dados originais sem sensíveis)*
 
-### 1.2 `appointments` (não substitui logs)
-`appointments` representa **agenda planejada**. Não é a mesma coisa que presença/falta.
+### 1.2 Campos de follow-up (anti-spam / rastreabilidade)
+Quando o Admin envia follow-ups, o sistema grava em:
+
+- `attendance_logs/{id}.followup`:
+  - `sentAt` (timestamp) ✅ marca envio bem-sucedido
+  - `status` (`present|absent`) ✅ qual tipo foi enviado
+  - `lastAttemptAt` (timestamp)
+  - `lastResult` (`sending|sent|error`)
+  - `lastError` (string curta; só em falha)
+
+**Regra de idempotência:**
+- Se `followup.sentAt` existir, o endpoint **não reenviará** (evita spam).
 
 ---
 
 ## 2) Métricas de constância (painel)
 
-### 2.1 Métricas essenciais
-Para cada paciente (por janela de tempo, ex. últimos 30/60/90 dias):
-
-- `sessionsScheduled` (int) *(se calculado a partir de agenda importada)*
+Para cada paciente (por janela de tempo: últimos 30/60/90 dias):
 - `sessionsAttended` (int)
 - `sessionsMissed` (int)
-- `attendanceRate` (float) = `attended / (attended + missed)`  
-- `streakPresent` (int) = sequência atual de presenças
-- `streakAbsent` (int) = sequência atual de faltas
-- `lastStatus` (string) e `lastSessionDate` (timestamp)
+- `attendanceRate` = `attended / (attended + missed)`
+- `streakPresent` (int)
+- `streakAbsent` (int)
+- `lastStatus` + `lastIsoDate`
 
-### 2.2 Indicadores clínicos (heurísticos)
+### 2.1 Indicadores clínicos (heurísticos)
 > São sinais para **cuidado ativo**, não para punição.
 
-- **Risco leve**: 1 falta no último mês
-- **Risco moderado**: 2 faltas em 60 dias
-- **Risco alto**: 2 faltas seguidas ou ≥3 faltas em 90 dias
-
-Registre sempre o critério usado no payload do log/relatório.
+- **Risco leve:** 1 falta no último mês
+- **Risco moderado:** 2 faltas em 60 dias
+- **Risco alto:** 2 faltas seguidas ou ≥3 faltas em 90 dias
 
 ---
 
-## 3) Disparos por constância (follow-ups)
+## 3) Follow-ups por constância
 
-### 3.1 Regras server-side (obrigatório)
-Antes de qualquer envio:
-- Validar `users/{uid}.status === "active"`
-- Bloquear se `inactive` (e logar em `history` com `blockedReason`)
-- Verificar `subscribers/{phoneCanonical}.pushToken` para push
-- Em caso de WhatsApp, validar política operacional (ex.: janela de envio, opt-in)
+### 3.1 Endpoint
+- `POST /api/admin/attendance/send-followups`
+- Suporta `dryRun: true`.
 
-### 3.2 Mensagens — tom e objetivo
-As mensagens devem:
-- Reforçar que **a sessão é um espaço de cuidado**
-- Convidar com firmeza
-- Evitar moralismo/culpa
-- Manter o foco em continuidade e vínculo
+### 3.2 Bloqueios server-side (obrigatório)
+Antes de enviar:
+- paciente inativo → bloqueia (`inactive_patient`)
+- subscriber inativo → bloqueia (`inactive_subscriber`)
+- sem pushToken → bloqueia (`no_token`)
+- sem telefone → bloqueia (`no_phone`)
+- já enviado (`followup.sentAt`) → bloqueia (`already_sent`)
 
-**Presença (reforço positivo)**
-- “Sua presença é um passo concreto no seu cuidado. A continuidade faz diferença.”
-
-**Falta (sem julgamento, com firmeza)**
-- “A ausência interrompe o processo. Se algo aconteceu, vamos acolher isso — e retomar é parte do cuidado.”
-
-### 3.3 Onde ficam os templates
-No `config/global`:
+### 3.3 Templates (config/global)
 - `attendanceFollowupPresentTitle`
 - `attendanceFollowupPresentBody`
 - `attendanceFollowupAbsentTitle`
 - `attendanceFollowupAbsentBody`
 
-Placeholders suportados: `{nome}`, `{data}`, `{dataIso}`, `{hora}`, `{profissional}`, `{servico}`, `{local}`, `{id}`  
-Compatível com legado `{{nome}}`.
+Placeholders suportados:
+- `{nome}`, `{data}`, `{dataIso}`, `{hora}`, `{profissional}`, `{servico}`, `{local}`, `{id}`
+- Compatível com legado `{{nome}}`.
+
+### 3.4 Tom e objetivo
+- Presença: reforço positivo (“sua presença sustenta o processo”).
+- Falta: psicoeducação firme e acolhedora (“a continuidade faz diferença; retomar é parte do cuidado”).
+- **Sem CTA de cancelar/remarcar.**
 
 ---
 
-## 4) Relatório por planilha (segunda fonte)
+## 4) Import (deduplicação)
 
-Quando o sistema externo não tem API, usar import por planilha:
-- Garantir `patientPhoneCanonical` no momento do import (não deixar “para depois” no client)
-- Deduplicar por:
-  - `patientPhoneCanonical + sessionDateIso + status`
-- Manter histórico (não apagar passado)
+Quando importar de planilha, deduplicar (no mínimo) por:
+- `patientId + isoDate + time + profissional`
 
----
-
-## 5) Logs em `history` (observabilidade)
-
-Registrar:
-- `type`: `attendance.followup.dryrun`, `attendance.followup.sent`, `attendance.followup.blocked`
-- `createdAt`
-- `payload`:
-  - `patientPhoneCanonical`
-  - `status` (`present/absent`)
-  - `blockedReason` (quando aplicável)
-  - `templateId` (opcional)
-  - `provider` (`push`/`whatsapp`)
-  - `debug` (contagens, amostras sem dados sensíveis)
+E manter apenas o registro mais recente (por `updatedAt`).
 
 ---
 
-## 6) Checklist de qualidade (produto)
+## 5) Observabilidade
 
-- O painel do paciente deve mostrar claramente:
-  - próximas sessões
-  - lembretes ativos (notificações)
-  - mensagens que reforçam constância como cuidado
-- O Admin deve conseguir:
-  - importar presença/falta
-  - ver taxa de constância por paciente
-  - acionar follow-ups (dryRun + envio real)
-- Erros devem ser resolvidos com prioridade:
-  - lembrete quebrado → mais risco de falta → quebra de continuidade
+- Preferir logs/auditoria no Admin para:
+  - `dryRun`
+  - total de candidatos
+  - contadores por motivo de bloqueio
+
+Sem armazenar dados sensíveis no `history`.
 

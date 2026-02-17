@@ -1,86 +1,101 @@
 # 27_OPERATIONS_RUNBOOK
 
-Runbook operacional do **Lembrete Psi** para manter o sistema funcionando sem “surpresas” que virem falhas de lembrete.
+Runbook operacional do **Lembrete Psi** para manter o sistema funcionando sem “surpresas” que virem falhas de constância.
 
-> Clínica: falha operacional vira falha de cuidado ativo.  
-> Falha de lembrete aumenta chance de falta. E falta interrompe evolução.
+> Clínica: falha operacional vira falha de cuidado ativo.
 
 ---
 
-## 1) Rotina diária (Admin)
+## Quick links (impressão / registro)
+- **Checklist diário (1 página):** `docs/27A_DAILY_CHECKLIST_ONEPAGER.md`
+- **Template de registro diário:** `docs/27B_DAILY_LOG_TEMPLATE.md`
 
-- [ ] Conferir se import de agenda do dia/semana está atualizado
-- [ ] Rodar dryRun de envios pendentes (msg1/2/3) e verificar `blockedReason`
-- [ ] Verificar pacientes inativos (se houve desligamentos recentes)
-- [ ] Conferir se houve erros no `history` relacionados a envio
+## 1) Rotina diária (modo manual — recomendado)
+
+### 1.1 Agenda (janela móvel)
+- [ ] Admin → **Agenda** → **Carregar Planilha** (hoje → +30 dias)
+- [ ] **Verificar** (conferir parsing e linhas problemáticas)
+- [ ] **Sincronizar** (criar/atualizar; e cancelar futuros que “sumiram” do upload)
+
+### 1.2 Lembretes
+- [ ] **Gerar Preview do Disparo** (dryRun)
+  - conferir contadores (enviáveis vs bloqueados)
+  - olhar amostra (placeholders preenchidos)
+- [ ] **Enviar lembrete**
+- [ ] **Operação do Dia → Salvar registro** (auditoria)
+  - opcional: **Marcar dia concluído** (somente com CHECK=0 e envio finalizado)
+  - ver **Histórico (últimos 14 dias)** no card para comparar e diagnosticar rapidamente
+
+### 1.3 Falha-segura (Admin)
+No card **Operação do Dia**, o bloco **Falha-segura** aparece quando o sistema detecta risco real de erro humano ou falha de infraestrutura.
+
+O que ele cobre:
+- Env/credenciais ausentes (ex.: `FIREBASE_ADMIN_SERVICE_ACCOUNT_B64`)
+- Admin SDK indisponível
+- VAPID ausente (paciente não consegue ativar push no navegador)
+- CHECK de push pendente (evita “achar que enviou”)
+- Seleção com 0 prontos (tudo bloqueado)
+
+Conduta operacional:
+1. Leia o item (ele já traz o **como resolver**).
+2. Clique **Reverificar** após ajustar.
+3. Só avance para envio quando não houver falha crítica (level=error).
+
+> Regra clínica: se houver muitos bloqueados por `no_token`, é sinal de risco de falta por não receber lembrete.
 
 ---
 
 ## 2) Rotina semanal
 
-- [ ] Importar presença/falta (se usar planilha externa)
-- [ ] Atualizar painel de constância (métricas 30/60/90 dias)
-- [ ] Executar follow-ups (presença/falta) com dryRun antes
+### 2.1 Presença/Faltas (constância)
+- [ ] Importar planilha de presença/faltas (quando aplicável)
+- [ ] Conferir painel de métricas (30/60/90 dias)
+- [ ] Rodar **follow-ups** com `dryRun` antes
+- [ ] Enviar follow-ups reais
+  - já existe idempotência por `attendance_logs/{id}.followup.sentAt` (anti-spam)
 
 ---
 
-## 3) Quando algo “sumiu” no Admin (fluxo quebrado)
+## 3) Se o paciente não recebe lembrete
 
-### 3.1 Upload não recarrega após “Limpar”
-- Verificar reset completo do state
-- Garantir troca de `key` do `<input type="file">`
-
-### 3.2 Preview não mostra amostras
-- Confirmar que o endpoint retorna `sample` mesmo quando bloqueado (com `blockedReason`)
-- Confirmar interpolação de placeholders (ver doc 15)
-
----
-
-## 4) Quando o paciente não recebe lembrete
-
-Checklist rápido (ordem):
-
-1. `users/{uid}.status` é `"active"`?
-2. `users/{uid}.phoneCanonical` existe e bate com `subscribers/{phoneCanonical}`?
+Checklist (ordem):
+1. `users/{uid}.status` é `active`?
+2. `users/{uid}.phoneCanonical` existe e está correto?
 3. `subscribers/{phoneCanonical}.pushToken` existe?
-4. O browser do paciente está com permissão `"granted"`?
-5. DryRun no Admin mostra `blockedNoToken` ou `blockedInactive`?
-6. Há logs em `history` com `push.send.failed`?
+4. Browser do paciente: notificação está `granted`?
+5. Preview/dryRun no Admin mostra `blockedNoToken` / `inactive`?
 
 Ação clínica (texto sugerido para contato humano):
 - “Percebi que seus lembretes podem não estar chegando. Vamos ajustar isso para proteger sua constância — seu horário é um espaço de cuidado.”
 
 ---
 
-## 5) Quando aparece `permission-denied`
+## 4) Se aparecer `permission-denied` no paciente
 
-- Validar consistência de `phoneCanonical` (doc 13)
-- Confirmar que o painel do paciente resolve/define telefone via rota server-side (se aplicável)
-- Revisar rules (doc 25) e bloquear decisões críticas server-side
-
----
-
-## 6) Padrão de logs obrigatórios em incidentes
-
-Sempre registrar em `history`:
-- `type`: `incident.opened`, `incident.resolved`
-- `payload`:
-  - `area` (admin/patient/push/import)
-  - `symptom` (texto curto)
-  - `rootCause` (texto curto)
-  - `fixCommit` (hash/descrição)
-  - `followUp` (o que evitar no futuro)
-
-Sem dados sensíveis.
+- Agenda do paciente é **server-side** (`GET /api/patient/appointments`).
+- Se aparecer `permission-denied`, normalmente é código antigo tentando ler `appointments` no client.
+- Verifique se:
+  - hook `usePatientAppointments` está atualizado
+  - build/deploy está com a versão mais recente
 
 ---
 
-## 7) Critérios de “ok para operar”
+## 5) Cron (opcional) — não confundir
 
-- DryRun sem erros e com contagens coerentes
+- O endpoint `/api/cron/reminders` **não roda sozinho**.
+- Só existe automação se você configurar Cron Jobs na Vercel.
+- Se sua operação é manual, mantenha **zero Cron Jobs**.
+
+---
+
+## 6) Critérios de “ok para operar”
+
+- Preview (dryRun) coerente e sem erros
+- Sem falhas críticas em **Falha-segura**
 - Paciente de teste ativo consegue:
   - abrir painel
-  - ver próxima sessão
+  - ver próxima sessão (via API)
   - ativar notificações (quando permitido)
-- Envios bloqueados (quando necessário) aparecem com motivo
+- Bloqueios aparecem com motivo (no_token, inactive, already_sent)
+- Registro do dia salvo (reduz risco humano e facilita diagnóstico amanhã)
 

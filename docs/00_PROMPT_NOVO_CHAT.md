@@ -1,55 +1,47 @@
-# Lembrete Psi — Handoff para novo chat (2026-02-15)
+# Prompt para iniciar novo chat — Lembrete Psi (continuação — 2026-02-16)
 
-## Contexto rápido
-Projeto **Lembrete Psi** (Next.js + Firebase) focado em **sustentar vínculo terapêutico** via lembretes de sessão e psicoeducação de constância.  
-Diretriz UX: **não facilitar cancelamento/remarcação** (sem botão de cancelar e sem CTA de WhatsApp para cancelar).
+Você é um **dev master full stack + olhar clínico** (psicoeducação/constância) para o projeto **Lembrete Psi** (Next.js 16 + Firebase).
 
-## Estado do sistema (antes das alterações desta rodada)
-- Admin → Pacientes: tabela compacta com rolagem interna (8 linhas), filtros server-side, paginação por cursor, busca inteligente.
-- Admin → Histórico: rolagem, filtros, modal de detalhes, paginação, visão “Falhas de envio” e “Campanhas” por slot.
-- Disparo push: corrigida duplicidade via SW (service worker) + envio `webpush.notification` com `tag/dedupeKey`; placeholders PT/EN suportados.
-- Import agenda: reconciliação por janela; sessão que some do upload diário é marcada `cancelled/missing_in_upload`.
-- Script limpeza: `scripts/purgeAttendanceLogs.cjs` (v3 ASCII).
+## Regras de trabalho (obrigatórias)
+- Sempre **passo a passo**, 1 por 1; só avance quando eu disser **OK**.
+- Quando houver alteração de código/documentação, entregue **arquivo completo em .zip** com **link para download** (não colar código no chat).
+- Prioridade clínica: reforçar vínculo e constância; faltar é ruim para o processo; **sem botão/CTA de cancelar/remarcar** no painel do paciente.
+- Se faltar arquivo/versão atual, peça para eu subir o zip mais recente.
 
-## Objetivo desta rodada
-1) Confirmar que o pipeline **48h / 24h / 12h** não duplica e sempre preenche placeholders `{nome}/{profissional}/{data}/{hora}`.  
-2) Implementar idempotência persistida por **sessão+slot** em:
-   - `appointments/{id}.reminders.slotX.sentAt`  
-   para evitar duplicidade em retries/clique duplo/re-disparo.
+---
 
-## Implementações feitas
-### A) Idempotência persistida por sessão+slot
-- Endpoint `POST /api/admin/reminders/send` agora:
-  - **verifica no Firestore** se `appointments/{id}.reminders.slotX.sentAt` já existe antes de enviar.
-  - se existe, **pula** e contabiliza `skippedAlreadySent`.
-  - se envia com sucesso, grava `sentAt` com `serverTimestamp()` no slot correspondente.
+## Onde paramos (estado validado)
 
-### B) Placeholders garantidos (client + server)
-- Client (preview/parse): substituição passou a ser **global** e compatível com `{chave}` e `{{chave}}`, PT/EN.
-- Server (envio real): mesmo quando `messageBody` já vem preenchido do client, o server aplica `applyTemplate()` para **garantir** que nenhum placeholder “escape”.
+### Operação (modo manual)
+Eu faço o fluxo diariamente:
+**Admin → Agenda → Carregar Planilha → Verificar → Sincronizar → Gerar Preview do Disparo → Enviar lembrete**.
 
-### C) Hardening (auditoria por slot)
-No mesmo endpoint, para cada `appointments/{id}.reminders.slotX`:
-- `attempts` (incrementa a cada tentativa)
-- `lastAttemptAt`
-- `lastResult`: `"success"` / `"failure"`
-- `lastError` / `lastErrorCode` (somente em falha)
-- `lastMessageId` (se retornado pelo FCM)
-- `dedupeKey`: `{appointmentId}:{slotX}` (estável por sessão+slot)
+Não há Cron Jobs configurados na Vercel.
 
-> Observação: `sentAt` continua sendo gravado **somente em sucesso**, preservando idempotência.
+### Decisões técnicas importantes
+- **Agenda do paciente é server-side**:
+  - Painel do paciente consome `GET /api/patient/appointments` (Admin SDK).
+  - Firestore Rules: `appointments/*` é **admin-only** (paciente não lê via client).
+- **Follow-ups de constância (presença/falta) têm idempotência**:
+  - `POST /api/admin/attendance/send-followups` não reenviará se `attendance_logs/{id}.followup.sentAt` já existir.
+- **Confirmação de presença**:
+  - `GET /api/attendance/confirmed` retorna `appointmentIds[]` para marcar “confirmado”.
+  - `confirmd` é alias.
+- **Psicoeducação passiva** no painel do paciente:
+  - mantra fixo + cards rotativos.
+  - WhatsApp (quando existir) é copy de **confirmação**, sem facilitar cancelamento.
+- Existe endpoint opcional `GET /api/cron/reminders` (protegido por `CRON_SECRET`), mas não está em uso (decisão atual: manual).
 
-## Arquivos alterados (final)
-1) `src/app/api/admin/reminders/send/route.js` *(versão “hardening” é a mais recente)*  
-2) `src/services/dataService.js`  
-3) `src/components/Admin/AdminScheduleTab.js`
+---
 
-## Como validar rapidamente
-- Fazer um disparo e confirmar que grava `appointments/{id}.reminders.slotX.sentAt`.
-- Repetir disparo: deve retornar `sentCount: 0` e `skippedAlreadySent > 0`.
-- Conferir que `messageBody` não contém `{nome}` / `{{nome}}` etc (Preview / Histórico).
-- Ver `attempts` e `lastResult` mudando em caso de falha.
+## Objetivo clínico do produto
+Sustentar constância: lembretes e psicoeducação para reduzir faltas por esquecimento/resistência. Sem moralismo, com firmeza e cuidado.
 
-## Próximas melhorias possíveis (se houver continuação)
-- (Opcional) Registrar também `reminders.slotX.templateKey`/`templateVersion` para auditoria clínica (sem expor “cancelamento”).
-- (Opcional) Job/cron seguro para envio automático (se ainda estiver manual), usando a mesma idempotência por slot.
+---
+
+## Próximo passo sugerido
+Criar/aperfeiçoar um **checklist operacional diário** (modo manual) para:
+- reduzir risco humano (dias corridos)
+- facilitar diagnóstico (sem token, inativo, já enviado)
+- manter continuidade do cuidado
+

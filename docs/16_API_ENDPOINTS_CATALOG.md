@@ -1,103 +1,96 @@
 # 16_API_ENDPOINTS_CATALOG.md
 
-> Objetivo clínico do sistema: sustentar o vínculo terapêutico por meio de **constância**.  
-> Na prática: rotas críticas (envio/decisões) devem ser **server-side**, com bloqueios para pacientes **inativos**.
+> Norte clínico: rotas críticas (envio/decisões) devem ser **server-side** para proteger a constância.
 
 ## Convenções
-
-- **Next.js App Router**: endpoints devem existir como `.../route.js`.
-- Autenticação: quando necessário, usar `Authorization: Bearer <Firebase ID Token>`.
-- Logs: preferir registrar em `history` com:
-  - `type: string`
-  - `createdAt: timestamp`
-  - `payload: map` (schema flexível)
-- Identidade: usar `phoneCanonical` como chave operacional (ver `13_PATIENT_KEY_DENORMALIZATION.md`).
+- Next.js App Router: endpoints existem como `.../route.js`.
+- Auth Admin: `Authorization: Bearer <Firebase ID Token>` + `role=admin` (ver `requireAdmin`).
+- Segredo (cron): `CRON_SECRET` via query `?key=` ou header `x-cron-secret`.
+- Logs/auditoria: ações críticas registram auditoria (quando aplicável).
 
 ---
 
-## Endpoints (App Router)
+## Paciente
 
-> Observação: nomes abaixo refletem a convenção esperada; ajuste o caminho conforme sua árvore de `src/app/api`.
+### 1) Resolver telefone/canonicalização
+- **GET** `/api/patient/resolve-phone`
+- **Auth:** obrigatório
+- **Uso:** garante `phoneCanonical` (fonte: `users/{uid}`; fallbacks quando necessário).
 
-### 1) Resolver telefone do paciente (compatibilidade)
+### 2) Agenda do paciente (server-side)
+- **GET** `/api/patient/appointments`
+- **Auth:** obrigatório
+- **Uso:** retorna sessões futuras do paciente via Admin SDK.
+- **Motivo:** evitar `permission-denied` e reduzir superfície (paciente não lê `appointments/*` direto no Firestore).
 
-**Path:** `/api/patient/resolve-phone`  
-**Arquivo:** `src/app/api/patient/resolve-phone/route.js`  
-**Método:** `GET`  
-**Auth:** obrigatório (ID Token)
+### 3) Push token (registrar)
+- **POST** `/api/patient/push/register`
+- **Auth:** obrigatório
+- **Uso:** salva `pushToken` em `subscribers/{phoneCanonical}` (ou estrutura equivalente do projeto).
 
-**Responsabilidade**
-- Obter `phone`/`phoneCanonical` para o usuário autenticado (`users/{uid}`).
-- Fallback: localizar em `subscribers` por `email` (legado) quando necessário.
-- Garantir merge em `users/{uid}` dos campos:
-  - `phone`, `phoneNumber`, `phoneCanonical`
+### 4) Push status (diagnóstico)
+- **GET** `/api/patient/push/status`
+- **Auth:** obrigatório
+- **Uso:** retorna status/permissão/token (para orientar o paciente a manter notificações ativas).
 
-**Retorno (exemplo)**
-```json
-{ "ok": true, "phoneCanonical": "11999998888", "source": "users" }
-```
-
----
-
-### 2) Enviar lembretes de agenda (Admin)
-
-**Path (exemplo):** `/api/admin/reminders/send`  
-**Método:** `POST`  
-**Auth:** obrigatório (Admin)
-
-**Bloqueios server-side**
-- Se paciente estiver `status: "inactive"` em `users/{uid}` ou `users` por `phoneCanonical`, **não enviar**.
-- Se não houver `pushToken` válido em `subscribers/{phoneCanonical}`, **não enviar** (retornar como `blockedNoToken`).
-
-**Recomendação de log**
-- `history.type = "reminder_send_batch"`
-- `payload`: intervalo, totais, amostras (sem PII), bloqueios por motivo.
+### 5) Pareamento (quando habilitado)
+- **POST** `/api/patient/pair`
+- **Auth:** obrigatório
+- **Uso:** fluxo de vinculação/pareamento com a clínica (quando usado).
 
 ---
 
-### 3) Enviar follow-ups de Presença/Falta (Admin)
+## Presença / Confirmação (Paciente)
 
-**Path (exemplo):** `/api/admin/attendance-followups/send`  
-**Método:** `POST`  
-**Auth:** obrigatório (Admin)
+### 6) Confirmar presença
+- **POST** `/api/attendance/confirm`
+- **Auth:** obrigatório
+- **Uso:** registra evento do paciente (ex.: `eventType = patient_confirmed`) para reforço de compromisso.
 
-**Config usada (Firestore)**
-- `config/global`:
-  - `attendanceFollowupPresentTitle`, `attendanceFollowupPresentBody`
-  - `attendanceFollowupAbsentTitle`, `attendanceFollowupAbsentBody`
-
-**Bloqueios server-side**
-- paciente inativo -> `blockedReason: "inactive"`
-- sem token -> `blockedReason: "no_token"`
-
-**Dry-run**
-- aceitar `dryRun: true` e retornar `sample` interpolado + `blockedReason`.
-
-**Recomendação de log**
-- `history.type = "attendance_followups_batch"`
-- `payload`: janela, totais, byStatus (present/absent), amostras sem PII.
+### 7) Consultar confirmados
+- **GET** `/api/attendance/confirmed`
+- **Auth:** obrigatório
+- **Retorno:**
+  - `{ ok: true, appointmentIds: string[] }`
+  - se enviar `?appointmentId=...`, inclui `{ confirmed: boolean }`
+- **Compat:** `GET /api/attendance/confirmd` é alias.
 
 ---
 
-### 4) Admin: reparo/normalização (scripts seguros)
+## Admin — Agenda e lembretes
 
-**Path (exemplo):** `/api/admin/users/repair-roles`  
-**Método:** `POST`  
-**Auth:** obrigatório (Admin)
-
-**Responsabilidade**
-- Corrigir `role/status` ausentes ou inconsistentes em `users`.
-- Nunca rodar do client; sempre server-side.
-
-**Retorno**
-- `{ ok, dryRun, scanned, updated, skipped }`
+### 8) Enviar lembretes (manual)
+- **POST** `/api/admin/reminders/send`
+- **Auth:** obrigatório (admin)
+- **Uso:** envio manual por slot (48h/24h/12h) com preview/dryRun e idempotência por sessão+slot.
 
 ---
 
-## Checklist de segurança (mínimo)
+## Admin — Constância (presença/faltas)
 
-- [ ] Rotas de envio **nunca** executam envio no client.
-- [ ] Bloqueio de paciente inativo ocorre **no endpoint**.
-- [ ] Retornos incluem contadores (`sent`, `blocked`, `blockedNoToken`) para auditoria.
-- [ ] Logs em `history` não armazenam conteúdo sensível (sem nome/telefone/email em claro).
+### 9) Importar presença/faltas
+- **POST** `/api/admin/attendance/import`
+- **Auth:** obrigatório (admin)
+- **Uso:** importar logs (planilha 2) para `attendance_logs/*`.
+
+### 10) Resumo/métricas
+- **POST** `/api/admin/attendance/summary`
+- **Auth:** obrigatório (admin)
+- **Uso:** métricas de constância por paciente (30/60/90 dias) para painel.
+
+### 11) Enviar follow-ups (presença/falta)
+- **POST** `/api/admin/attendance/send-followups`
+- **Auth:** obrigatório (admin)
+- **Idempotência:** se `attendance_logs/{id}.followup.sentAt` existe → não reenviar.
+- **DryRun:** retorna amostra interpolada + motivos de bloqueio.
+
+---
+
+## Cron (opcional)
+
+### 12) Enviar lembretes automaticamente
+- **GET** `/api/cron/reminders`
+- **Auth:** por segredo (`CRON_SECRET`)
+- **Uso:** scheduler chama a URL e o endpoint envia lembretes 48h/24h/12h com idempotência por slot.
+- **Observação:** não roda sozinho; só funciona se você configurar Cron Jobs.
 

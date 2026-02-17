@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Lembrete Psi
 
-## Getting Started
+**Propósito:** sustentar vínculo terapêutico e constância (reduzir faltas) com lembretes e psicoeducação.
 
-First, run the development server:
+- Stack: **Next.js 16 (App Router)** + **Firebase (Firestore + Admin SDK + FCM/Web Push)**
+- Diretriz clínica/UX (painel do paciente):
+  - reforçar compromisso e continuidade
+  - **sem botão/CTA de cancelar/remarcar**
+  - WhatsApp (quando existir): **apenas para confirmação de presença**
+
+## Rodando localmente
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Acesse: http://localhost:3000
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Docs
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+A documentação do projeto está em `./docs`.
 
-## Learn More
+Arquivos mais úteis para operação e continuidade:
+- `docs/00_ONDE_PARAMOS.md`
+- `docs/00_PROMPT_NOVO_CHAT.md`
+- `docs/01_HANDOFF.md`
+- `docs/27_OPERATIONS_RUNBOOK.md`
 
-To learn more about Next.js, take a look at the following resources:
+## Operação (modo manual recomendado)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Fluxo diário (Admin → Agenda):
+1. **Carregar Planilha** (janela móvel **hoje → +30 dias**)
+2. **Verificar**
+3. **Sincronizar**
+4. **Gerar Preview do Disparo** (dryRun)
+5. **Enviar lembrete**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+> Observação: existe um endpoint opcional de cron (`/api/cron/reminders`), mas **não roda sozinho**.
+> Só funciona se você configurar Cron Jobs na Vercel. Veja `docs/26_VERCEL_CRON_REMINDERS.md`.
 
-## Deploy on Vercel
+## Segurança (importante)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Paciente **não lê** `appointments/*` diretamente no Firestore (client). Agenda do paciente é **server-side**:
+  - `GET /api/patient/appointments` (Admin SDK)
+- Firestore Rules: `appointments/*` é **admin-only**. Veja `docs/25_FIRESTORE_RULES_GUIDE.md`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

@@ -1,39 +1,53 @@
-# Prompt para iniciar novo chat — Lembrete Psi (continuação)
+# Prompt para iniciar novo chat — Lembrete Psi (continuação — 2026-02-16)
 
 Você é um **dev master full stack + olhar clínico** (psicoeducação/constância) para o projeto **Lembrete Psi** (Next.js 16 + Firebase).
 
-Regras de trabalho:
+## Regras de trabalho
 - Sempre **passo a passo**, 1 por 1; só avance quando eu disser **OK**.
 - Quando houver alteração de código/documentação, entregue **arquivo completo em .zip** com **link para download** (não colar código no chat).
 - Prioridade clínica: reforçar vínculo e constância; faltar é ruim para o processo; **sem botão/CTA de cancelar/remarcar** no painel do paciente.
 - Se faltar arquivo/versão atual, peça para eu subir o zip mais recente.
 
-## Status do projeto (até 2026-02-14)
-### Paciente
-- Header limpo, mantra e contraste revisados.
-- Próximo atendimento com destaque sutil e leitura boa no mobile.
-- Contrato para releitura via menu.
-- Agenda ajustada no mobile, “Agenda atualizada em {data/hora}”.
-- Diário rápido + histórico (modal) + preview últimas 2, contexto da próxima sessão, pin local.
-- **Sem CTA de Admin no painel do paciente**.
+---
 
-### Admin
-- Admin em rota dedicada: **/admin**.
-- Menu e tela de acesso do Admin com branding.
-- Dashboard focado em **Constância Terapêutica (30 dias)** + alertas de risco.
-- Painel de Saúde do Sistema.
-- Auditoria (aba Audit) lendo `audit_logs`.
+## Status do projeto (até 2026-02-16)
 
-### Segurança / Produção (hardening)
-- Rotas sensíveis protegidas com **Authorization: Bearer (idToken)** + `role=admin`.
-- Rate limit best-effort nas rotas Admin.
-- **Audit log** (`audit_logs`) para ações críticas.
-- **Hardening anti-CSRF/CORS**: rotas Admin bloqueiam `Origin` diferente do host.
-- **Erros padronizados** (sem vazar detalhes) + `requestId`.
-- **Fail-safe**: exceções inesperadas viram `audit_logs` com `status=error`.
+### Paciente (UX/Clínico)
+- Painel focado em **próxima sessão** + **psicoeducação**:
+  - mantra fixo + cards rotativos
+- **Sem CTA de cancelar/remarcar**.
+- WhatsApp (quando exibido): copy voltado a **confirmação de presença**.
+- Agenda do paciente é **server-side**:
+  - `GET /api/patient/appointments` (Admin SDK)
+  - paciente não lê `appointments/*` no client (evita `permission-denied` e tela vazia).
 
-## Próximo passo sugerido
-1) Revisar/limpar rotas antigas `_push_old/*` (remover ou bloquear) e conferir se ainda são usadas.
-2) Checklist final de produção: env vars, logs, Firestore rules, backup local e teste end-to-end.
+### Admin (Operação)
+- Fluxo diário (manual):
+  - **Agenda → Carregar Planilha → Verificar → Sincronizar → Preview → Enviar**
+- Follow-ups de constância:
+  - `POST /api/admin/attendance/send-followups` (dryRun + envio)
+  - idempotência por `attendance_logs/{id}.followup.sentAt`
 
-Comece pelo **passo 1**.
+### Segurança
+- `appointments/*` nas Firestore Rules: **admin-only**.
+- Envios e decisões críticas sempre **server-side**.
+
+### Automação (opcional)
+- Existe `GET /api/cron/reminders` (protegido por `CRON_SECRET`), documentado em `docs/26_VERCEL_CRON_REMINDERS.md`.
+- Decisão operacional atual: **não usar cron**; manter envios manuais.
+
+---
+
+## Objetivo final
+Sustentar constância terapêutica: reduzir faltas por esquecimento e por “resistências do dia a dia” com cuidado ativo + psicoeducação + responsabilização.
+
+---
+
+## Onde olhar no repositório
+- Docs canônicas:
+  - `docs/00_ONDE_PARAMOS.md`
+  - `docs/01_HANDOFF.md`
+  - `docs/02_CHANGELOG.md`
+  - `docs/27_OPERATIONS_RUNBOOK.md`
+  - `docs/25_FIRESTORE_RULES_GUIDE.md`
+

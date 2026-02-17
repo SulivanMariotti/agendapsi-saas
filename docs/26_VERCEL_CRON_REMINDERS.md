@@ -1,81 +1,88 @@
-# 26 — Cron de Lembretes (48h/24h/12h) — Automático
+# 26 — Cron de Lembretes (48h/24h/12h) — Opcional
 
 ## Objetivo clínico
-O lembrete automático reduz faltas por esquecimento e sustenta a **constância** (a terapia acontece na continuidade).
+Automatizar lembretes reduz faltas por esquecimento e sustenta **constância**.
 
-## O que este passo adiciona
-- Endpoint protegido: `GET /api/cron/reminders`
-
-O cron:
-- Busca sessões futuras (janela ~48h + tolerância)
-- Determina o slot correto (**48h/24h/12h**) pela proximidade
-- **NÃO duplica** (usa `appointments/{id}.reminders.slotX.sentAt` como idempotência)
+⚠️ **Importante:** este recurso é **opcional**.
+- Se você prefere operar manualmente (Admin → Agenda → Preview → Enviar), **não crie Cron Jobs**.
+- O endpoint não roda sozinho.
 
 ---
 
-## 1) Configurar o segredo do cron (CRON_SECRET)
-### 1.1 Local (Windows)
-1. Abra o arquivo `.env.local`
-2. Adicione uma linha:
+## O que existe no projeto
+- Endpoint protegido: `GET /api/cron/reminders`
+- Proteção por segredo (`CRON_SECRET`):
+  - Header: `x-cron-secret: <valor>`
+  - OU Query: `?key=<valor>`
+
+O endpoint:
+- busca sessões futuras (janela ~48h + tolerância)
+- escolhe o slot (**48h/24h/12h**) pela proximidade
+- **não duplica** (usa `appointments/{id}.reminders.slotX.sentAt` como idempotência)
+
+---
+
+## 1) Quando usar (recomendação prática)
+
+Use cron quando:
+- você quer que os lembretes saiam mesmo em dias corridos
+- o time não quer depender do clique diário
+
+Não use cron quando:
+- você quer controle total e já opera manualmente (seu caso atual)
+
+> Mesmo se você decidir usar cron depois, o sistema foi desenhado para **não virar spam** por duplicidade.
+
+---
+
+## 2) Configurar o segredo (CRON_SECRET)
+
+### 2.1 Local (Windows)
+1. Abra `.env.local`
+2. Adicione:
    - `CRON_SECRET=uma_chave_grande_aleatoria`
 
-Sugestão: use um valor longo (32+ caracteres) com letras/números.
-
-### 1.2 Vercel (Production)
-1. Vá em **Vercel Dashboard** → seu projeto `agenda.msgflow.app.br`
-2. Clique em **Settings** → **Environment Variables**
-3. Adicione:
-   - **Key**: `CRON_SECRET`
-   - **Value**: (mesmo valor do `.env.local`)
-   - **Environment**: marque **Production** (e opcionalmente Preview/Development)
-4. Clique em **Save**
-
-> Importante: o cron só funciona se `CRON_SECRET` existir no ambiente.
+### 2.2 Vercel (Production)
+1. Vercel Dashboard → Project
+2. Settings → Environment Variables
+3. Adicione `CRON_SECRET` (Production)
 
 ---
 
-## 2) Agendar no Vercel (recomendado)
-O jeito mais simples (sem colocar segredo no repositório) é criar o Cron pelo dashboard.
+## 3) Testar sem enviar (dryRun)
 
-1. Vá em **Vercel Dashboard** → seu projeto
-2. Abra **Cron Jobs** (ou **Settings → Cron Jobs**, dependendo do layout)
-3. Clique em **Add Cron Job**
-4. Configure:
-   - **Schedule (cron)**: `0 * * * *` (1x por hora)
-   - **Path**: `/api/cron/reminders?key=SEU_CRON_SECRET`
-
-> Observação: aqui o segredo fica salvo no Vercel (não no Git).
-
----
-
-## 3) Teste manual (sem enviar)
-O endpoint aceita **dry run**:
-
+Abra:
 - `GET /api/cron/reminders?dryRun=1&key=SEU_CRON_SECRET`
 
-Retorna contadores (candidatos, tokens ausentes, inativos, etc.) e **não envia**.
+Retorna contadores (candidatos elegíveis, etc.) e **não envia**.
 
 ---
 
-## 4) Teste manual (enviar de verdade)
+## 4) Testar enviando de verdade
+
+Abra:
 - `GET /api/cron/reminders?key=SEU_CRON_SECRET`
 
-Após executar:
-1. Verifique coleção `history` no Firestore:
-   - `type = "cron_reminders_send_summary"`
-2. Verifique em `appointments/{id}.reminders.slotX.sentAt` se marcou o slot.
+Depois verifique:
+- `appointments/{id}.reminders.slotX.sentAt` gravado
 
 ---
 
-## 5) Ajuste fino (se quiser)
-Se você preferir **mais precisão** (ex.: rodar de 30 em 30 min), use:
-- `*/30 * * * *`
+## 5) Criar Cron Job na Vercel (se decidir automatizar)
 
-Se preferir menos execução (ex.: 6x/dia), use horários fixos.
+1. Vercel Dashboard → seu Project
+2. Menu → **Cron Jobs**
+3. **Create / Add Cron Job**
+4. Configure:
+   - Schedule: `*/15 * * * *` (a cada 15 min — robusto)
+   - URL/Path: `/api/cron/reminders?key=SEU_CRON_SECRET`
+
+> Alguns layouts chamam de “URL” em vez de “Path”.
 
 ---
 
-## 6) Observações clínicas (mensagem)
-- Não há CTA de cancelar/remarcar.
-- O conteúdo segue a lógica do produto: **espaço reservado** + reforço de compromisso.
-- O texto vem de `config/global` (MSG1/MSG2/MSG3 ou msg48h/msg24h/msg12h).
+## 6) Observações clínicas
+- Sem CTA de cancelar/remarcar.
+- Conteúdo vem de `config/global` (MSG1/MSG2/MSG3 e/ou msg48h/msg24h/msg12h).
+- Automação é para **proteger constância**, não para “cobrar”.
+

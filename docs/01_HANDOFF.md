@@ -1,74 +1,79 @@
-# Lembrete Psi — Handoff para novo chat (2026-02-15)
+# Lembrete Psi — Handoff para novo chat (2026-02-16)
 
-Este pack serve para **iniciar um novo chat** e continuar o desenvolvimento **de onde paramos**.
+Este pack serve para iniciar um novo chat e continuar o desenvolvimento **de onde paramos**, sem perder decisões clínicas/técnicas.
 
 ---
 
 ## Contexto do projeto
 - App: **Lembrete Psi**
-- Stack: **Next.js (App Router) + Firebase (Firestore/FCM)**
+- Stack: **Next.js (App Router) + Firebase (Firestore/FCM + Admin SDK)**
 - Diretriz clínica/UX (painel do paciente):
-  - Foco: **lembrar, psicoeducar e responsabilizar**.
-  - Evitar CTAs que facilitem cancelamento/remarcação (sem botão “cancelar”, sem WhatsApp como atalho para cancelar).
+  - foco em **lembrar + psicoeducar + responsabilizar**
+  - **sem botão/CTA de cancelar/remarcar**
+  - WhatsApp (quando existir): **apenas para confirmação de presença**
 
 ---
 
 ## Onde paramos (estado atual)
-### Objetivo recente
-- Corrigir fluxo de lembretes (48h/24h/12h) com:
-  - **não duplicar push**,
-  - **preencher placeholders** na mensagem,
-  - garantir que **cancelamento via planilha diária** interrompa 24h/12h (sessão “sumiu do upload” → cancela).
 
-### Último estado validado
-- Push chegou **apenas 1x** (sem duplicar).
-- Houve teste com planilha simples e placeholders preenchidos.
-- Implementada limpeza de dados de teste via script (pasta `scripts/`).
+### Operação (manual)
+Rotina diária (Admin → Agenda):
+1) Carregar Planilha (janela **hoje → +30 dias**)
+2) Verificar
+3) Sincronizar
+4) Gerar Preview do Disparo (dryRun)
+5) Enviar lembrete
 
----
+> Não há Cron Jobs configurados na Vercel. O envio automático é **opcional**.
 
-## Regras de negócio consolidadas (agenda + import)
-### Import diário em janela móvel (30 dias)
-- Você exporta **hoje → hoje+30d** diariamente.
-- O sistema deve:
-  1) **criar/atualizar** sessões do upload;
-  2) marcar como **cancelled/missing_in_upload** as sessões FUTURAS dentro da janela que existiam antes, mas **não vieram** no upload atual.
-- Isso evita enviar lembretes 24h/12h para sessão que foi cancelada no sistema da clínica.
-
-### Disparo de lembretes
-- O sistema **não agenda “fila futura”** no momento do 48h.
-- Cada disparo (48/24/12) **filtra por janela** e envia somente as sessões elegíveis daquele momento.
+### Segurança (decisão importante)
+- Paciente **não lê** `appointments/*` via Firestore client.
+- Agenda do paciente é carregada via:
+  - `GET /api/patient/appointments` (Admin SDK)
+- Firestore Rules: `appointments/*` é **admin-only**.
 
 ---
 
-## Correções recentes importantes
-### 1) Push duplicado (2x)
-- Causa típica: payload + Service Worker mostrando duas vezes.
-- Solução aplicada:
-  - Ajuste no **Service Worker** para **não** chamar `showNotification()` quando `payload.notification` existe.
-  - Backend envia `webpush.notification` com `tag` (`dedupeKey`) + `data` para auditoria/deep link.
+## Principais entregas desta rodada
 
-### 2) Placeholders não preenchidos
-- Suporte a placeholders PT/EN na interpolação:
-  - `{nome}/{profissional}/{data}/{hora}` e `{name}/{professional}/{date}/{time}`
-- `AdminScheduleTab` foi ajustado para mapear templates `msg1/msg2/msg3` no parse e enviar `messageBody` já pronto quando disponível.
+1) **Follow-ups de constância (presença/falta) com anti-spam**
+   - Endpoint: `POST /api/admin/attendance/send-followups`
+   - Idempotência por log: se `attendance_logs/{id}.followup.sentAt` existir → não reenviar.
+   - DryRun mostra amostras e bloqueios (inclui `already_sent`).
 
-### 3) Reconciliação “sumiu do upload”
-- Ajuste na sincronização da agenda para cancelar sessões FUTURAS na janela do upload quando não vierem no CSV do dia.
+2) **Agenda do paciente server-side (fim de permission-denied)**
+   - `src/features/patient/hooks/usePatientAppointments.js` passou a usar `fetch('/api/patient/appointments')`.
 
----
+3) **Confirmar presença (status coerente)**
+   - `GET /api/attendance/confirmed` retorna `appointmentIds[]`.
+   - `confirmd` mantido como alias.
 
-## Arquivos alterados (consolidado desde o último pack)
-- `src/app/api/admin/reminders/send/route.js`
-- `firebase-messaging-sw.js`
-- `src/components/Admin/AdminScheduleTab.js`
-- `src/components/Admin/AdminHistoryTab.js` (campanhas/slots)
-- `src/components/Admin/AdminPatientsTab.js` + `src/app/api/admin/patients/list/route.js` (paginação/filtros/busca/perf)
-- `src/components/DesignSystem.js` (min-h-0 no Card)
-- `scripts/purgeAttendanceLogs.cjs` (limpar sujeira de testes no Firestore)
+4) **Psicoeducação no painel do paciente**
+   - Cards rotativos + mantra fixo.
+   - Copy do WhatsApp ajustado para confirmação (sem facilitar cancelamento).
+
+5) **Cron opcional de lembretes (não habilitado)**
+   - `GET /api/cron/reminders` protegido por `CRON_SECRET`.
+   - Documentação: `docs/26_VERCEL_CRON_REMINDERS.md`.
 
 ---
 
-## Próximo passo sugerido
-- Consolidar idempotência por sessão+slot no Firestore (`appointments/{id}.reminders.slotX.sentAt`) para evitar qualquer duplicidade mesmo em retries (opcional se você não estiver vendo duplicidade).
-- Criar endpoint/admin action “limpar dados de teste” (somente em dev) com confirmação forte (opcional).
+## Arquivos alterados (essenciais)
+- `src/app/api/admin/attendance/send-followups/route.js`
+- `src/components/Admin/AdminAttendanceFollowupsCard.js`
+- `src/app/api/patient/appointments/route.js`
+- `src/features/patient/hooks/usePatientAppointments.js`
+- `firestore.rules`
+- `src/app/api/attendance/confirmed/route.js`
+- `src/app/api/attendance/confirmd/route.js`
+- `src/components/Patient/PatientFlow.js`
+- `src/features/patient/components/NextSessionCard.js`
+- `src/components/Admin/AdminConfigTab.js`
+- `src/app/api/cron/reminders/route.js`
+
+---
+
+## Próximo passo sugerido (quando retomar)
+- Consolidar um **checklist operacional diário** dentro do Admin (sem automatizar) para reduzir risco humano (dias corridos).
+- Evoluir o painel de constância (presença/faltas) com indicadores e “alertas” (sem moralismo; firmeza + cuidado).
+

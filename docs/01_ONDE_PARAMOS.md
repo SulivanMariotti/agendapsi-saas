@@ -1,53 +1,63 @@
 # Lembrete Psi — Onde paramos
 
-> Este arquivo espelha o `docs/00_ONDE_PARAMOS.md` para manter compatibilidade com históricos antigos de docs.
+> Este arquivo espelha o `docs/00_ONDE_PARAMOS.md` para manter compatibilidade com históricos antigos.
 
-# Onde paramos — Lembrete Psi (2026-02-14)
+# Onde paramos — Lembrete Psi (2026-02-16)
 
-## Status de hoje (encerrado)
-- Foco: **aprimoramento do WEB** (Capacitor ficou **pausado**).
-- Estabilidade: Turbopack voltou a funcionar sem “panic”.
-- Rotas do paciente/admin voltaram a responder corretamente (resolve-phone 200).
-- Vercel: corrigidos arquivos com **merge conflict markers** que estavam quebrando o build.
+## Estado atual (validado)
 
-## Entregas concluídas hoje
-1) **Turbopack panic fix**
-   - Ajuste para evitar “FATAL: unexpected Turbopack error / panic log”.
-2) **Resolve Phone (patient)**
-   - `GET /api/patient/resolve-phone` estava 400 → agora **200**.
-   - Suporte a `phoneCanonical` vindo de claims / pareamento e persistência no `users/{uid}`.
-3) **Merge markers removidos (build local/Vercel)**
-   - Removidos `<<<<<<<`, `=======`, `>>>>>>>` nas rotas:
-     - `src/app/api/admin/patient/pair-code/route.js`
-     - `src/app/api/admin/push/status-batch/route.js`
-     - `src/app/api/patient/pair/route.js`
-     - (e também já havíamos corrigido outros arquivos com markers como `resolve-phone/route.js`).
-4) **UX Paciente (mobile-first)**
-   - Card **“Seu próximo atendimento”** com **destaque sutil** e conteúdo legível no celular.
-   - **Contrato** sempre disponível no **menu superior** (para releituras futuras), com modal.
-   - Correção de cor/contraste no menu (**Admin / Sair** estavam claros demais).
-   - **Mantra fixo** no topo do painel (psicoeducação leve e contínua).
-   - Remoção de texto redundante no header (“Olá, paciente… frase longa”) e melhoria do layout do telefone/WhatsApp.
+### Operação (modo manual)
+- Você opera diariamente pelo Admin:
+  1) **Agenda → Carregar Planilha** (janela móvel **hoje → +30 dias**)
+  2) **Verificar** → 3) **Sincronizar**
+  4) **Gerar Preview do Disparo** (dryRun)
+  5) **Enviar lembrete**
+- **Não há Cron Jobs configurados** na Vercel (nenhuma automação rodando).
 
-5) **Firestore Rules (appointments) — fallback por claim phoneCanonical**
-   - Fix: remove `permission-denied` na janela do primeiro acesso pós-pareamento, quando `users/{uid}.phoneCanonical` ainda não está persistido.
-   - Solução: permitir leitura do `appointments/*` quando `resource.data.phone == request.auth.token.phoneCanonical`.
-   - Arquivo: `/firestore.rules`
-
-## O que validar amanhã (check rápido)
-- `npm run build` local passando.
-- Deploy Vercel “verde”.
-- No paciente:
-  - “Seu próximo atendimento” visível e legível no mobile.
-  - Menu: Contrato abre corretamente e Admin/Sair legíveis.
-  - `GET /api/patient/resolve-phone` retorna 200.
-
-## Próximo passo sugerido (amanhã)
-> **Painel de constância (presença/faltas)**: consolidar import/registro e preparar os disparos/psicoeducação de follow-up (parabenizar presença + orientar em caso de falta), sem criar “botão de cancelar”.
-
-- Ajustar/confirmar a fonte de dados (planilha 2 de presença/faltas).
-- Garantir que o painel de constância e o disparo estejam acessíveis no Admin.
-- Revisar armazenamento (Firestore) para histórico de constância (sem joins; denormalização).
+### Diretriz clínica/UX (painel do paciente)
+- Produto reforça vínculo e constância.
+- **Sem botão/CTA de cancelar/remarcar**.
+- WhatsApp, quando exibido: **apenas para confirmação de presença**.
 
 ---
-Capacitor: **pausado** por decisão (retomar só quando o WEB estiver estável e a UX do paciente redonda).
+
+## Entregas concluídas nesta rodada
+
+### 1) Follow-ups de constância (presença/falta) com anti-spam (idempotência)
+- `POST /api/admin/attendance/send-followups`
+  - Se `attendance_logs/{id}.followup.sentAt` existir → **não reenviar** (`blockedReason: already_sent`).
+  - DryRun mostra contadores e amostra, incluindo itens bloqueados por “já enviado”.
+  - Marca tentativas em `attendance_logs/{id}.followup.*` (diagnóstico e rastreio).
+
+### 2) Agenda do paciente 100% server-side (fim do `permission-denied`)
+- Paciente deixou de ler `appointments/*` via Firestore client.
+- Painel do paciente carrega via:
+  - `GET /api/patient/appointments` (Admin SDK)
+- Firestore Rules foram fechadas para:
+  - `appointments/*` **read: admin-only**.
+
+### 3) Confirmação de presença (status “confirmado” coerente)
+- `GET /api/attendance/confirmed`
+  - Retorna `appointmentIds[]` para pintar “confirmado” na agenda.
+  - Mantém compatibilidade: aceita `appointmentId` para checar boolean.
+- `GET /api/attendance/confirmd` ficou como alias.
+
+### 4) Psicoeducação passiva (painel do paciente)
+- Cards rotativos de reflexão + mantra fixo.
+- Copy do WhatsApp ajustado: **confirmação**, sem atalho de cancelamento.
+
+### 5) Endpoint opcional de cron (não habilitado)
+- Criado `GET /api/cron/reminders` (protegido por `CRON_SECRET`).
+- Documentado em `docs/26_VERCEL_CRON_REMINDERS.md`.
+- Decisão operacional atual: **manter envios manuais**.
+
+---
+
+## Próximo passo sugerido (quando retomar)
+1) **Operação manual mais blindada**
+   - Checklist diário no Admin (import → preview → envio) + verificação rápida de “bloqueados sem token”.
+2) **Presença/faltas**
+   - Rotina de import (diária ou semanal) + follow-ups com idempotência (já pronto).
+3) **Mobile/App (Capacitor)**
+   - Retomar apenas com web estável e regras/rotas consolidadas.
+
