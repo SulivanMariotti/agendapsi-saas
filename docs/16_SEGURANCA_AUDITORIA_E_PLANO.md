@@ -1,8 +1,15 @@
-# Segurança — auditoria rápida e plano de correção (atualizado em 2026-02-18)
+# Segurança — auditoria rápida e plano de correção (atualizado em 2026-02-18) — ✅ Segurança v1 finalizada
 
 Este documento organiza os **riscos de segurança** encontrados no estado atual do repositório e define a **ordem de execução** das correções (do menor score para o maior), até ficar **pronto para produção**.
 
 > Diretriz clínica: segurança aqui não é “burocracia” — é **cuidado**. Vazamento/erro de autorização quebra confiança e fragiliza vínculo.
+
+
+## 0) Conclusão (produção)
+
+- ✅ **Bloqueadores críticos resolvidos** (auth paciente, RBAC, rules, headers, CSRF/origin, rate-limit, logs/TTL).
+- ✅ Pronto para produção **no aspecto segurança v1**.
+- 🔜 Próximos (não bloqueadores): **LGPD operacional** (retenção/backup/exportação) e **OTP/magic link** antes de PWA/App.
 
 ---
 
@@ -10,11 +17,11 @@ Este documento organiza os **riscos de segurança** encontrados no estado atual 
 
 | Área | Nota | Situação | Observação objetiva |
 |---|---:|---|---|
-| Gestão de segredos (env/keys) | 1/10 | 🔴 Atenção | `.env.local` apareceu no zip enviado (mesmo que não seja commitado). Garantir **.gitignore**, não compartilhar em entregas e **rotacionar** se houver risco de exposição. |
+| Gestão de segredos (env/keys) | 8/10 | ✅ Resolvido | `.gitignore` + `.env.example` + `npm run security:check`. Regra: **nunca** compartilhar `.env*` em zip. Rotacionar apenas se houver suspeita de exposição. |
 | Autenticação Admin | 6/10 | 🟠 Melhorar | `role=admin` via token/claim está ok, mas endpoints sensíveis precisam de rate limit + checagens consistentes. |
 | Autenticação do Paciente | 2/10 | ✅ Resolvido | Login por e-mail sem prova foi desativado por padrão; fluxo principal é **pair-code**. |
 | Autorização/RBAC (APIs) | 2/10 | ✅ Resolvido | Removido fallback inseguro baseado em `users/{uid}.role` no `requireAdmin`. |
-| Firestore Rules | 6/10 | 🟠 Melhorar | “deny by default” ok; manter revisão contínua de imutabilidade (owner/patientId) em coleções futuras. |
+| Firestore Rules | 8/10 | ✅ Resolvido | Rules blindadas: `users/{uid}` whitelist/imutável (identidade), `patient_notes.patientId` imutável; manter revisão contínua para novas coleções. |
 | Proteções de rotas (rate limit, erros, CSRF/origin) | 8/10 | ✅ Resolvido | Rate limit + erros padronizados + origin checks consistentes via `originGuard` em rotas sensíveis. |
 | Privacidade (PII) e logs | 7/10 | ✅ Resolvido | `history` mascara telefone/e-mail e tokens; `history`/`audit_logs` com `expireAt` + opção TTL/cron. |
 | Headers de segurança (CSP/HSTS etc.) | 7/10 | ✅ Resolvido | Headers aplicados; **CSP ENFORCE em produção** (Report-Only apenas em dev). |

@@ -2,8 +2,9 @@
 
 import React, { useMemo, useState } from "react";
 import { Button } from "../../../components/DesignSystem";
-import { LogOut, FileText, X, Phone } from "lucide-react";
+import { LogOut, FileText, X, Phone, BookOpen } from "lucide-react";
 import { formatPhoneBR } from "../lib/phone";
+import PatientLibraryModal from "./PatientLibraryModal";
 
 export default function PatientHeader({
   patientName,
@@ -17,6 +18,7 @@ export default function PatientHeader({
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [contractOpen, setContractOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   const safeContractText = useMemo(
     () => String(contractText || "Contrato não configurado."),
@@ -49,6 +51,10 @@ export default function PatientHeader({
         {/* Desktop actions */}
         <div className="hidden sm:flex gap-2">
 
+          <Button onClick={() => setLibraryOpen(true)} variant="secondary" icon={BookOpen}>
+            Biblioteca
+          </Button>
+
           <Button onClick={() => setContractOpen(true)} variant="secondary" icon={FileText}>
             Contrato
           </Button>
@@ -66,6 +72,16 @@ export default function PatientHeader({
 
           {mobileMenuOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden z-30">
+
+              <button
+                className="w-full text-left px-4 py-3 text-sm text-slate-800 font-medium hover:bg-slate-50 flex items-center gap-2"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setLibraryOpen(true);
+                }}
+              >
+                <BookOpen size={16} className="text-slate-600" /> Biblioteca
+              </button>
 
               <button
                 className="w-full text-left px-4 py-3 text-sm text-slate-800 font-medium hover:bg-slate-50 flex items-center gap-2"
@@ -144,6 +160,9 @@ export default function PatientHeader({
           </div>
         </div>
       )}
+
+      {/* Modal: Biblioteca (psicoeducação) */}
+      <PatientLibraryModal open={libraryOpen} onClose={() => setLibraryOpen(false)} />
     </>
   );
 }

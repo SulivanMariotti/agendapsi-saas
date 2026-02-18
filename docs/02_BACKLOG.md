@@ -21,10 +21,10 @@
 - [x] Atalhos “Ver no Manual” dentro de Agenda e Presença/Faltas
 
 ## 3) UX (Paciente) — psicoeducação e compromisso
-- [ ] **Menu Artigos/Biblioteca** (artigos mais completos)
-  - mantra fixo: “Leitura não substitui sessão. A mudança acontece na continuidade.”
-  - seção “Para levar para a sessão”
-  - sem CTA cancelar/remarcar
+- [x] **Menu Artigos/Biblioteca** (artigos mais completos)
+  - [x] mantra fixo: “Leitura não substitui sessão. A mudança acontece na continuidade.”
+  - [x] seção “Para levar para a sessão”
+  - [x] sem CTA cancelar/remarcar
 - [x] Mantra fixo + cards rotativos de reflexão
 - [x] Estado de notificações: “Ativas neste aparelho” + instruções quando inativas
 
@@ -37,6 +37,8 @@
 - [x] Agenda do paciente server-side (`GET /api/patient/appointments`) + rules `appointments` admin-only
 
 ### 5.1) Segurança para produção (bloqueadores)
+**Segurança v1: ✅ concluída (2026-02-18).**
+
 > Ordem: do **mais crítico/baixo score** → para o **menos crítico/alto score**.
 
 - [x] **Bloquear login do paciente por e-mail sem verificação** (inseguro) — usar vinculação por telefone+código

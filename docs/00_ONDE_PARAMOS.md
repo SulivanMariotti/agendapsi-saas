@@ -59,18 +59,23 @@ Documentação e UX de operação manual para reduzir risco humano:
 ---
 
 ## Próximos itens (backlog imediato)
-- **Segurança para produção (bloqueadores)** — concluído nesta rodada:
+- **Segurança v1** — ✅ finalizada nesta rodada (produção-ready):
   - [x] Login paciente por e-mail sem verificação desativado (fluxo principal: telefone+código)
   - [x] RBAC: removido fallback por `users.role` no `requireAdmin` + rules blindadas
   - [x] Identidade do paciente travada no `users/{uid}` (sem editar `phoneCanonical/email/role`)
   - [x] Removido recurso DEV “Trocar paciente”
-  - [x] Headers de segurança (HSTS/XFO/nosniff/Referrer/Permissions + CSP report-only)
+  - [x] Headers de segurança (HSTS/XFO/nosniff/Referrer/Permissions + **CSP ENFORCE em produção**)
   - [x] Rate limit em endpoints sensíveis + erros sem vazamento
   - [x] Logs/retencao: PII minimizado + `expireAt` + **TTL habilitado** (`history.expireAt`, `audit_logs.expireAt`)
 
-- **Próximo ajuste de segurança (não-bloqueador, recomendado):** CSP sair de **Report-Only** para **Enforce** (após observar relatórios).
 - **Paciente: menu Artigos/Biblioteca** (psicoeducação mais completa + “Para levar para a sessão” + mantra fixo “leitura não substitui sessão”; sem CTA cancelar/remarcar).
 - **Dados/Consistência**: documentar modelo NoSQL Firestore (denormalização + chave única paciente).
 - **Autenticação do paciente** (mais segura) antes de PWA/App.
+
+- ✅ **Paciente: Biblioteca de apoio** implementada:
+  - botão “Biblioteca” no cabeçalho (desktop + mobile)
+  - modal com artigos por temas + busca
+  - seção “Para levar para a sessão” + mantra fixo (leitura não substitui sessão)
+  - sem CTA cancelar/remarcar
 
 > Futuro (quando o sistema estiver 100% OK): **SaaS multi-tenant** para revenda.

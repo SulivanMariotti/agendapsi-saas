@@ -2,7 +2,9 @@
 
 > Norte clínico: segurança e privacidade sustentam vínculo. Qualquer brecha vira quebra de confiança e aumenta chance de falta.
 
-## Status atual (2026-02-18)
+## Status atual (2026-02-18) — ✅ Segurança v1 finalizada
+
+Esta rodada fechou os **bloqueadores de produção** e padronizou hardening (CSP/CSRF/rate-limit/logs).
 
 ### Bloqueadores já resolvidos
 - [x] **Paciente: login por e-mail sem verificação** desativado por padrão (era sequestro de sessão)

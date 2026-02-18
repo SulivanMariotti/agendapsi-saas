@@ -1,15 +1,19 @@
-# Próximos passos — checklist rápido
+# Próximos passos (após Segurança v1)
 
-## A) Produção (essencial)
-- **Segurança (bloqueador antes de produção):** executar `docs/16_SEGURANCA_AUDITORIA_E_PLANO.md` (do menor score para maior).
-- Confirmar `config/global` com mensagens msg1/msg2/msg3 e títulos.
-- Validar `firebase-messaging-sw.js` atualizado (desregistrar SW no browser e recarregar).
-- Rodar limpeza de testes (apenas se for necessário):
-  - attendance: `node scripts/purgeAttendanceLogs.cjs --yes`
-  - histórico: `node scripts/purgeAttendanceLogs.cjs --collection=history --yes`
-  - auditoria: `node scripts/purgeAttendanceLogs.cjs --collection=audit_logs --yes`
+> Segurança v1 está **finalizada** (bloqueadores de produção resolvidos). Agora voltamos para evolução clínica/UX.
 
-## B) Robustez (recomendado)
-- Idempotência por sessão+slot:
-  - gravar `appointments/{{id}}.reminders.slotX.sentAt` ao enviar, e checar antes de reenviar.
-- Melhorar preview no Admin para indicar “já enviado/ignorando”.
+## 1) Paciente — Artigos/Biblioteca (psicoeducação)
+- ✅ Implementado: menu **Biblioteca** no cabeçalho + modal com artigos por temas.
+- ✅ Seção **Para levar para a sessão**.
+- ✅ Mantra fixo: **leitura não substitui sessão**.
+- ✅ Diretriz clínica: **sem CTA de cancelar/remarcar**.
+
+## 2) Presença/Faltas — painel de constância (30 dias)
+- Importar 2ª planilha (presenças/faltas) e montar painel de constância.
+- Disparos futuros: **parabenizar presença** e orientar em caso de falta (sem moralismo).
+
+## 3) Firestore — modelo NoSQL e chave única
+- Documentar denormalização + padrão de `patientKey` (ex.: `patientId + phoneCanonical`).
+
+## 4) Futuro (antes de PWA/App)
+- Autenticação do paciente mais segura com menos fricção: **OTP/magic link**.

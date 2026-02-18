@@ -86,3 +86,18 @@
 ## 2026-02-18 — Segurança (continuação)
 - Padronização de CSRF/origin: helper `src/lib/server/originGuard.js`.
 - Aplicado em rotas sensíveis: `/api/auth`, `/api/patient/pair`, `/api/patient-auth`, `/api/patient/push/register`, `/api/attendance/confirm` e `requireAdmin`.
+
+## 2026-02-18 — Segurança v1 finalizada
+- Concluídos todos os bloqueadores para produção: RBAC/rules, auth paciente (pair-code), headers+CSP, rate-limit, CSRF/origin, logs+TTL.
+- Cron routes já prontas para futura automação (header-only + rotação), sem necessidade de cron ativo hoje.
+
+---
+
+## 2026-02-18 — Paciente: Biblioteca (psicoeducação)
+- Adicionado botão **“Biblioteca”** no cabeçalho do painel do paciente (desktop + menu mobile).
+- Modal “Biblioteca de Apoio” com:
+  - artigos curtos por temas + busca
+  - mantra fixo (leitura não substitui sessão)
+  - seção **“Para levar para a sessão”**
+  - sem CTA de cancelar/remarcar
+
