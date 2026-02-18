@@ -35,6 +35,7 @@ Use estes arquivos como “fonte de verdade” quando for continuar em outro cha
 
 - **Operação / Produção**
   - `27_OPERATIONS_RUNBOOK.md`
+  - `73_ADMIN_MANUAL_DE_USO.md`
   - `30_DEPLOY_ENV_CHECKLIST.md`
   - `18_TROUBLESHOOTING_COMMON_ERRORS.md`
 

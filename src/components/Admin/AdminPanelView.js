@@ -10,6 +10,7 @@ import {
   Settings,
   History,
   ShieldCheck,
+  BookOpen,
   LogOut,
 } from 'lucide-react';
 
@@ -20,6 +21,7 @@ import AdminPatientsTab from './AdminPatientsTab';
 import AdminAttendanceTab from './AdminAttendanceTab';
 import AdminScheduleTab from './AdminScheduleTab';
 import AdminConfigTab from './AdminConfigTab';
+import AdminManualTab from './AdminManualTab';
 
 export default function AdminPanelView({
   onLogout,
@@ -30,6 +32,18 @@ export default function AdminPanelView({
   globalConfig,
 }) {
   const [adminTab, setAdminTab] = useState('dashboard');
+
+  // Manual de Uso: jump/atalho contextual (Agenda / Presença/Faltas)
+  const [manualJump, setManualJump] = useState(null);
+
+  const openManual = (sectionId, queryText = '') => {
+    setManualJump({
+      id: sectionId || null,
+      query: queryText || '',
+      ts: Date.now(),
+    });
+    setAdminTab('manual');
+  };
 
   // STEP43: Painel de Constância (attendance_logs)
   const [attendancePeriodDays, setAttendancePeriodDays] = useState(30);
@@ -489,6 +503,18 @@ export default function AdminPanelView({
             </button>
 
             <button
+              onClick={() => openManual('visao-geral')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                adminTab === 'manual'
+                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-200'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <BookOpen size={18} /> Manual de Uso
+            </button>
+
+
+            <button
               onClick={() => setAdminTab('config')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                 adminTab === 'config'
@@ -504,6 +530,36 @@ export default function AdminPanelView({
 
       {/* Conteúdo */}
       <div className="lg:col-span-9 space-y-6">
+        {(adminTab === 'schedule' || adminTab === 'attendance') && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-extrabold text-slate-900 tracking-tight">
+                  Ajuda rápida (para proteger a constância)
+                </div>
+                <div className="text-xs text-slate-600 mt-1">
+                  Em dia corrido, use o Manual como “memória externa”: passo a passo + diagnóstico sem depender de
+                  lembrança.
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => openManual(adminTab === 'schedule' ? 'agenda' : 'presenca')}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-semibold hover:bg-slate-100"
+                >
+                  <BookOpen size={16} className="text-violet-700" /> Ver passo a passo no Manual
+                </button>
+                <button
+                  onClick={() => openManual('diagnostico')}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-semibold hover:bg-slate-100"
+                >
+                  <BookOpen size={16} className="text-violet-700" /> Ver diagnóstico no Manual
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {adminTab === 'dashboard' && (
           <AdminDashboardTab
             activeUsersCount={activeUsersCount}
@@ -563,6 +619,8 @@ export default function AdminPanelView({
         {adminTab === 'history' && <AdminHistoryTab historyLogs={historyLogs} />}
 
         {adminTab === 'audit' && <AdminAuditTab showToast={showToast} />}
+
+        {adminTab === 'manual' && <AdminManualTab manualJump={manualJump} />}
 
         {adminTab === 'config' && (
           <AdminConfigTab
