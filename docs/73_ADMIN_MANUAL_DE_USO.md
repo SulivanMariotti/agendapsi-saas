@@ -1,84 +1,92 @@
-# Manual de Uso — Painel Admin (Agenda + Presença/Faltas)
+# 73 — Manual de Uso (Painel Admin) — Agenda e Presença/Faltas (2026-02-17)
 
-> Norte clínico: **constância é cuidado**.  
-> O Lembrete Psi existe para sustentar vínculo terapêutico por meio de lembretes e psicoeducação — **sem atalhos de cancelamento/remarcação**.
+Este manual existe para **reduzir falhas operacionais** que viram falhas de cuidado ativo.  
+Quando o lembrete falha, a sessão “some” da semana — e a constância (que é parte do tratamento) perde força.
 
----
-
-## 1) Agenda — Finalidade
-
-A Agenda existe para reduzir faltas por esquecimento/caos do dia a dia e proteger o “horário sagrado” do cuidado.
-
-- O sistema assume a carga mental de lembrar.
-- A sessão **existe** independentemente de confirmação.
-- O painel do paciente **não** deve facilitar cancelar/remarcar.
+> Diretriz: o painel do paciente **não** oferece CTA/botão de cancelar/remarcar.  
+> Cancelar/remarcar exige contato ativo (barreira saudável contra resistências momentâneas).
 
 ---
 
-## 2) Agenda — Fluxo diário (modo manual)
-
-Caminho: **Admin → Agenda → Carregar Planilha → Verificar → Sincronizar → Gerar Preview do Disparo → Enviar lembrete**
-
-1. **Carregar Planilha**
-   - Cole/importe o CSV da agenda (ex.: janela de 30 dias à frente).
-2. **Verificar**
-   - Valida formato, datas, duplicidades e consistência.
-3. **Sincronizar**
-   - Grava a agenda como “fonte única da verdade”.
-4. **Gerar Preview do Disparo**
-   - Calcula quem receberá lembretes e aponta bloqueios.
-   - **Regra de ouro:** se houver **CHECK** (push não confirmado), faça preview antes do envio.
-5. **Enviar lembrete**
-   - Execute o envio somente após preview coerente (sem CHECK).
+## 1) Agenda — finalidade clínica
+- Garantir que o paciente **não precise lembrar sozinho**.
+- Diminuir faltas por esquecimento e por “ruído” do dia a dia.
+- Sustentar vínculo: o horário é um compromisso terapêutico.
 
 ---
 
-## 3) Presença/Faltas — Finalidade
+## 2) Agenda — passo a passo (modo manual recomendado)
 
-O painel de Presença/Faltas existe para transformar constância em **fator de evolução**:
+### 2.1 Importar agenda (janela móvel)
+1. Admin → **Agenda** → **Carregar Planilha**
+2. Selecione a planilha do período **hoje → +30 dias**
+3. Clique **Verificar**
+   - confira parsing (data/hora/profissional)
+   - corrija linhas problemáticas na origem quando necessário
+4. Clique **Sincronizar**
+   - cria/atualiza sessões
+   - quando uma sessão futura “sumiu” do upload, ela pode ser marcada como **missing/cancelled** (mantém histórico)
 
-- Dar visibilidade à continuidade (presença/falta).
-- Disparar follow-ups psicoeducativos:
-  - **Presença:** reforço positivo e autonomia.
-  - **Falta:** firmeza com cuidado (“faltar interrompe o processo”).
+### 2.2 Lembretes (dryRun → envio)
+1. Clique **Gerar Preview do Disparo** (dryRun)
+2. Confira:
+   - enviáveis (sendable)
+   - bloqueados por motivo: `SEM_PUSH`, `INATIVO`, `SEM_TELEFONE`, `ALREADY_SENT`
+3. Confira a amostra (placeholders preenchidos)
+4. Clique **Enviar lembrete**
 
----
-
-## 4) Presença/Faltas — Importação (CSV)
-
-1. **Colar/Carregar CSV**
-2. **Validar (Dry-run)**
-   - Mostra o que será gravado sem gravar.
-   - Se o CSV mudar, valide novamente (preview invalida).
-3. **Confirmar (Commit)**
-   - Grava em `attendance_logs`.
-
----
-
-## 5) Follow-ups — Idempotência
-
-O envio de follow-ups é protegido contra duplicidade:
-
-- Se `attendance_logs/{id}.followup.sentAt` existir, **não reenviar**.
+**Regra de segurança:** se houver **CHECK** (push não confirmado), o sistema bloqueia o envio até você gerar preview/diagnóstico coerente.
 
 ---
 
-## 6) Diagnóstico rápido (bloqueios)
+## 3) Operação do Dia — como usar
+No topo da Agenda existe o card **Operação do Dia** para reduzir risco humano:
 
-- **SEM_PUSH**: paciente sem assinatura válida de push
-  - orientar abrir painel do paciente e permitir notificações; verificar VAPID/env.
-- **INATIVO**: cadastro desativado (não enviar)
-- **SEM_TELEFONE**: telefone ausente/inválido (corrigir cadastro com telefone canônico)
-- **CHECK**: push não consultado para a seleção (rodar Preview)
-- **JÁ_ENVIADO / already_sent**: proteção contra duplicidade (normal)
-- **permission-denied**: leitura sensível no client (use server-side/Admin SDK)
+- **Progresso** do pipeline (import/verificar/sincronizar/preview/envio)
+- **CHECK**: indica que o estado de push ainda não foi confirmado para a seleção atual
+- **CSV diagnóstico**: exporta uma lista objetiva de bloqueios (para ação rápida)
+- **Copiar resumo do dia**: pronto para colar no seu registro diário
+- **Salvar registro** e **Marcar dia concluído**
+- **Histórico (últimos 14 dias)**: auditoria e comparação
 
 ---
 
-## 7) Boas práticas (clínicas + operação)
+## 4) Presença/Faltas — finalidade clínica
+- Não é “punição”: é **visibilidade do processo**.
+- Ajuda a clínica a detectar padrões:
+  - faltas recorrentes por esquecimento
+  - resistências/evitações
+  - necessidade de reforço de vínculo/contrato terapêutico
 
-- Evite tom punitivo. Use linguagem de vínculo e responsabilidade.
-- Sem CTA de cancelamento/remarcação no painel do paciente.
-- WhatsApp (quando existir) apenas para **confirmação**, nunca como “atalho de desistência”.
-- Em dia corrido: use o **Preview** + CSV de diagnóstico para agir com objetividade.
+---
 
+## 5) Presença/Faltas — passo a passo
+1. Admin → **Presença/Faltas** → importar a planilha/relatório (quando aplicável)
+2. Conferir métricas (30/60/90 dias)
+3. Rodar follow-ups primeiro em **dryRun**
+4. Enviar follow-ups reais
+
+### Idempotência (anti-spam)
+- O follow-up não reenviará se:
+  - `attendance_logs/{id}.followup.sentAt` já existir
+
+---
+
+## 6) Diagnóstico rápido (erros comuns)
+- **SEM_PUSH**: paciente não ativou notificações / token ausente
+- **INATIVO**: usuário/paciente está desativado
+- **SEM_TELEFONE**: falta phone/phoneCanonical (corrigir cadastro/import)
+- **ALREADY_SENT**: idempotência funcionando (reenvio bloqueado)
+- **CHECK**: precisa rodar preview/diagnóstico antes de enviar
+
+Se algo bloquear o lembrete, trate como risco de constância:  
+“Se o lembrete não chega, o paciente fica sozinho com a tarefa de lembrar — e isso aumenta a chance de falta.”
+
+---
+
+## 7) Links úteis
+- Runbook operacional: `docs/27_OPERATIONS_RUNBOOK.md`
+- Checklist 1 página: `docs/27A_DAILY_CHECKLIST_ONEPAGER.md`
+- Template de registro: `docs/27B_DAILY_LOG_TEMPLATE.md`
+- Troubleshooting: `docs/18_TROUBLESHOOTING_COMMON_ERRORS.md`
+- Catálogo de endpoints: `docs/16_API_ENDPOINTS_CATALOG.md`

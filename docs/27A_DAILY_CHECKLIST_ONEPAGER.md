@@ -30,8 +30,6 @@
 ---
 
 ## C) Lembretes (48h/24h/12h) — 3–5 min
-> Se o bloco **Falha-segura** aparecer em “Operação do Dia”, **leia e corrija antes** de seguir. Ele indica risco real de enviar no escuro.
-
 1. [ ] Clique **Gerar Preview do Disparo** (dryRun)
 2. [ ] Confira os contadores principais:
    - [ ] **Enviáveis** (sendable)
@@ -72,5 +70,4 @@
 | Muitos `inactive` | paciente desativado | validar `users/{uid}.status` |
 | Quase tudo `already_sent` | reenvio na mesma janela | ok (idempotência funcionando) |
 | `permission-denied` no paciente | código tentando ler `appointments` no client | confirmar uso do `GET /api/patient/appointments` + deploy atualizado |
-| Falha-segura: credenciais/SDK | env ausente ou Admin SDK não inicializa | Vercel → Settings → Environment Variables → corrigir e re-deploy |
 

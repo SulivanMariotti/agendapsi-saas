@@ -1,50 +1,52 @@
-# 18_TROUBLESHOOTING_COMMON_ERRORS
+# 18_TROUBLESHOOTING_COMMON_ERRORS (atualizado em 2026-02-17)
 
 Este documento reúne erros recorrentes do **Lembrete Psi** e o caminho de diagnóstico.  
 Objetivo: reduzir regressões que quebram lembretes (e quebrar lembretes aumenta risco de falta — falta interrompe evolução).
 
 ---
 
-## 1) Firestore: `permission-denied` no painel do paciente
+## 1) `permission-denied` no painel do paciente (Firestore)
 
 **Sintoma**
 - Console: `FirebaseError: [code=permission-denied]: Missing or insufficient permissions.`
-- Agenda do paciente não carrega / tela em branco / listener falha.
+- Agenda do paciente não carrega / listener falha.
 
-**Causa mais comum**
-- **Padrão oficial:** `phoneCanonical` no projeto é **somente dígitos, SEM 55** (DDD + número, 10–11 dígitos). Ex.: `"11999999999"`.
-- Inconsistência entre:
-  - `users/{uid}.phoneCanonical` (ou `phone`)
-  - `appointments/*.(phone|phoneCanonical)` (campo vindo do import/sync)
-  - `subscribers/{phoneCanonical}` (docId)
-- **Primeiro acesso / pós-pareamento:** o client pode iniciar o listener de `appointments` antes do `users/{uid}.phoneCanonical` estar persistido.
-  - Patch (2026-02-14): `appointments` permite leitura também por `request.auth.token.phoneCanonical` (claim do custom token emitido no pareamento), evitando `permission-denied` nessa janela.
-- Ou paciente está `status: "inactive"` e endpoints server-side bloqueiam corretamente.
+**Causa mais comum (atual)**
+- Código do paciente (antigo) tentando ler `appointments/*` via Firestore client.
+- No estado atual validado:
+  - agenda do paciente é **server-side** via `GET /api/patient/appointments` (Admin SDK)
+  - `appointments/*` em Firestore é **admin-only** (por Rules)
 
 **Checklist (ordem)**
-1. Verifique em `users/{uid}`:
-   - `role` (esperado: `"patient"`)
-   - `status` (esperado: `"active"`)
-   - `phoneCanonical` (string) — padrão: **somente dígitos, SEM 55** (ex.: `"11999999999"`)
-2. Verifique um `appointments/{id}` do mesmo paciente:
-   - `phoneCanonical` ou `phone` deve bater com o padrão
-3. Verifique `subscribers/{phoneCanonical}`:
-   - docId deve ser exatamente o `phoneCanonical`
-   - `pushToken` pode existir ou não (sem token não impede carregar agenda, mas impede disparo push)
-4. Se o problema acontece só no primeiro login:
-   - Confirme que o pareamento/rota do paciente está gravando `phoneCanonical` em `users/{uid}` (ex.: `/api/patient/resolve-phone`)
-   - E/ou que o token contém claim `phoneCanonical`
-
-**Correção típica**
-- Padronizar e gravar `phoneCanonical` em:
-  - `users/{uid}`
-  - `appointments/*` durante import
-  - `subscribers/{phoneCanonical}` como docId
-- Nunca depender de “heurísticas” no client para resolver chave; use rota server-side.
+1. Confirme que o painel do paciente está chamando **API** (não Firestore) para agenda:
+   - `GET /api/patient/appointments`
+2. Confirme que o deploy está atualizado (cache/build antigo costuma manter imports antigos).
+3. Procure no código por:
+   - `collection(db, 'appointments')`
+   - `onSnapshot(...appointments...)`
+   - e remova/garanta que não é usado no fluxo do paciente.
 
 ---
 
-## 2) React: `useEffect changed size between renders`
+## 2) Next/Build: `Module not found: Can't resolve './AdminManualTab'`
+
+**Sintoma**
+- Build quebra apontando import em `AdminPanelView.js`:
+  - `import AdminManualTab from './AdminManualTab';`
+
+**Causa**
+- Arquivo `AdminManualTab.js` não existe no diretório esperado (`src/components/Admin/`).
+
+**Correção**
+- Garantir que o arquivo existe e está com o nome correto:
+  - `src/components/Admin/AdminManualTab.js`
+- Em Windows, atenção extra com:
+  - extensão invisível (ex.: `AdminManualTab.js.txt`)
+  - diferença de maiúsculas/minúsculas em git/zip
+
+---
+
+## 3) React: `useEffect changed size between renders`
 
 **Sintoma**
 - `The final argument passed to useEffect changed size between renders...`
@@ -61,7 +63,7 @@ Objetivo: reduzir regressões que quebram lembretes (e quebrar lembretes aumenta
 
 ---
 
-## 3) Web Push: Preview mostra candidatos mas `blockedNoToken` alto
+## 4) Web Push: Preview mostra candidatos mas `blockedNoToken` alto
 
 **Sintoma**
 - Dry run: `candidates > 0`, `sent = 0`, `blockedNoToken` alto.
@@ -75,21 +77,6 @@ Objetivo: reduzir regressões que quebram lembretes (e quebrar lembretes aumenta
   - “Ativar notificações é cuidar da sua constância. Você não precisa lembrar sozinho.”
 - Mostrar estado claro:
   - Ativo neste aparelho / desativado / permissão negada.
-
----
-
-## 4) Auth: `auth/quota-exceeded` (email sign-in)
-
-**Sintoma**
-- `Firebase: Exceeded daily quota for email sign-in. (auth/quota-exceeded).`
-
-**Causas**
-- Alto volume de links mágicos em curto período
-- Uso em testes repetidos
-
-**Ações**
-- Para desenvolvimento: habilitar modo DEV (quando existir) e evitar disparos repetidos
-- Para produção: monitorar volume e avaliar método alternativo (ex.: SMS/WhatsApp, login mais estável)
 
 ---
 
@@ -113,6 +100,5 @@ Objetivo: reduzir regressões que quebram lembretes (e quebrar lembretes aumenta
 
 - Bloqueios críticos sempre **server-side** (status inativo, janela de envio, etc.).
 - Não “inventar join”: defina e persista `phoneCanonical` como chave de relacionamento.
-- Logs em `history` com `type`, `createdAt`, `payload` (sem dados sensíveis).
+- Logs/auditoria: registrar ações críticas sem dados sensíveis.
 - Sempre que um erro impactar lembretes, trate como risco clínico: menos lembrete → mais chance de falta.
-

@@ -1,4 +1,4 @@
-# Lembrete Psi — Handoff para novo chat (2026-02-16)
+# Lembrete Psi — Handoff para novo chat (2026-02-17)
 
 Este pack serve para iniciar um novo chat e continuar o desenvolvimento **de onde paramos**, sem perder decisões clínicas/técnicas.
 
@@ -6,7 +6,7 @@ Este pack serve para iniciar um novo chat e continuar o desenvolvimento **de ond
 
 ## Contexto do projeto
 - App: **Lembrete Psi**
-- Stack: **Next.js (App Router) + Firebase (Firestore/FCM + Admin SDK)**
+- Stack: **Next.js (App Router) + Firebase (Firestore/FCM + Admin SDK + Web Push)**
 - Diretriz clínica/UX (painel do paciente):
   - foco em **lembrar + psicoeducar + responsabilizar**
   - **sem botão/CTA de cancelar/remarcar**
@@ -24,7 +24,10 @@ Rotina diária (Admin → Agenda):
 4) Gerar Preview do Disparo (dryRun)
 5) Enviar lembrete
 
-> Não há Cron Jobs configurados na Vercel. O envio automático é **opcional**.
+- Operação reforçada com **Runbook/Checklist/Log**: `docs/27_*`
+- Admin tem o card **Operação do Dia** (progresso, contadores, CSV diagnóstico, copiar resumo, registro diário, auditoria 14 dias, falha-segura).
+
+> Não há Cron Jobs configurados na Vercel. O endpoint de cron é **opcional** e não está em uso.
 
 ### Segurança (decisão importante)
 - Paciente **não lê** `appointments/*` via Firestore client.
@@ -34,46 +37,44 @@ Rotina diária (Admin → Agenda):
 
 ---
 
-## Principais entregas desta rodada
+## Principais entregas (até 2026-02-17)
 
-1) **Follow-ups de constância (presença/falta) com anti-spam**
-   - Endpoint: `POST /api/admin/attendance/send-followups`
-   - Idempotência por log: se `attendance_logs/{id}.followup.sentAt` existir → não reenviar.
-   - DryRun mostra amostras e bloqueios (inclui `already_sent`).
+1) **Operação manual blindada (redução de erro humano)**
+   - Falha-segura + CHECK + trava de envio sem preview confiável
+   - Auditoria (registro do dia + histórico 14 dias)
+   - CSV diagnóstico + copiar resumo do dia
 
-2) **Agenda do paciente server-side (fim de permission-denied)**
-   - `src/features/patient/hooks/usePatientAppointments.js` passou a usar `fetch('/api/patient/appointments')`.
+2) **Manual de Uso no Admin**
+   - Menu “Manual de Uso” no painel admin (Agenda + Presença/Faltas)
+   - Atalhos contextuais “Ver no Manual”
+   - Doc canônico: `docs/73_ADMIN_MANUAL_DE_USO.md`
 
-3) **Confirmar presença (status coerente)**
-   - `GET /api/attendance/confirmed` retorna `appointmentIds[]`.
+3) **Constância (presença/falta) com anti-spam**
+   - `POST /api/admin/attendance/send-followups`
+   - Idempotência: se `attendance_logs/{id}.followup.sentAt` existe → não reenviar.
+
+4) **Confirmar presença**
+   - `GET /api/attendance/confirmed` retorna `appointmentIds[]`
    - `confirmd` mantido como alias.
 
-4) **Psicoeducação no painel do paciente**
-   - Cards rotativos + mantra fixo.
-   - Copy do WhatsApp ajustado para confirmação (sem facilitar cancelamento).
-
-5) **Cron opcional de lembretes (não habilitado)**
-   - `GET /api/cron/reminders` protegido por `CRON_SECRET`.
-   - Documentação: `docs/26_VERCEL_CRON_REMINDERS.md`.
+5) **Psicoeducação no painel do paciente**
+   - mantra + cards rotativos
+   - sem CTA cancelar/remarcar (WhatsApp somente confirmação)
 
 ---
 
-## Arquivos alterados (essenciais)
-- `src/app/api/admin/attendance/send-followups/route.js`
-- `src/components/Admin/AdminAttendanceFollowupsCard.js`
-- `src/app/api/patient/appointments/route.js`
-- `src/features/patient/hooks/usePatientAppointments.js`
-- `firestore.rules`
-- `src/app/api/attendance/confirmed/route.js`
-- `src/app/api/attendance/confirmd/route.js`
-- `src/components/Patient/PatientFlow.js`
-- `src/features/patient/components/NextSessionCard.js`
-- `src/components/Admin/AdminConfigTab.js`
-- `src/app/api/cron/reminders/route.js`
+## Próximo item de produto (planejado)
+**Menu “Artigos/Biblioteca” no painel do paciente**
+- psicoeducação mais completa (artigos)
+- seção “Para levar para a sessão”
+- mantra fixo “leitura não substitui sessão”
+- conteúdo/temas pensados para reforçar constância.
 
 ---
 
-## Próximo passo sugerido (quando retomar)
-- Consolidar um **checklist operacional diário** dentro do Admin (sem automatizar) para reduzir risco humano (dias corridos).
-- Evoluir o painel de constância (presença/faltas) com indicadores e “alertas” (sem moralismo; firmeza + cuidado).
-
+## Docs canônicos para retomar rápido
+- `docs/00_ONDE_PARAMOS.md`
+- `docs/00_PROMPT_NOVO_CHAT.md`
+- `docs/02_CHANGELOG.md`
+- `docs/27_OPERATIONS_RUNBOOK.md`
+- `docs/73_ADMIN_MANUAL_DE_USO.md`

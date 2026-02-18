@@ -1,26 +1,48 @@
-# Backlog (lista viva)
+# Backlog (lista viva — atualizado em 2026-02-17)
 
 > Marque com [x] quando concluir.
 
-## Segurança / Acesso
-- [x] Remover leitura direta de `subscribers` no painel do paciente (evitar permission-denied) — usar rotas server-side push
-- [x] Login simples sem custo: Código de Vinculação (telefone + código) com hash+salt e single-use
-- [ ] **Futuro:** reintroduzir autenticação/login seguro alternativo do paciente (magic link/OTP) + hardening geral antes de PWA/App
+## 0) Prioridade clínica
+- O sistema existe para sustentar **constância**.
+- Sem atalhos no painel do paciente para **cancelar/remarcar**.
 
-## Presença/Faltas (Admin)
-- [x] Estabilizar preview “Amostra” (`sample`) no dryRun
-- [x] Corrigir fluxo “Limpar” + reprocessar sem travar estado
-- [x] Garantir visibilidade consistente de “Disparos por constância”
-- [x] Processar segunda planilha/relatório de presença/faltas para painel de constância e notificações futuras
-- [x] Melhorar UI do upload CSV (evitar “Escolher arquivo / Nenhum arquivo escolhido”; usar botão mais claro)
+---
 
-## Dados / Consistência
-- [ ] Documentar modelo NoSQL Firestore (sem joins), denormalização e chave única do paciente (ex.: patientId + phone canônico)
+## 1) Operação / Auditoria (Admin)
+- [x] Checklist operacional diário + runbook (docs/27_*)
+- [x] Card **Operação do Dia** (progresso, contadores, CHECK, trava de envio)
+- [x] CSV de diagnóstico (seleção atual)
+- [x] Copiar resumo do dia + registro diário + auditoria (14 dias)
+- [x] **Falha-segura** (detector + instrução objetiva)
+- [ ] Auditoria por **batchId** do envio (opcional): rastrear lote do dia (enviados/bloqueados) para auditoria “sem dúvida”.
+
+## 2) Admin — Manual de Uso
+- [x] Menu **Manual de Uso** (Agenda + Presença/Faltas)
+- [x] Atalhos “Ver no Manual” dentro de Agenda e Presença/Faltas
+
+## 3) UX (Paciente) — psicoeducação e compromisso
+- [ ] **Menu Artigos/Biblioteca** (artigos mais completos)
+  - mantra fixo: “Leitura não substitui sessão. A mudança acontece na continuidade.”
+  - seção “Para levar para a sessão”
+  - sem CTA cancelar/remarcar
+- [x] Mantra fixo + cards rotativos de reflexão
+- [x] Estado de notificações: “Ativas neste aparelho” + instruções quando inativas
+
+## 4) Presença/Faltas (Admin)
+- [x] Importar planilha de presença/faltas
+- [x] Follow-ups com idempotência (anti-spam): `attendance_logs.followup.sentAt`
+- [ ] Melhorar painel de constância (métricas + insights) com ênfase clínica (sem moralismo)
+
+## 5) Segurança / Acesso
+- [x] Agenda do paciente server-side (`GET /api/patient/appointments`) + rules `appointments` admin-only
+- [ ] **Futuro:** reintroduzir autenticação/login seguro do paciente (magic link/OTP) + hardening geral antes de PWA/App
+
+## 6) Dados / Consistência (Firestore)
+- [ ] Documentar modelo NoSQL Firestore (sem joins), estratégia de denormalização e chave única (ex.: patientId + phone canônico)
 - [ ] Deduplicar `users` por email/phoneCanonical; normalizar telefone no `users/{uid}`
 
-## UX (Paciente)
-- [x] Identificar paciente no topo (Olá, {{nome}})
-- [x] Estado de notificações: “Ativas neste aparelho” + CTA/instruções quando inativas
-
-## Operação / Auditoria
-- [ ] Padronizar escrita do `history` (server-side): sempre gravar `type`, `createdAt`, `payload` (e `sentAt` quando fizer sentido)
+## 7) Futuro (pós “100% OK”): SaaS / Revenda
+- [ ] Multi-tenant por clínica (`tenantId` em tudo) + isolamento de dados
+- [ ] Custom claims/roles por tenant
+- [ ] Onboarding (criar tenant + admin) + billing (planos/limites)
+- [ ] Conteúdos (Artigos/Biblioteca) e templates/configs **por tenant** (por clínica)

@@ -1,4 +1,4 @@
-# Prompt para iniciar novo chat — Lembrete Psi (continuação — 2026-02-16)
+# Prompt para iniciar novo chat — Lembrete Psi (continuação — 2026-02-17)
 
 Você é um **dev master full stack + olhar clínico** (psicoeducação/constância) para o projeto **Lembrete Psi** (Next.js 16 + Firebase).
 
@@ -13,35 +13,45 @@ Você é um **dev master full stack + olhar clínico** (psicoeducação/constân
 ## Onde paramos (estado validado)
 
 ### Operação (modo manual)
-Eu faço o fluxo diariamente:
+Fluxo diário:
 **Admin → Agenda → Carregar Planilha → Verificar → Sincronizar → Gerar Preview do Disparo → Enviar lembrete**.
 
-Não há Cron Jobs configurados na Vercel.
+- Janela: **hoje → +30 dias**
+- **Sem Cron Jobs** na Vercel (decisão atual: manual).
 
-### Decisões técnicas importantes
-- **Agenda do paciente é server-side**:
-  - Painel do paciente consome `GET /api/patient/appointments` (Admin SDK).
-  - Firestore Rules: `appointments/*` é **admin-only** (paciente não lê via client).
-- **Follow-ups de constância (presença/falta) têm idempotência**:
-  - `POST /api/admin/attendance/send-followups` não reenviará se `attendance_logs/{id}.followup.sentAt` já existir.
-- **Confirmação de presença**:
-  - `GET /api/attendance/confirmed` retorna `appointmentIds[]` para marcar “confirmado”.
-  - `confirmd` é alias.
-- **Psicoeducação passiva** no painel do paciente:
-  - mantra fixo + cards rotativos.
-  - WhatsApp (quando existir) é copy de **confirmação**, sem facilitar cancelamento.
-- Existe endpoint opcional `GET /api/cron/reminders` (protegido por `CRON_SECRET`), mas não está em uso (decisão atual: manual).
+### O que já está implementado (resumo)
+- **Operação blindada** (Admin → Agenda):
+  - Runbook + checklist 1 página + template: `docs/27_*`
+  - Card **Operação do Dia** com:
+    - contadores e bloqueios (SEM_PUSH/INATIVO/SEM_TELEFONE/ALREADY_SENT)
+    - **CHECK** (push não confirmado) + trava de envio
+    - CSV diagnóstico + copiar resumo
+    - registro diário + auditoria 14 dias
+    - **Falha-segura** com instruções objetivas
+- **Admin: Menu Manual de Uso** (Agenda + Presença/Faltas) + atalhos “Ver no Manual”
+  - doc canônico: `docs/73_ADMIN_MANUAL_DE_USO.md`
+- **Paciente: agenda server-side**
+  - `GET /api/patient/appointments` (Admin SDK)
+  - rules: `appointments/*` admin-only
+- **Constância**
+  - follow-ups com idempotência: `POST /api/admin/attendance/send-followups`
+- **Confirmados**
+  - `GET /api/attendance/confirmed` (alias `confirmd`)
+- **Psicoeducação passiva**
+  - mantra fixo + cards rotativos
+  - WhatsApp (quando existir): apenas confirmação (sem facilitar cancelamento)
+- Endpoint opcional de cron existe (`/api/cron/reminders`), mas **não está em uso**.
 
 ---
 
 ## Objetivo clínico do produto
-Sustentar constância: lembretes e psicoeducação para reduzir faltas por esquecimento/resistência. Sem moralismo, com firmeza e cuidado.
+Sustentar constância: lembretes + psicoeducação para reduzir faltas por esquecimento/resistência. Sem moralismo, com firmeza e cuidado.
 
 ---
 
-## Próximo passo sugerido
-Criar/aperfeiçoar um **checklist operacional diário** (modo manual) para:
-- reduzir risco humano (dias corridos)
-- facilitar diagnóstico (sem token, inativo, já enviado)
-- manter continuidade do cuidado
-
+## Próximo item sugerido
+**Paciente: Menu “Artigos/Biblioteca”**
+- artigos mais completos (tags + tempo de leitura)
+- mantra fixo: “Leitura não substitui sessão. A mudança acontece na continuidade.”
+- seção “Para levar para a sessão”
+- **sem CTA/botões de cancelar/remarcar**

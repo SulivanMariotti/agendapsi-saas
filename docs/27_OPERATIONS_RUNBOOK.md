@@ -26,21 +26,6 @@ Runbook operacional do **Lembrete Psi** para manter o sistema funcionando sem �
   - opcional: **Marcar dia concluído** (somente com CHECK=0 e envio finalizado)
   - ver **Histórico (últimos 14 dias)** no card para comparar e diagnosticar rapidamente
 
-### 1.3 Falha-segura (Admin)
-No card **Operação do Dia**, o bloco **Falha-segura** aparece quando o sistema detecta risco real de erro humano ou falha de infraestrutura.
-
-O que ele cobre:
-- Env/credenciais ausentes (ex.: `FIREBASE_ADMIN_SERVICE_ACCOUNT_B64`)
-- Admin SDK indisponível
-- VAPID ausente (paciente não consegue ativar push no navegador)
-- CHECK de push pendente (evita “achar que enviou”)
-- Seleção com 0 prontos (tudo bloqueado)
-
-Conduta operacional:
-1. Leia o item (ele já traz o **como resolver**).
-2. Clique **Reverificar** após ajustar.
-3. Só avance para envio quando não houver falha crítica (level=error).
-
 > Regra clínica: se houver muitos bloqueados por `no_token`, é sinal de risco de falta por não receber lembrete.
 
 ---
@@ -91,7 +76,6 @@ Ação clínica (texto sugerido para contato humano):
 ## 6) Critérios de “ok para operar”
 
 - Preview (dryRun) coerente e sem erros
-- Sem falhas críticas em **Falha-segura**
 - Paciente de teste ativo consegue:
   - abrir painel
   - ver próxima sessão (via API)

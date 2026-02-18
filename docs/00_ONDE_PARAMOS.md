@@ -1,69 +1,66 @@
-# Onde paramos — Lembrete Psi (2026-02-16)
+# Onde paramos — Lembrete Psi (2026-02-17)
 
 ## Estado atual (validado)
 
-### Operação (modo manual)
-- Você opera diariamente pelo Admin:
-  1) **Agenda → Carregar Planilha** (janela móvel **hoje → +30 dias**)
-  2) **Verificar** → 3) **Sincronizar**
-  4) **Gerar Preview do Disparo** (dryRun)
-  5) **Enviar lembrete**
-- **Não há Cron Jobs configurados** na Vercel (nenhuma automação rodando).
+### Operação (modo manual — recomendado)
+Você opera diariamente pelo Admin, no fluxo:
+
+**Admin → Agenda → Carregar Planilha → Verificar → Sincronizar → Gerar Preview do Disparo → Enviar lembrete**
+
+- Janela de upload: **hoje → +30 dias** (rodar também em fim de semana/feriado).
+- **Não há Cron Jobs configurados** na Vercel (decisão atual: **modo manual**).
 
 ### Diretriz clínica/UX (painel do paciente)
-- Produto reforça vínculo e constância.
+- O painel do paciente existe para **sustentar vínculo e constância**.
 - **Sem botão/CTA de cancelar/remarcar**.
-- WhatsApp, quando exibido: **apenas para confirmação de presença**.
+- WhatsApp, quando existir: **apenas para confirmação de presença** (nunca como atalho para cancelar/remarcar).
+- Psicoeducação passiva: mantra fixo + cards rotativos.
 
 ---
 
-## Entregas concluídas nesta rodada
+## Entregas concluídas nesta rodada (2026-02-17)
 
-### 1) Follow-ups de constância (presença/falta) com anti-spam (idempotência)
-- `POST /api/admin/attendance/send-followups`
-  - Se `attendance_logs/{id}.followup.sentAt` existir → **não reenviar** (`blockedReason: already_sent`).
-  - DryRun mostra contadores e amostra, incluindo itens bloqueados por “já enviado”.
-  - Marca tentativas em `attendance_logs/{id}.followup.*` (diagnóstico e rastreio).
+### 1) Operação “à prova de dia corrido” (Admin → Agenda)
+Documentação e UX de operação manual para reduzir risco humano:
+- **Runbook + checklist 1 página + template de registro**: `docs/27_*`
+- Card **Operação do Dia** (Admin → Agenda):
+  - progresso do pipeline (import → verificar → sincronizar → preview → envio)
+  - contadores e bloqueios: `SEM_PUSH`, `INATIVO`, `SEM_TELEFONE`, `ALREADY_SENT`
+  - **CHECK** (push não confirmado) com alerta
+  - **bloqueio de envio** enquanto houver CHECK (fail-safe)
+  - export **CSV de diagnóstico** da seleção atual
+  - botão **Copiar resumo do dia** (para registro)
+  - **Registro do dia**: salvar + marcar como concluído
+  - **Auditoria**: histórico dos últimos 14 dias (salvo/concluído + contadores)
+  - **Falha-segura**: detecta inconsistências e mostra instrução objetiva do que fazer
 
-### 2) Agenda do paciente 100% server-side (fim do `permission-denied`)
-- Paciente deixou de ler `appointments/*` via Firestore client.
-- Painel do paciente carrega via:
-  - `GET /api/patient/appointments` (Admin SDK)
-- Firestore Rules foram fechadas para:
-  - `appointments/*` **read: admin-only**.
+> Norte clínico: falha operacional vira falha de cuidado ativo — e aumenta chance de falta.
 
-### 3) Confirmação de presença (status “confirmado” coerente)
-- `GET /api/attendance/confirmed`
-  - Retorna `appointmentIds[]` para pintar “confirmado” na agenda.
-  - Mantém compatibilidade: aceita `appointmentId` para checar boolean.
-- `GET /api/attendance/confirmd` ficou como alias.
+### 2) Manual de Uso no Admin (Agenda + Presença/Faltas)
+- Novo menu **Manual de Uso** no Admin com:
+  - finalidade de cada módulo (Agenda / Presença-Faltas)
+  - passo a passo (uso correto)
+  - diagnóstico e erros comuns
+  - boas práticas (operações que protegem constância)
+- Atalhos “**Ver no Manual**” dentro de **Agenda** e **Presença/Faltas** para abrir direto na seção certa.
+- Documento canônico: `docs/73_ADMIN_MANUAL_DE_USO.md`
 
-### 4) Psicoeducação passiva (painel do paciente)
-- Cards rotativos de reflexão + mantra fixo.
-- Copy do WhatsApp ajustado: **confirmação**, sem atalho de cancelamento.
-
-### 5) Endpoint opcional de cron (não habilitado)
-- Criado `GET /api/cron/reminders` (protegido por `CRON_SECRET`).
-- Documentado em `docs/26_VERCEL_CRON_REMINDERS.md`.
-- Decisão operacional atual: **manter envios manuais**.
-
----
-
-## Arquivos-chave alterados (high level)
-- Follow-ups: `src/app/api/admin/attendance/send-followups/route.js`, `src/components/Admin/AdminAttendanceFollowupsCard.js`
-- Agenda paciente server-side: `src/app/api/patient/appointments/route.js`, `src/features/patient/hooks/usePatientAppointments.js`
-- Rules: `firestore.rules` (appointments admin-only)
-- Confirmados: `src/app/api/attendance/confirmed/route.js` + alias `confirmd`
-- Psicoeducação/copy: `src/components/Patient/PatientFlow.js`, `src/features/patient/components/NextSessionCard.js`, `src/components/Admin/AdminConfigTab.js`
-- Cron (opcional): `src/app/api/cron/reminders/route.js`, `docs/26_VERCEL_CRON_REMINDERS.md`
+### 3) Decisões técnicas importantes (mantidas)
+- **Agenda do paciente é server-side**:
+  - painel do paciente consome `GET /api/patient/appointments` (Admin SDK).
+  - Firestore Rules: `appointments/*` é **admin-only** (paciente não lê via client).
+- **Follow-ups de constância (presença/falta) têm idempotência**:
+  - `POST /api/admin/attendance/send-followups` não reenviará se `attendance_logs/{id}.followup.sentAt` já existir.
+- **Confirmação de presença**:
+  - `GET /api/attendance/confirmed` retorna `appointmentIds[]` para marcar “confirmado”.
+  - `confirmd` é alias.
+- Existe endpoint opcional `GET /api/cron/reminders` (protegido por `CRON_SECRET`), mas **não está em uso** (decisão atual: manual).
 
 ---
 
-## Próximo passo sugerido (quando retomar)
-1) **Operação manual mais blindada**
-   - Checklist diário no Admin (import → preview → envio) + verificação rápida de “bloqueados sem token”.
-2) **Presença/faltas**
-   - Rotina de import (diária ou semanal) + follow-ups com idempotência (já pronto).
-3) **Mobile/App (Capacitor)**
-   - Retomar apenas com web estável e regras/rotas consolidadas.
+## Próximos itens (backlog imediato)
+- **Paciente: menu Artigos/Biblioteca** (psicoeducação mais completa + “Para levar para a sessão” + mantra fixo “leitura não substitui sessão”; sem CTA cancelar/remarcar).
+- **Dados/Consistência**: documentar modelo NoSQL Firestore (denormalização + chave única paciente).
+- **Autenticação do paciente** (mais segura) antes de PWA/App.
 
+> Futuro (quando o sistema estiver 100% OK): **SaaS multi-tenant** para revenda.

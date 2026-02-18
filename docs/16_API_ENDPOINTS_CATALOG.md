@@ -94,3 +94,24 @@
 - **Uso:** scheduler chama a URL e o endpoint envia lembretes 48h/24h/12h com idempotência por slot.
 - **Observação:** não roda sozinho; só funciona se você configurar Cron Jobs.
 
+
+---
+
+## Admin — Operação (Ops)
+
+### 13) Health check (falha-segura / diagnóstico)
+- **GET** `/api/admin/ops/health`
+- **Auth:** obrigatório (admin)
+- **Uso:** checar rapidamente se o ambiente está apto (ex.: credenciais Admin SDK presentes) e orientar o operador.
+
+### 14) Registro do dia (auditoria operacional)
+- **GET** `/api/admin/ops/daily-log?date=YYYY-MM-DD`
+- **POST** `/api/admin/ops/daily-log`
+- **Auth:** obrigatório (admin)
+- **Uso:** salvar resumo do dia e marcar como concluído.
+- **Observação:** pensado para reduzir risco humano e facilitar diagnóstico no dia seguinte.
+
+### 15) Listagem de registros (últimos dias)
+- **GET** `/api/admin/ops/daily-logs?days=14`
+- **Auth:** obrigatório (admin)
+- **Uso:** trazer o histórico (salvo/concluído + contadores) e abrir detalhes por data.
