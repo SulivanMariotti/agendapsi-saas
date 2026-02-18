@@ -86,6 +86,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ========= AUDIT LOGS =========
+    match /audit_logs/{id} {
+      allow read, write: if isAdmin();
+    }
+
     // fallback
     match /{document=**} {
       allow read, write: if false;

@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+import { writeHistory } from "@/lib/server/historyLog";
 export const runtime = "nodejs";
 /**
  * Admin server-side: desativar (soft-delete) paciente
@@ -153,7 +154,7 @@ export async function POST(req) {
 
     if (!userDocIds.length) {
       // No match found; still log so you can track the attempt
-      await db.collection("history").add({
+      await writeHistory(db, {
         type: "patient_deactivate_not_found",
         uid: uid || null,
         email: email || null,
@@ -192,7 +193,7 @@ export async function POST(req) {
       )
     );
 
-    await db.collection("history").add({
+    await writeHistory(db, {
       type: "patient_deactivate",
       userDocIds,
       uid: uid || null,

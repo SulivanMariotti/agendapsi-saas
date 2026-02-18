@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+import { writeHistory } from "@/lib/server/historyLog";
 export const runtime = "nodejs";
 /**
  * POST /api/admin/attendance/import
@@ -463,7 +464,7 @@ export async function POST(req) {
     await commitIfNeeded(true);
 
     if (!dryRun) {
-      await db.collection("history").add({
+      await writeHistory(db, {
         type: "attendance_import_summary",
         createdAt: nowTs,
         count: imported,

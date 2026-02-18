@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import crypto from "crypto";
+import { writeHistory } from "@/lib/server/historyLog";
+import { enforceSameOrigin } from "@/lib/server/originGuard";
 export const runtime = "nodejs";
 
 function getServiceAccount() {
@@ -26,6 +28,13 @@ function sha256(input) {
 
 export async function POST(req) {
   try {
+    const originCheck = enforceSameOrigin(req, {
+      allowNoOrigin: false,
+      allowNoOriginWithAuth: true,
+      message: "Acesso bloqueado (origem inválida).",
+    });
+    if (!originCheck.ok) return originCheck.res;
+
     initAdmin();
 
     // Auth: Bearer <firebase idToken>
@@ -87,7 +96,7 @@ export async function POST(req) {
       }
     }
 
-    await historyRef.add({
+    await writeHistory(admin.firestore(), {
       type: "push_enabled",
       patientId: uid,
       phone,

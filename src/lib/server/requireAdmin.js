@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import { requireAuth } from "@/lib/server/requireAuth";
 import { forbiddenOrigin } from "@/lib/server/adminError";
+import { enforceSameOrigin } from "@/lib/server/originGuard";
 
 /**
  * requireAdmin(req)
  *
  * Padrão de segurança para rotas sensíveis (Admin):
- * - (CORS/CSRF) Bloqueia requisições com Origin diferente do host atual.
+ * - (CSRF/CORS hardening) Bloqueia requisições cross-site quando houver contexto de navegador.
  * - Exige Authorization: Bearer <idToken>
  * - Valida token via Firebase Admin
  * - Autoriza se:
@@ -16,31 +17,14 @@ import { forbiddenOrigin } from "@/lib/server/adminError";
  * Retorna { ok: true, uid, decoded } ou { ok: false, res }
  */
 
-function getExpectedOrigin(req) {
-  const proto = req.headers.get("x-forwarded-proto") || "https";
-  const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
-  if (!host) return null;
-  return `${proto}://${host}`;
-}
-
-function enforceSameOrigin(req) {
-  const origin = req.headers.get("origin");
-  // Se não houver Origin, geralmente é server-to-server (permitir).
-  if (!origin) return { ok: true };
-
-  const expected = getExpectedOrigin(req);
-  if (!expected) return { ok: true };
-
-  if (origin !== expected) {
-    return { ok: false, res: forbiddenOrigin() };
-  }
-
-  return { ok: true };
-}
-
 export async function requireAdmin(req) {
   // Bloqueio de origem (CSRF/CORS hardening)
-  const originCheck = enforceSameOrigin(req);
+  const originCheck = enforceSameOrigin(req, {
+    // Admin usa Bearer token; permite server-to-server sem Origin quando autenticado
+    allowNoOrigin: false,
+    allowNoOriginWithAuth: true,
+    failureResponse: () => forbiddenOrigin(),
+  });
   if (!originCheck.ok) return originCheck;
 
   const auth = await requireAuth(req);

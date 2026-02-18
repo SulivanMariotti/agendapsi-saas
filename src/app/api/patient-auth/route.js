@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
+import { enforceSameOrigin } from "@/lib/server/originGuard";
 export const runtime = "nodejs";
 /**
  * Patient Login (email) - server-side (Firebase Admin)
@@ -105,6 +106,14 @@ function pickBestUserDoc(items) {
 
 export async function POST(req) {
   try {
+    const originCheck = enforceSameOrigin(req, {
+      // Endpoint inseguro (email) - se habilitado, deve aceitar apenas mesma origem.
+      allowNoOrigin: false,
+      allowNoOriginWithAuth: false,
+      message: "Acesso bloqueado (origem inválida).",
+    });
+    if (!originCheck.ok) return originCheck.res;
+
     // Rate limit (mesmo desativado por padrão, evita abuso quando habilitado em testes)
     const rl = await rateLimit(req, {
       bucket: "auth:patient:email",

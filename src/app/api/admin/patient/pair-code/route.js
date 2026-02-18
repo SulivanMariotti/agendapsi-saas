@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+import { writeHistory } from "@/lib/server/historyLog";
 
 export const runtime = "nodejs";
 
@@ -94,7 +95,7 @@ export async function POST(req) {
     );
 
     // Auditoria (histórico)
-    await db.collection("history").add({
+    await writeHistory(db, {
       type: "patient_pair_code_issued",
       createdAt: now,
       payload: {

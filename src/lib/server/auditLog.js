@@ -24,7 +24,7 @@ function shouldRedactKey(k) {
 function truncateString(s, max = 400) {
   const str = String(s ?? "");
   if (str.length <= max) return str;
-  return str.slice(0, max) + "…";
+  return str.slice(0, max) + "...";
 }
 
 function sanitizeMeta(meta) {
@@ -54,6 +54,22 @@ function sanitizeMeta(meta) {
   return out;
 }
 
+function toInt(v, defVal) {
+  const n = parseInt(String(v || ""), 10);
+  return Number.isFinite(n) ? n : defVal;
+}
+
+function getAuditRetentionDays() {
+  // Keep longer than history; admin accountability.
+  return Math.max(30, toInt(process.env.AUDIT_RETENTION_DAYS, 365));
+}
+
+function buildExpireAt(days) {
+  const d = Math.max(1, toInt(days, 365));
+  const ms = Date.now() + d * 24 * 60 * 60 * 1000;
+  return admin.firestore.Timestamp.fromDate(new Date(ms));
+}
+
 /**
  * Admin audit log (server-side).
  * Stores a minimal record for accountability and troubleshooting.
@@ -77,6 +93,7 @@ export async function logAdminAudit({
 
     const doc = {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expireAt: buildExpireAt(getAuditRetentionDays()),
       actorUid: actorUid || null,
       actorEmail: actorEmail || null,
       action: String(action || "").slice(0, 120),

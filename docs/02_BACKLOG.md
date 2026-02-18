@@ -45,8 +45,12 @@
 - [x] **Travar `patient_notes.patientId`** no update (paciente não consegue trocar dono da nota)
 - [x] **Remover recurso DEV "Trocar paciente"** do painel do paciente
 - [x] **Hardening de headers** (CSP/HSTS/X-Frame-Options/etc.) no Next.js
+  - [x] CSP **ENFORCE em produção** (Report-Only apenas em dev)
 - [x] **Rate limit** em endpoints de autenticação (admin/paciente) + erros sem vazamento de detalhes
-- [ ] **Política de logs/retenção** (PII em history/audit) + acesso somente admin
+- [x] **Política de logs/retenção** (PII em history/audit) + acesso somente admin (TTL/cron + mascaramento)
+  - [x] TTL habilitado no Firestore: policies `history.expireAt` e `audit_logs.expireAt`
+
+- [x] **Cron secret (header-only em produção)**: Authorization/x-cron-secret + rotação via `CRON_SECRETS`; `?key=` só com `ALLOW_CRON_QUERY_KEY=true` (transição)
 
 - [ ] **Futuro (antes de PWA/App):** OTP/magic link para paciente (sem fricção e com segurança)
 
@@ -59,3 +63,11 @@
 - [ ] Custom claims/roles por tenant
 - [ ] Onboarding (criar tenant + admin) + billing (planos/limites)
 - [ ] Conteúdos (Artigos/Biblioteca) e templates/configs **por tenant** (por clínica)
+
+### Segurança — Operacional
+- [x] Adicionar `.gitignore` + `.env.example`.
+- [x] Adicionar `npm run security:check` para bloquear compartilhamento acidental de `.env*`/chaves.
+
+
+### Segurança (status)
+- [x] Origin/CSRF padronizado em rotas sensíveis (helper `originGuard`).

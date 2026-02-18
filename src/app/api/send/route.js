@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+import { writeHistory } from "@/lib/server/historyLog";
 export const runtime = "nodejs";
 function getServiceAccount() {
   const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
@@ -172,7 +173,8 @@ export async function POST(req) {
 
     const types = [...new Set(items.map((i) => i.reminderType).filter(Boolean))].map(String);
 
-    await db.collection("history").add({
+    await writeHistory(db, {
+      type: "legacy_send_push_summary",
       sentAt: admin.firestore.FieldValue.serverTimestamp(),
       count: sent,
       skipped: {

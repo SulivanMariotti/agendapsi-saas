@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
+import { enforceSameOrigin } from "@/lib/server/originGuard";
 export const runtime = "nodejs";
 function getServiceAccount() {
   const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
@@ -26,6 +27,13 @@ function getBearerToken(req) {
 
 export async function POST(req) {
   try {
+    const originCheck = enforceSameOrigin(req, {
+      allowNoOrigin: false,
+      allowNoOriginWithAuth: true,
+      message: "Acesso bloqueado (origem inválida).",
+    });
+    if (!originCheck.ok) return originCheck.res;
+
     initAdmin();
 
     const idToken = getBearerToken(req);

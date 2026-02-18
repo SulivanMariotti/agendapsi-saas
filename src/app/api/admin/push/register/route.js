@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+import { writeHistory } from "@/lib/server/historyLog";
 export const runtime = "nodejs";
 
 function getServiceAccount() {
@@ -84,7 +85,7 @@ export async function POST(req) {
     const tokenHash = sha256(token);
     const tokenTail = token.length >= 8 ? token.slice(-8) : token;
 
-    await admin.firestore().collection("history").add({
+    await writeHistory(admin.firestore(), {
       type: "push_enabled",
       patientId: uid,
       phone,

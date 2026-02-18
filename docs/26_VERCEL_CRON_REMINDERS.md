@@ -11,9 +11,15 @@ Automatizar lembretes reduz faltas por esquecimento e sustenta **constância**.
 
 ## O que existe no projeto
 - Endpoint protegido: `GET /api/cron/reminders`
-- Proteção por segredo (`CRON_SECRET`):
-  - Header: `x-cron-secret: <valor>`
-  - OU Query: `?key=<valor>`
+
+### Proteção por segredo (recomendado)
+**Produção: header-only** (evita segredo em URL/logs)
+- `Authorization: Bearer <segredo>` **(preferido)**
+- ou `x-cron-secret: <segredo>`
+
+### Fallback legado (desativado em produção)
+- `?key=<segredo>`
+- Só funciona se `ALLOW_CRON_QUERY_KEY=true` (não recomendado; use apenas como transição)
 
 O endpoint:
 - busca sessões futuras (janela ~48h + tolerância)
@@ -35,33 +41,43 @@ Não use cron quando:
 
 ---
 
-## 2) Configurar o segredo (CRON_SECRET)
+## 2) Configurar o segredo (CRON_SECRETS)
 
 ### 2.1 Local (Windows)
 1. Abra `.env.local`
-2. Adicione:
-   - `CRON_SECRET=uma_chave_grande_aleatoria`
+2. Adicione **um segredo forte** (32+ chars, aleatório):
+   - `CRON_SECRETS=uma_chave_grande_aleatoria`
+
+> Você pode colocar **mais de um** segredo (separado por vírgula) para rotação:
+> `CRON_SECRETS=SEGREDO_ATUAL,SEGREDO_NOVO`
 
 ### 2.2 Vercel (Production)
 1. Vercel Dashboard → Project
 2. Settings → Environment Variables
-3. Adicione `CRON_SECRET` (Production)
+3. Adicione `CRON_SECRETS` (Production)
+
+> Compatibilidade: `CRON_SECRET` ainda funciona, mas o padrão recomendado agora é `CRON_SECRETS`.
 
 ---
 
 ## 3) Testar sem enviar (dryRun)
 
-Abra:
-- `GET /api/cron/reminders?dryRun=1&key=SEU_CRON_SECRET`
+### 3.1 Teste com Authorization (recomendado)
+Exemplo (curl):
+- `GET /api/cron/reminders?dryRun=1`
+- Header: `Authorization: Bearer SEU_SEGREDO`
 
 Retorna contadores (candidatos elegíveis, etc.) e **não envia**.
+
+### 3.2 Teste com x-cron-secret (alternativa)
+- Header: `x-cron-secret: SEU_SEGREDO`
 
 ---
 
 ## 4) Testar enviando de verdade
 
-Abra:
-- `GET /api/cron/reminders?key=SEU_CRON_SECRET`
+- `GET /api/cron/reminders`
+- Com o header (Authorization ou x-cron-secret)
 
 Depois verifique:
 - `appointments/{id}.reminders.slotX.sentAt` gravado
@@ -70,14 +86,19 @@ Depois verifique:
 
 ## 5) Criar Cron Job na Vercel (se decidir automatizar)
 
-1. Vercel Dashboard → seu Project
-2. Menu → **Cron Jobs**
-3. **Create / Add Cron Job**
-4. Configure:
-   - Schedule: `*/15 * * * *` (a cada 15 min — robusto)
-   - URL/Path: `/api/cron/reminders?key=SEU_CRON_SECRET`
+✅ **Preferência:** use um agendador que consiga enviar **headers**.
 
-> Alguns layouts chamam de “URL” em vez de “Path”.
+- Se o seu agendador permitir configurar header, configure:
+  - URL/Path: `/api/cron/reminders`
+  - Header: `Authorization: Bearer SEU_SEGREDO`
+
+### Se a ferramenta NÃO suportar headers
+Use apenas como **transição**:
+1. Habilite `ALLOW_CRON_QUERY_KEY=true` (Production)
+2. Configure a URL/Path com:
+   - `/api/cron/reminders?key=SEU_SEGREDO`
+
+⚠️ **Nota de segurança:** segredo em URL pode aparecer em logs/prints/histórico. Migrar para header-only assim que possível.
 
 ---
 
@@ -85,4 +106,3 @@ Depois verifique:
 - Sem CTA de cancelar/remarcar.
 - Conteúdo vem de `config/global` (MSG1/MSG2/MSG3 e/ou msg48h/msg24h/msg12h).
 - Automação é para **proteger constância**, não para “cobrar”.
-

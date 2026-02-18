@@ -25,7 +25,7 @@ Resumo do que foi implementado/ajustado nesta rodada para sustentar **constânci
 - Copy do WhatsApp ajustado para **confirmação**, sem CTA de cancelar/remarcar.
 
 5) **Cron opcional (não habilitado)**
-- Criado `GET /api/cron/reminders` (protegido por `CRON_SECRET`).
+- Criado `GET /api/cron/reminders` (protegido por `CRON_SECRETS` (compat: `CRON_SECRET`)).
 - Documentado em `docs/26_VERCEL_CRON_REMINDERS.md`.
 - Decisão operacional atual: **envios manuais**.
 

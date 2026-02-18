@@ -1,9 +1,11 @@
 /** @type {import('next').NextConfig} */
 
-// Security headers (produção)
-// - CSP está em modo Report-Only para reduzir risco de quebra.
-//   Quando validado em produção (sem violações relevantes), trocar para Content-Security-Policy.
-const CONTENT_SECURITY_POLICY_REPORT_ONLY = [
+// Security headers
+// - Em produção: CSP ENFORCE (Content-Security-Policy)
+// - Em desenvolvimento: CSP Report-Only (para evitar quebra por eval/hot-reload)
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
@@ -12,14 +14,16 @@ const CONTENT_SECURITY_POLICY_REPORT_ONLY = [
   "img-src 'self' data: https:",
   "font-src 'self' data: https:",
   "style-src 'self' 'unsafe-inline' https:",
-  // Next em dev usa eval; em prod normalmente não. Mantemos para evitar quebra em builds com tooling.
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
+  // Next em dev usa eval; em prod evitamos.
+  IS_PROD
+    ? "script-src 'self' 'unsafe-inline' https:"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
   // Firebase/FCM/Firestore + WebSockets
   "connect-src 'self' https: wss:",
   "frame-src 'self' https:",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
-  // ajuda a detectar mixed-content (report-only aqui)
+  // mixed-content
   'upgrade-insecure-requests',
 ].join('; ');
 
@@ -41,10 +45,12 @@ const SECURITY_HEADERS = [
     key: 'Strict-Transport-Security',
     value: 'max-age=63072000; includeSubDomains; preload',
   },
-  // CSP em modo observação
+  // CSP
   {
-    key: 'Content-Security-Policy-Report-Only',
-    value: CONTENT_SECURITY_POLICY_REPORT_ONLY,
+    key: IS_PROD
+      ? 'Content-Security-Policy'
+      : 'Content-Security-Policy-Report-Only',
+    value: CONTENT_SECURITY_POLICY,
   },
 ];
 

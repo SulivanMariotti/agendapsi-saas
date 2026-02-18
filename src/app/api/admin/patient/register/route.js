@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+import { writeHistory } from "@/lib/server/historyLog";
 export const runtime = "nodejs";
 /**
  * POST /api/admin/patient/register
@@ -232,7 +233,7 @@ export async function POST(req) {
       } catch (_) {}
     }
 
-    await db.collection("history").add({
+    await writeHistory(db, {
       type: "patient_register",
       createdAt: nowTs,
       uid,

@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+import { writeHistory } from "@/lib/server/historyLog";
 export const runtime = "nodejs";
 // POST /api/admin/users/repair-roles
 // Corrige docs legados em users/{uid} que ficaram com role ausente (null/undefined),
@@ -95,7 +96,7 @@ export async function POST(req) {
     // Log em history
     try {
       if (!dryRun) {
-        await db.collection('history').add({
+        await writeHistory(db, {
           action: 'repair_roles',
           scope: 'users',
           scanned,

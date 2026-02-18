@@ -33,7 +33,7 @@ Você é um **dev master full stack + olhar clínico** (psicoeducação/constân
 - Envios e decisões críticas sempre **server-side**.
 
 ### Automação (opcional)
-- Existe `GET /api/cron/reminders` (protegido por `CRON_SECRET`), documentado em `docs/26_VERCEL_CRON_REMINDERS.md`.
+- Existe `GET /api/cron/reminders` (protegido por `CRON_SECRETS` (compat: `CRON_SECRET`)), documentado em `docs/26_VERCEL_CRON_REMINDERS.md`.
 - Decisão operacional atual: **não usar cron**; manter envios manuais.
 
 ---

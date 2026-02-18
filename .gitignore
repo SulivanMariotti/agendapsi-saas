@@ -1,32 +1,36 @@
-# dependencies
+# Dependencies
 node_modules/
 
-# next
+# Next.js
 .next/
 out/
 
-# vercel
-.vercel/
-
-# env (NUNCA commitar)
-.env
-.env.*
-
-# local keys / secrets
-serviceAccount*.json
-*.pem
-*.key
-
-# logs
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# backups (NUNCA commitar dados de paciente)
-backups/
-*.jsonl.gz
-
-# OS
+# OS / Editor
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
+
+# Env (NUNCA versionar)
+.env
+.env.*
+!.env.example
+
+# Firebase
+.firebase/
+firestore-debug.log
+firebase-debug.log
+ui-debug.log
+
+# Android / Capacitor
+android/
+ios/
+capacitor.config.json
+*.keystore
+*.jks

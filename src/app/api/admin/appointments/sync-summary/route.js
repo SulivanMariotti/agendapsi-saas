@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+import { writeHistory } from "@/lib/server/historyLog";
 
 export const runtime = "nodejs";
 /**
@@ -63,7 +64,7 @@ export async function POST(req) {
     const db = admin.firestore();
     const now = admin.firestore.FieldValue.serverTimestamp();
 
-    await db.collection('history').add({
+    await writeHistory(db, {
       type: 'appointments_sync_summary',
       uploadId,
       totalAppointments,

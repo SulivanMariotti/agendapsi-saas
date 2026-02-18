@@ -1,4 +1,4 @@
-# Onde paramos — Lembrete Psi (2026-02-17)
+# Onde paramos — Lembrete Psi (2026-02-18)
 
 ## Estado atual (validado)
 
@@ -18,7 +18,7 @@ Você opera diariamente pelo Admin, no fluxo:
 
 ---
 
-## Entregas concluídas nesta rodada (2026-02-17)
+## Entregas concluídas nesta rodada (2026-02-18)
 
 ### 1) Operação “à prova de dia corrido” (Admin → Agenda)
 Documentação e UX de operação manual para reduzir risco humano:
@@ -54,16 +54,21 @@ Documentação e UX de operação manual para reduzir risco humano:
 - **Confirmação de presença**:
   - `GET /api/attendance/confirmed` retorna `appointmentIds[]` para marcar “confirmado”.
   - `confirmd` é alias.
-- Existe endpoint opcional `GET /api/cron/reminders` (protegido por `CRON_SECRET`), mas **não está em uso** (decisão atual: manual).
+- Existe endpoint opcional `GET /api/cron/reminders` (protegido por `CRON_SECRETS` (compat: `CRON_SECRET`)), mas **não está em uso** (decisão atual: manual).
 
 ---
 
 ## Próximos itens (backlog imediato)
-- **Segurança para produção (bloqueadores)** — manter como prioridade 0:
-  - [x] Bloquear login do paciente por e-mail sem verificação (ficou somente vinculação por telefone+código)
-  - [x] Remover fallback perigoso de admin via `users.role` + travar writes no `users/{uid}`
-  - [ ] Hardening de headers (CSP/HSTS/etc.)
-  - [ ] Rate limit e padronização de erros em auth
+- **Segurança para produção (bloqueadores)** — concluído nesta rodada:
+  - [x] Login paciente por e-mail sem verificação desativado (fluxo principal: telefone+código)
+  - [x] RBAC: removido fallback por `users.role` no `requireAdmin` + rules blindadas
+  - [x] Identidade do paciente travada no `users/{uid}` (sem editar `phoneCanonical/email/role`)
+  - [x] Removido recurso DEV “Trocar paciente”
+  - [x] Headers de segurança (HSTS/XFO/nosniff/Referrer/Permissions + CSP report-only)
+  - [x] Rate limit em endpoints sensíveis + erros sem vazamento
+  - [x] Logs/retencao: PII minimizado + `expireAt` + **TTL habilitado** (`history.expireAt`, `audit_logs.expireAt`)
+
+- **Próximo ajuste de segurança (não-bloqueador, recomendado):** CSP sair de **Report-Only** para **Enforce** (após observar relatórios).
 - **Paciente: menu Artigos/Biblioteca** (psicoeducação mais completa + “Para levar para a sessão” + mantra fixo “leitura não substitui sessão”; sem CTA cancelar/remarcar).
 - **Dados/Consistência**: documentar modelo NoSQL Firestore (denormalização + chave única paciente).
 - **Autenticação do paciente** (mais segura) antes de PWA/App.

@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import crypto from "crypto";
 import { rateLimit } from "@/lib/server/rateLimit";
+import { enforceSameOrigin } from "@/lib/server/originGuard";
+import { writeHistory } from "@/lib/server/historyLog";
 export const runtime = "nodejs";
 
 /**
@@ -74,6 +76,14 @@ function isInactiveUser(u) {
 
 export async function POST(req) {
   try {
+    const originCheck = enforceSameOrigin(req, {
+      // Fluxo de vinculação deve vir do próprio app (browser/webview).
+      allowNoOrigin: false,
+      allowNoOriginWithAuth: false,
+      message: "Acesso bloqueado (origem inválida).",
+    });
+    if (!originCheck.ok) return originCheck.res;
+
     const body = await req.json().catch(() => ({}));
     const phoneRaw = String(body?.phone || "").trim();
     const codeRaw = String(body?.code || "").trim();
@@ -190,7 +200,7 @@ export async function POST(req) {
 
     // Auditoria
     const ua = (req.headers.get("user-agent") || "").slice(0, 180);
-    await db.collection("history").add({
+    await writeHistory(db, {
       type: "patient_paired_device",
       createdAt: now,
       payload: {

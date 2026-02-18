@@ -5,7 +5,8 @@
 ## Convenções
 - Next.js App Router: endpoints existem como `.../route.js`.
 - Auth Admin: `Authorization: Bearer <Firebase ID Token>` + `role=admin` (ver `requireAdmin`).
-- Segredo (cron): `CRON_SECRET` via query `?key=` ou header `x-cron-secret`.
+- Segredo (cron): `CRON_SECRETS` (ou compat `CRON_SECRET`) via header `Authorization: Bearer ...` (preferido) ou `x-cron-secret`.
+- Legado: query `?key=` só se `ALLOW_CRON_QUERY_KEY=true` (não recomendado).
 - Logs/auditoria: ações críticas registram auditoria (quando aplicável).
 
 ---
@@ -90,9 +91,17 @@
 
 ### 12) Enviar lembretes automaticamente
 - **GET** `/api/cron/reminders`
-- **Auth:** por segredo (`CRON_SECRET`)
+- **Auth:** por segredo (`CRON_SECRETS`) via header (Authorization Bearer / x-cron-secret)
 - **Uso:** scheduler chama a URL e o endpoint envia lembretes 48h/24h/12h com idempotência por slot.
 - **Observação:** não roda sozinho; só funciona se você configurar Cron Jobs.
+
+
+
+### 12B) Limpeza de logs (retencao)
+- **GET** `/api/cron/retention`
+- **Auth:** por segredo (`CRON_SECRETS`) via header (Authorization Bearer / x-cron-secret)
+- **Uso:** apaga docs expirados de `history` e `audit_logs` (TTL/rotacao).
+- **Observação:** opcional se TTL do Firestore estiver habilitado; recomendado 1x/dia como fallback.
 
 
 ---

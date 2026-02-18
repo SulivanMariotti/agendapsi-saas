@@ -53,10 +53,36 @@
   - `X-Content-Type-Options` (nosniff)
   - `Referrer-Policy`
   - `Permissions-Policy`
-  - `Content-Security-Policy-Report-Only` (CSP em observação)
+  - `Content-Security-Policy` (**ENFORCE em produção**; Report-Only apenas em dev)
 
 - Auth hardening:
   - `/api/auth` (admin): **rate limit** + **origin check** + comparação de senha em tempo constante.
   - Paciente: **rate limit** em `/api/patient/pair`, `/api/patient/appointments`, `/api/patient/resolve-phone`.
   - Padronização de erros (não vaza `e.message` em rotas sensíveis).
   - Removida a possibilidade de override/impersonação por querystring na rota de appointments.
+
+- Logs/retencao:
+  - `history`: escrita centralizada com minimizacao de PII (telefone/e-mail mascarados; token bruto nunca).
+  - `history` e `audit_logs`: campo `expireAt` para TTL/rotacao.
+  - TTL habilitado no Firestore: policies `history.expireAt` e `audit_logs.expireAt` (exclusao pode levar ate ~24h apos `expireAt`).
+  - Nova rota opcional: `GET /api/cron/retention` (limpeza por cron), usando `CRON_SECRETS` (compat: `CRON_SECRET`).
+  - Firestore rules: match explicito para `audit_logs` admin-only.
+  - Docs: `docs/75_RETENCAO_LOGS_TTL_E_CRON.md` e atualizacao do padrao `docs/11_HISTORY_LOGGING_STANDARD.md`.
+
+## 2026-02-18 — Segurança (segredos)
+- Adicionado `.gitignore` com bloqueio de `.env*`.
+- Adicionado `.env.example` (template sem valores).
+- Adicionado `npm run security:check` para detectar `.env*` e padrões de segredos antes de compartilhar.
+
+
+## 2026-02-18 — Segurança (cron secret)
+- Cron routes (`/api/cron/*`) agora priorizam **header-only** em produção (Authorization Bearer / x-cron-secret).
+- Suporte a rotação via `CRON_SECRETS` (lista separada por vírgula).
+- Query `?key=` desativado em produção por padrão (só com `ALLOW_CRON_QUERY_KEY=true` como transição).
+- Novo helper: `src/lib/server/cronAuth.js` + logs seguros de tentativas inválidas.
+- Docs atualizadas: `docs/26_VERCEL_CRON_REMINDERS.md` e `docs/75_RETENCAO_LOGS_TTL_E_CRON.md`.
+
+
+## 2026-02-18 — Segurança (continuação)
+- Padronização de CSRF/origin: helper `src/lib/server/originGuard.js`.
+- Aplicado em rotas sensíveis: `/api/auth`, `/api/patient/pair`, `/api/patient-auth`, `/api/patient/push/register`, `/api/attendance/confirm` e `requireAdmin`.

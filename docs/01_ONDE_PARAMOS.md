@@ -47,7 +47,7 @@
 - Copy do WhatsApp ajustado: **confirmação**, sem atalho de cancelamento.
 
 ### 5) Endpoint opcional de cron (não habilitado)
-- Criado `GET /api/cron/reminders` (protegido por `CRON_SECRET`).
+- Criado `GET /api/cron/reminders` (protegido por `CRON_SECRETS` (compat: `CRON_SECRET`)).
 - Documentado em `docs/26_VERCEL_CRON_REMINDERS.md`.
 - Decisão operacional atual: **manter envios manuais**.
 

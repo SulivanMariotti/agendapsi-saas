@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+import { writeHistory } from "@/lib/server/historyLog";
 
 export const runtime = "nodejs";
 
@@ -466,7 +467,7 @@ export async function POST(req) {
     }
 
     if (!messages.length) {
-      await db.collection("history").add({
+      await writeHistory(db, {
         type: "push_reminder_send_summary",
         uploadId: uploadId || null,
         phonesTotal: phones.length,
@@ -519,7 +520,7 @@ export async function POST(req) {
 
       if (r?.success) {
         sentCount += 1;
-        db.collection("history").add({
+        writeHistory(db, {
           type: "push_reminder_sent",
           uploadId: uploadId || null,
           phoneCanonical: phone,
@@ -540,7 +541,7 @@ export async function POST(req) {
         }
       } else {
         failCount += 1;
-        db.collection("history").add({
+        writeHistory(db, {
           type: "push_reminder_failed",
           uploadId: uploadId || null,
           phoneCanonical: phone,
@@ -575,7 +576,7 @@ export async function POST(req) {
     }
 
 
-    await db.collection("history").add({
+    await writeHistory(db, {
       type: "push_reminder_send_summary",
       uploadId: uploadId || null,
       phonesTotal: phones.length,

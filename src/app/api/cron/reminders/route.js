@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
+import { writeHistory } from "@/lib/server/historyLog";
+import { requireCron } from "@/lib/server/cronAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,24 +13,12 @@ export const dynamic = "force-dynamic";
  * automaticamente, reduzindo faltas por esquecimento e sustentando constância.
  *
  * Segurança:
- * - Requer secret via:
- *   - Header: x-cron-secret
- *   - OU Query: ?key=...
- *
- * Observação: Alguns schedulers (ex.: Vercel Cron) não permitem headers custom.
- * Por isso aceitamos `?key=` como fallback.
+ * - Produção: header-only (não expõe secret em URL/log).
+ *   - Authorization: Bearer <secret>
+ *   - ou x-cron-secret: <secret>
+ * - Legado (desativado em produção): ?key=...
+ *   (só funciona se ALLOW_CRON_QUERY_KEY=true).
  */
-
-function getCronKeyFromReq(req) {
-  const url = new URL(req.url);
-  const q = url.searchParams.get("key") || "";
-  const h = req.headers.get("x-cron-secret") || "";
-  return (h || q || "").toString().trim();
-}
-
-function deny() {
-  return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-}
 
 function onlyDigits(v) {
   return String(v || "").replace(/\D/g, "");
@@ -203,10 +193,8 @@ function determineSlotByDiffHours(diffHours, tolHours = 6) {
 }
 
 export async function GET(req) {
-  const secret = String(process.env.CRON_SECRET || "").trim();
-  if (!secret) return NextResponse.json({ ok: false, error: "Missing CRON_SECRET env" }, { status: 500 });
-  const key = getCronKeyFromReq(req);
-  if (!key || key !== secret) return deny();
+  const guard = requireCron(req);
+  if (guard) return guard;
 
   const url = new URL(req.url);
   const dryRun = url.searchParams.get("dryRun") === "1" || url.searchParams.get("dryRun") === "true";
@@ -449,7 +437,7 @@ export async function GET(req) {
   }
 
   if (!messages.length) {
-    await db.collection("history").add({
+    await writeHistory(db, {
       type: "cron_reminders_send_summary",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       window: { from: nowDate.toISOString(), to: windowEnd.toISOString() },
@@ -537,7 +525,7 @@ export async function GET(req) {
     }
   }
 
-  await db.collection("history").add({
+  await writeHistory(db, {
     type: "cron_reminders_send_summary",
     createdAt: nowTs,
     window: { from: nowDate.toISOString(), to: windowEnd.toISOString() },

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import crypto from "crypto";
+import { writeHistory } from "@/lib/server/historyLog";
+import { enforceSameOrigin } from "@/lib/server/originGuard";
 export const runtime = "nodejs";
 
 function getServiceAccount() {
@@ -44,6 +46,14 @@ function toPhoneCanonical(raw) {
 
 export async function POST(req) {
   try {
+    const originCheck = enforceSameOrigin(req, {
+      // Bearer token protege, mas bloqueamos cross-site quando houver contexto de navegador.
+      allowNoOrigin: false,
+      allowNoOriginWithAuth: true,
+      message: "Acesso bloqueado (origem inválida).",
+    });
+    if (!originCheck.ok) return originCheck.res;
+
     initAdmin();
 
     const authHeader = req.headers.get("authorization") || "";
@@ -101,7 +111,7 @@ export async function POST(req) {
     const tokenHash = sha256(token);
     const tokenTail = token.length >= 8 ? token.slice(-8) : token;
 
-    await admin.firestore().collection("history").add({
+    await writeHistory(admin.firestore(), {
       type: "push_enabled",
       patientId: uid,
       phoneCanonical,
@@ -114,6 +124,6 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, phoneCanonical });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ ok: false, error: e?.message || "Erro" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "Erro interno. Tente novamente." }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import crypto from "crypto";
 import { rateLimit } from "@/lib/server/rateLimit";
+import { enforceSameOrigin } from "@/lib/server/originGuard";
 
 export const runtime = "nodejs";
 
@@ -16,32 +17,6 @@ function initAdmin() {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
-}
-
-// Proteção simples contra CSRF/CORS: se houver Origin, exige que seja o próprio host.
-function getExpectedOrigin(req) {
-  const proto = req.headers.get("x-forwarded-proto") || "https";
-  const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
-  if (!host) return null;
-  return `${proto}://${host}`;
-}
-
-function enforceSameOrigin(req) {
-  const origin = req.headers.get("origin");
-  // Se não houver Origin, geralmente é server-to-server (permitir).
-  if (!origin) return { ok: true };
-  const expected = getExpectedOrigin(req);
-  if (!expected) return { ok: true };
-  if (origin !== expected) {
-    return {
-      ok: false,
-      res: NextResponse.json(
-        { ok: false, error: "Acesso bloqueado (origem inválida)." },
-        { status: 403 }
-      ),
-    };
-  }
-  return { ok: true };
 }
 
 function timingSafePasswordEquals(a, b) {
@@ -67,8 +42,13 @@ function timingSafePasswordEquals(a, b) {
 
 export async function POST(req) {
   try {
-    // 1) Proteção de origem
-    const originCheck = enforceSameOrigin(req);
+    // 1) Proteção de origem (CSRF/CORS hardening)
+    const originCheck = enforceSameOrigin(req, {
+      // Login admin deve vir do próprio app (browser). Em produção, sem Origin/Referer => bloqueia.
+      allowNoOrigin: false,
+      allowNoOriginWithAuth: false,
+      message: "Acesso bloqueado (origem inválida).",
+    });
     if (!originCheck.ok) return originCheck.res;
 
     // 2) Rate limit (best-effort)
