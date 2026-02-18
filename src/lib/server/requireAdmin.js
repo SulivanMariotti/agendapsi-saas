@@ -12,7 +12,6 @@ import { forbiddenOrigin } from "@/lib/server/adminError";
  * - Valida token via Firebase Admin
  * - Autoriza se:
  *   - decoded.role === 'admin'  OR decoded.admin === true
- *   - (fallback) users/{uid}.role === 'admin'
  *
  * Retorna { ok: true, uid, decoded } ou { ok: false, res }
  */
@@ -54,16 +53,6 @@ export async function requireAdmin(req) {
   const claimAdmin = decoded?.admin === true;
   if (claimRole === "admin" || claimAdmin) {
     return { ok: true, uid, decoded };
-  }
-
-  try {
-    const userSnap = await admin.firestore().collection("users").doc(uid).get();
-    const user = userSnap.exists ? userSnap.data() : null;
-    if (user?.role === "admin") {
-      return { ok: true, uid, decoded };
-    }
-  } catch (_) {
-    // ignore
   }
 
   return {

@@ -1,5 +1,9 @@
 # Login do paciente — Código de Vinculação (Opção B)
 
+> **Nota de segurança:** o login do paciente por **e-mail** (sem OTP/magic link) é considerado **inseguro**.
+> Neste projeto, o acesso padrão para o paciente é via **telefone + código de vinculação**.
+> O endpoint legado `/api/patient-auth` deve permanecer **desativado em produção**.
+
 ## Objetivo
 Um login **simples**, **robusto** e **sem custo** (sem SMS/email), para o paciente acessar o painel e ativar notificações com consistência.
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
+import { rateLimit } from "@/lib/server/rateLimit";
 export const runtime = "nodejs";
 function getServiceAccount() {
   const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
@@ -58,6 +59,14 @@ function toPhoneCanonical(raw) {
 
 export async function GET(req) {
   try {
+    const rl = await rateLimit(req, {
+      bucket: "patient:resolve-phone",
+      limit: 60,
+      windowMs: 60_000,
+      errorMessage: "Muitas tentativas. Aguarde um pouco e tente novamente.",
+    });
+    if (!rl.ok) return rl.res;
+
     initAdmin();
 
     const authHeader = req.headers.get("authorization") || "";
@@ -154,8 +163,9 @@ export async function GET(req) {
 
     return NextResponse.json({ ok: true, phoneCanonical });
   } catch (err) {
+    console.error("[PATIENT_RESOLVE_PHONE] Error", err);
     return NextResponse.json(
-      { ok: false, error: err?.message || "resolve-phone failed" },
+      { ok: false, error: "Erro interno. Tente novamente." },
       { status: 500 }
     );
   }

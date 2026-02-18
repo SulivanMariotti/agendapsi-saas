@@ -59,6 +59,11 @@ Documentação e UX de operação manual para reduzir risco humano:
 ---
 
 ## Próximos itens (backlog imediato)
+- **Segurança para produção (bloqueadores)** — manter como prioridade 0:
+  - [x] Bloquear login do paciente por e-mail sem verificação (ficou somente vinculação por telefone+código)
+  - [x] Remover fallback perigoso de admin via `users.role` + travar writes no `users/{uid}`
+  - [ ] Hardening de headers (CSP/HSTS/etc.)
+  - [ ] Rate limit e padronização de erros em auth
 - **Paciente: menu Artigos/Biblioteca** (psicoeducação mais completa + “Para levar para a sessão” + mantra fixo “leitura não substitui sessão”; sem CTA cancelar/remarcar).
 - **Dados/Consistência**: documentar modelo NoSQL Firestore (denormalização + chave única paciente).
 - **Autenticação do paciente** (mais segura) antes de PWA/App.

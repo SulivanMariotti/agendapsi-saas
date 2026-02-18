@@ -36,6 +36,9 @@ export async function rateLimit(req, opts = {}) {
     limit = 60,
     windowMs = 60_000,
     uid = null,
+    // Mensagem retornada ao cliente quando exceder o limite.
+    // Admin pode manter o padrão (inglês) se desejar; rotas do paciente usam PT-BR.
+    errorMessage = "Rate limit exceeded.",
   } = opts;
 
   const store = getStore();
@@ -61,7 +64,7 @@ export async function rateLimit(req, opts = {}) {
     const res = NextResponse.json(
       {
         ok: false,
-        error: "Rate limit exceeded.",
+        error: String(errorMessage || "Rate limit exceeded."),
         retryAfterSeconds,
       },
       { status: 429 }

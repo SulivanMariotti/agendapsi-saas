@@ -6,8 +6,11 @@ import { patientLoginByEmail, patientLoginByPairCode } from "../../services/auth
 import { Button, Card } from "../DesignSystem";
 import { Mail, CheckCircle, Bell, CalendarCheck, NotebookPen, Info, Key } from "lucide-react";
 
+const ENABLE_EMAIL_LOGIN =
+  String(process.env.NEXT_PUBLIC_ENABLE_PATIENT_EMAIL_LOGIN || "").toLowerCase() === "true";
+
 export default function PatientLogin() {
-  const [mode, setMode] = useState("code"); // code | email
+  const [mode, setMode] = useState("code"); // code | email (email apenas se ENABLE_EMAIL_LOGIN)
 
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -98,42 +101,49 @@ export default function PatientLogin() {
 
         <Card title="Entrar">
           <div className="space-y-3">
-            {/* Seletor simples */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setMode("code")}
-                className={[
-                  "px-3 py-2 rounded-xl text-sm border",
-                  mode === "code"
-                    ? "bg-violet-600 text-white border-violet-600"
-                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300",
-                ].join(" ")}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Key size={16} />
-                  Código
-                </div>
-              </button>
+            {/* Seletor simples (email é legado e fica desativado por padrão) */}
+            {ENABLE_EMAIL_LOGIN ? (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMode("code")}
+                  className={[
+                    "px-3 py-2 rounded-xl text-sm border",
+                    mode === "code"
+                      ? "bg-violet-600 text-white border-violet-600"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300",
+                  ].join(" ")}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Key size={16} />
+                    Código
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setMode("email")}
-                className={[
-                  "px-3 py-2 rounded-xl text-sm border",
-                  mode === "email"
-                    ? "bg-violet-600 text-white border-violet-600"
-                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300",
-                ].join(" ")}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Mail size={16} />
-                  E-mail
-                </div>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setMode("email")}
+                  className={[
+                    "px-3 py-2 rounded-xl text-sm border",
+                    mode === "email"
+                      ? "bg-violet-600 text-white border-violet-600"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300",
+                  ].join(" ")}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Mail size={16} />
+                    E-mail
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div className="text-[12px] text-slate-500">
+                <b>Segurança:</b> o acesso é por <b>vinculação de aparelho</b> (telefone + código). Isso protege seu
+                espaço de cuidado.
+              </div>
+            )}
 
-            {mode === "code" ? (
+            {mode === "code" || !ENABLE_EMAIL_LOGIN ? (
               <div className="space-y-3">
                 <div className="text-sm text-slate-600">
                   Use seu <b>telefone</b> e o <b>código de vinculação</b> entregue pela clínica.

@@ -1,4 +1,4 @@
-# Changelog — Lembrete Psi (até 2026-02-17)
+# Changelog — Lembrete Psi (até 2026-02-18)
 
 ## Até 2026-02-16 (resumo)
 - Follow-ups de constância (presença/falta) com idempotência.
@@ -32,3 +32,31 @@
 
 ### C) Documentação consolidada para continuidade
 - Atualização de `00_ONDE_PARAMOS.md`, `00_PROMPT_NOVO_CHAT.md`, `01_HANDOFF.md`, `02_BACKLOG.md`, `16_API_ENDPOINTS_CATALOG.md`, `18_TROUBLESHOOTING_COMMON_ERRORS.md` e índice.
+
+---
+
+## 2026-02-18 — Segurança (bloqueadores para produção)
+
+- Paciente: **login por e-mail sem verificação** desativado por padrão (mantido somente telefone+código).
+- Admin: `requireAdmin` passou a aceitar **apenas claim** (`role=admin` ou `admin=true`) — sem fallback em `users.role`.
+- Firestore Rules:
+  - `users/{uid}`: paciente só atualiza `lastSeen` e aceite de contrato (sem editar identidade).
+  - `patient_notes/{id}`: travado para impedir troca de `patientId` no update.
+- Paciente: `PatientFlow` não tenta mais “criar perfil” no Firestore (perfil é whitelist/admin).
+- Novo: `docs/74_SEGURANCA_PLANO_PRODUCAO.md` (checklist vivo para liberar produção).
+
+- Paciente: removido botão/recurso DEV **“Trocar paciente”** do painel.
+
+- Next.js: **hardening de headers** aplicado globalmente:
+  - `Strict-Transport-Security` (HSTS)
+  - `X-Frame-Options` (anti-clickjacking)
+  - `X-Content-Type-Options` (nosniff)
+  - `Referrer-Policy`
+  - `Permissions-Policy`
+  - `Content-Security-Policy-Report-Only` (CSP em observação)
+
+- Auth hardening:
+  - `/api/auth` (admin): **rate limit** + **origin check** + comparação de senha em tempo constante.
+  - Paciente: **rate limit** em `/api/patient/pair`, `/api/patient/appointments`, `/api/patient/resolve-phone`.
+  - Padronização de erros (não vaza `e.message` em rotas sensíveis).
+  - Removida a possibilidade de override/impersonação por querystring na rota de appointments.

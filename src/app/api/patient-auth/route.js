@@ -1,6 +1,7 @@
 // src/app/api/patient-auth/route.js
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
+import { rateLimit } from "@/lib/server/rateLimit";
 export const runtime = "nodejs";
 /**
  * Patient Login (email) - server-side (Firebase Admin)
@@ -104,6 +105,31 @@ function pickBestUserDoc(items) {
 
 export async function POST(req) {
   try {
+    // Rate limit (mesmo desativado por padrão, evita abuso quando habilitado em testes)
+    const rl = await rateLimit(req, {
+      bucket: "auth:patient:email",
+      limit: 10,
+      windowMs: 10 * 60_000,
+      errorMessage: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
+    });
+    if (!rl.ok) return rl.res;
+
+    // 🔒 Segurança: login por e-mail do paciente é INSEGURO sem verificação (OTP/Magic Link).
+    // Mantemos o endpoint apenas para testes controlados e legado.
+    // Em produção, deixe DESATIVADO (padrão). Para habilitar conscientemente, set:
+    //   ENABLE_INSECURE_PATIENT_EMAIL_LOGIN="true"
+    const enabled = String(process.env.ENABLE_INSECURE_PATIENT_EMAIL_LOGIN || "").toLowerCase() === "true";
+    if (!enabled) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Login por e-mail está desativado por segurança. Use telefone + código de vinculação fornecido pela clínica.",
+        },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const email = String(body?.email || "").trim().toLowerCase();
 
@@ -181,7 +207,10 @@ export async function POST(req) {
 
     return NextResponse.json({ ok: true, token, uid, phoneCanonical: phoneCanonical || null });
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: e?.message || "Erro" }, { status: 500 });
+    console.error("[PATIENT_AUTH_EMAIL] Error", e);
+    return NextResponse.json(
+      { ok: false, error: "Erro interno. Tente novamente." },
+      { status: 500 }
+    );
   }
 }

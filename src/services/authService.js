@@ -22,6 +22,17 @@ export async function loginWithGoogle() {
  * - faz signInWithCustomToken
  */
 export async function patientLoginByEmail(email) {
+  // 🔒 Por padrão, o login por e-mail do paciente fica desativado.
+  // Ele é inseguro sem verificação (OTP/Magic Link) e pode permitir sequestro de acesso.
+  // Para habilitar conscientemente (apenas testes/legado), defina:
+  //   NEXT_PUBLIC_ENABLE_PATIENT_EMAIL_LOGIN="true"
+  const enabled = String(process.env.NEXT_PUBLIC_ENABLE_PATIENT_EMAIL_LOGIN || "").toLowerCase() === "true";
+  if (!enabled) {
+    throw new Error(
+      "Login por e-mail está desativado por segurança. Use telefone + código de vinculação fornecido pela clínica."
+    );
+  }
+
   const auth = getAuth(app);
 
   const res = await fetch("/api/patient-auth", {

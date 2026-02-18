@@ -7,6 +7,12 @@ service cloud.firestore {
     function isAdmin()  { return signedIn() && request.auth.token.role == "admin"; }
     function isOwner(userId) { return signedIn() && request.auth.uid == userId; }
 
+    // Paciente só pode atualizar (no próprio users/{uid}) campos estritamente necessários
+    // para UX/contrato (evitar escalonamento e sequestro de agenda via troca de telefone/email).
+    function allowedUserSelfUpdateKeys() {
+      return ["lastSeen", "contractAcceptedVersion", "contractAcceptedAt"]; // mínimo
+    }
+
     // ========= CONFIG (global) =========
     // Mantém o comportamento que você descreveu: leitura liberada, escrita só admin.
     match /config/{id} {
@@ -17,8 +23,16 @@ service cloud.firestore {
     // ========= USERS (perfil) =========
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+      // ✅ Segurança: criação do perfil é responsabilidade do Admin (whitelist).
+      // Evita que um usuário crie users/{uid} forjado com phoneCanonical de terceiros.
+      allow create: if isAdmin();
+
+      // ✅ Segurança: o paciente não pode editar identidade (role/phone/email/status/etc.).
+      // Apenas campos mínimos (lastSeen + aceite de contrato).
+      allow update: if isAdmin()
+        || (isOwner(userId)
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(allowedUserSelfUpdateKeys())
+        );
       allow delete: if isAdmin();
     }
 
@@ -42,27 +56,23 @@ service cloud.firestore {
       // Paciente pode criar nota apenas para si mesmo
       allow create: if signedIn() && request.resource.data.patientId == request.auth.uid;
 
-      // Paciente pode editar/apagar apenas suas notas
-      allow update, delete: if isAdmin()
+      // ✅ Segurança: paciente pode editar apenas suas notas e NÃO pode trocar patientId no update.
+      allow update: if isAdmin()
+        || (signedIn()
+          && resource.data.patientId == request.auth.uid
+          && request.resource.data.patientId == request.auth.uid
+        );
+
+      // Paciente pode apagar apenas suas notas
+      allow delete: if isAdmin()
         || (signedIn() && resource.data.patientId == request.auth.uid);
     }
 
     // ========= SUBSCRIBERS (whitelist/push) =========
     match /subscribers/{id} {
-      // Admin total
+      // ✅ Segurança: paciente NÃO acessa subscribers no client.
+      // Push é registrado via API server-side (Admin SDK).
       allow read, write: if isAdmin();
-
-      // ✅ Paciente pode LER apenas o próprio doc (por email)
-      allow read: if signedIn()
-        && request.auth.token.email != null
-        && resource.data.email == request.auth.token.email;
-
-      // ✅ Paciente só pode ATUALIZAR pushToken/lastSeen do próprio doc
-      allow update: if signedIn()
-        && request.auth.token.email != null
-        && resource.data.email == request.auth.token.email
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["pushToken", "lastSeen"])
-        && request.resource.data.pushToken is string;
     }
 
     // ========= HISTORY =========

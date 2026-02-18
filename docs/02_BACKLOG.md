@@ -1,4 +1,4 @@
-# Backlog (lista viva — atualizado em 2026-02-17)
+# Backlog (lista viva — atualizado em 2026-02-18)
 
 > Marque com [x] quando concluir.
 
@@ -35,7 +35,20 @@
 
 ## 5) Segurança / Acesso
 - [x] Agenda do paciente server-side (`GET /api/patient/appointments`) + rules `appointments` admin-only
-- [ ] **Futuro:** reintroduzir autenticação/login seguro do paciente (magic link/OTP) + hardening geral antes de PWA/App
+
+### 5.1) Segurança para produção (bloqueadores)
+> Ordem: do **mais crítico/baixo score** → para o **menos crítico/alto score**.
+
+- [x] **Bloquear login do paciente por e-mail sem verificação** (inseguro) — usar vinculação por telefone+código
+- [x] **Impedir escalonamento para admin** via `users/{uid}.role` (rules + remoção de fallback em `requireAdmin`)
+- [x] **Travar identidade do paciente** no `users/{uid}` (paciente só atualiza `lastSeen` + aceite de contrato)
+- [x] **Travar `patient_notes.patientId`** no update (paciente não consegue trocar dono da nota)
+- [x] **Remover recurso DEV "Trocar paciente"** do painel do paciente
+- [x] **Hardening de headers** (CSP/HSTS/X-Frame-Options/etc.) no Next.js
+- [x] **Rate limit** em endpoints de autenticação (admin/paciente) + erros sem vazamento de detalhes
+- [ ] **Política de logs/retenção** (PII em history/audit) + acesso somente admin
+
+- [ ] **Futuro (antes de PWA/App):** OTP/magic link para paciente (sem fricção e com segurança)
 
 ## 6) Dados / Consistência (Firestore)
 - [ ] Documentar modelo NoSQL Firestore (sem joins), estratégia de denormalização e chave única (ex.: patientId + phone canônico)

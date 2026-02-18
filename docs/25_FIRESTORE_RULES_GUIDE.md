@@ -9,7 +9,8 @@ Guia prático para manter **Firestore Rules** seguras sem quebrar o produto.
 
 ## 1) Princípios
 
-1. **Fonte de verdade** do paciente é `users/{uid}` (role/status).
+1. **Fonte de verdade de role** é **custom claim** (`request.auth.token.role`).
+   - `users/{uid}` é perfil/whitelist, não autoridade de RBAC.
 2. **Chave do paciente**: `phoneCanonical`.
 3. **Client lê pouco** e escreve menos ainda.
 4. Ações críticas (envio, bloqueio de inativo, janela de envio) acontecem em **API routes** com Admin SDK.
@@ -31,8 +32,8 @@ No client, sempre que permitir leitura, condicione a:
 - Admin: pode ler coleções operacionais
 - Patient: lê apenas os próprios dados e dados “sem risco” (ex.: próximos horários)
 
-> Evite depender de campos “no documento alvo” para autorizar.  
-> Prefira derivar autorização de `users/{uid}`.
+> Evite autorizar por campos que o próprio usuário pode alterar.
+> Para RBAC, **prefira custom claims** (ex.: `role=admin`).
 
 ---
 
@@ -41,15 +42,15 @@ No client, sempre que permitir leitura, condicione a:
 ### 3.1 `users/{uid}`
 - Patient:
   - pode ler **apenas o próprio doc**
-  - escrita limitada (se existir): campos não críticos (ex.: preferências)
+  - escrita mínima: `lastSeen` e aceite de contrato
+  - **não cria** o doc (whitelist é responsabilidade do admin)
 - Admin:
   - pode ler todos
   - pode atualizar `status`, `role`, etc.
 
 ### 3.2 `subscribers/{phoneCanonical}`
 - Patient:
-  - pode escrever **apenas** o doc do seu `phoneCanonical` (para salvar `pushToken`)
-  - leitura pode ser limitada (ideal: permitir leitura mínima ou usar server-side quando possível)
+  - **não acessa no client** (push é registrado via API server-side)
 - Admin:
   - leitura para diagnóstico e envio
 
@@ -98,7 +99,7 @@ No client, sempre que permitir leitura, condicione a:
 ## 5) Checklist de validação rápida
 
 - [ ] Patient consegue abrir painel e ver próxima sessão
-- [ ] Patient consegue salvar `pushToken` (se habilitado)
+- [ ] Patient consegue registrar push via API (se habilitado)
 - [ ] Admin consegue importar e enviar (dryRun + real)
 - [ ] Paciente inativo:
   - [ ] envios bloqueados server-side

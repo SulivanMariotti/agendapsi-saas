@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
+import { rateLimit } from "@/lib/server/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -13,7 +14,7 @@ export const runtime = "nodejs";
  * - Authorization Bearer (idToken)
  * - role patient
  * - Resolve phone pelo users/{uid} e/ou claims
- * - (DEV ONLY) permite ?phone=... apenas fora de produção com NEXT_PUBLIC_DEV_LOGIN=true
+ * - Sem impersonação/override (produção)
  */
 
 function getServiceAccount() {
@@ -49,12 +50,6 @@ function toPhoneCanonical(raw) {
   return d;
 }
 
-function isDevImpersonationAllowed() {
-  const devSwitch = String(process.env.NEXT_PUBLIC_DEV_LOGIN || "").toLowerCase() === "true";
-  const isProd = String(process.env.NODE_ENV || "").toLowerCase() === "production";
-  return devSwitch && !isProd;
-}
-
 function serializeFirestoreValue(v) {
   if (v == null) return v;
   if (typeof v?.toMillis === "function") return v.toMillis();
@@ -71,6 +66,14 @@ function serializeFirestoreValue(v) {
 
 export async function GET(req) {
   try {
+    const rl = await rateLimit(req, {
+      bucket: "patient:appointments",
+      limit: 180,
+      windowMs: 60_000,
+      errorMessage: "Muitas requisições. Aguarde um pouco e tente novamente.",
+    });
+    if (!rl.ok) return rl.res;
+
     initAdmin();
 
     const authHeader = req.headers.get("authorization") || "";
@@ -97,16 +100,10 @@ export async function GET(req) {
     const userSnap = await userRef.get();
     const userData = userSnap.exists ? userSnap.data() : {};
 
-    // DEV: permitir impersonation por telefone (somente local/dev)
-    const url = new URL(req.url);
-    const phoneParam = toPhoneCanonical(url.searchParams.get("phone") || "");
-    const devPhone = isDevImpersonationAllowed() ? phoneParam : "";
-
     const claimPhone =
       decoded?.phoneCanonical || decoded?.patientPhone || decoded?.phone || decoded?.phone_number || "";
 
     const phoneCanonical =
-      devPhone ||
       toPhoneCanonical(
         userData?.phoneCanonical || userData?.phone || userData?.phoneNumber || userData?.phoneE164 || claimPhone || ""
       );
@@ -134,7 +131,10 @@ export async function GET(req) {
 
     return NextResponse.json({ ok: true, appointments });
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: e?.message || "Erro" }, { status: 500 });
+    console.error("[PATIENT_APPOINTMENTS] Error", e);
+    return NextResponse.json(
+      { ok: false, error: "Erro interno. Tente novamente." },
+      { status: 500 }
+    );
   }
 }

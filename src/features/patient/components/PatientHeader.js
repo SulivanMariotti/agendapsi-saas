@@ -2,15 +2,12 @@
 
 import React, { useMemo, useState } from "react";
 import { Button } from "../../../components/DesignSystem";
-import { Users, LogOut, FileText, X, Phone } from "lucide-react";
+import { LogOut, FileText, X, Phone } from "lucide-react";
 import { formatPhoneBR } from "../lib/phone";
 
 export default function PatientHeader({
   patientName,
   patientPhone,
-  devSwitchEnabled,
-  impersonatePhone,
-  setDevPanelOpen,
   onLogout,
 
   // Contrato (leitura futura no menu)
@@ -47,22 +44,10 @@ export default function PatientHeader({
               <span className="font-semibold text-slate-900">{formatPhoneBR(patientPhone)}</span>
             </div>
           ) : null}
-
-          {devSwitchEnabled && impersonatePhone ? (
-            <div className="mt-2 inline-flex items-center gap-2 text-[11px] px-2 py-1 rounded-full border border-amber-100 bg-amber-50 text-amber-900">
-              <Users size={14} />
-              Visualizando agenda de: <b>{formatPhoneBR(impersonatePhone)}</b>
-            </div>
-          ) : null}
         </div>
 
         {/* Desktop actions */}
         <div className="hidden sm:flex gap-2">
-          {devSwitchEnabled ? (
-            <Button onClick={() => setDevPanelOpen((v) => !v)} variant="secondary" icon={Users}>
-              Trocar paciente
-            </Button>
-          ) : null}
 
           <Button onClick={() => setContractOpen(true)} variant="secondary" icon={FileText}>
             Contrato
@@ -81,17 +66,6 @@ export default function PatientHeader({
 
           {mobileMenuOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden z-30">
-              {devSwitchEnabled ? (
-                <button
-                  className="w-full text-left px-4 py-3 text-sm text-slate-800 font-medium hover:bg-slate-50 flex items-center gap-2"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    setDevPanelOpen(true);
-                  }}
-                >
-                  <Users size={16} className="text-slate-600" /> Trocar paciente
-                </button>
-              ) : null}
 
               <button
                 className="w-full text-left px-4 py-3 text-sm text-slate-800 font-medium hover:bg-slate-50 flex items-center gap-2"

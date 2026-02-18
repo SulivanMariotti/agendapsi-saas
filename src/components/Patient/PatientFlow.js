@@ -17,14 +17,7 @@ import { doc,
   updateDoc,
   setDoc } from "firebase/firestore";
 
-import { Button,
-  Card,
-  Toast } from "../DesignSystem";
-import {
-  Users,
-  X,
-} from "lucide-react";
-
+import { Toast } from "../DesignSystem";
 import { onlyDigits, toCanonical, normalizeWhatsappPhone } from "../../features/patient/lib/phone";
 import { brDateParts, addMinutes, relativeLabelForDate, formatDateTimeBR } from "../../features/patient/lib/dates";
 import { makeIcsDataUrl, startDateTimeFromAppointment } from "../../features/patient/lib/ics";
@@ -58,21 +51,6 @@ const [profile, setProfile] = useState(null);
 
   const [confirmedIds, setConfirmedIds] = useState(() => new Set());
   const [confirmedLoading, setConfirmedLoading] = useState(false);
-  const DEV_SWITCH_ENABLED = String(process.env.NEXT_PUBLIC_DEV_LOGIN || "").toLowerCase() === "true";
-  const DEV_IMP_KEY = "LP_IMPERSONATE_PHONE";
-
-  const [devPanelOpen, setDevPanelOpen] = useState(false);
-  const [impersonatePhone, setImpersonatePhone] = useState("");
-  const [impersonateInput, setImpersonateInput] = useState("");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!DEV_SWITCH_ENABLED) return;
-
-    const saved = window.localStorage.getItem(DEV_IMP_KEY) || "";
-    setImpersonatePhone(onlyDigits(saved));
-    setImpersonateInput(onlyDigits(saved));
-  }, [DEV_SWITCH_ENABLED]);
 
   const cleanPhoneFromProfile = useMemo(() => {
     const p = profile?.phone || profile?.phoneNumber || "";
@@ -131,9 +109,8 @@ useEffect(() => {
 }, [cleanPhoneFromProfile, user?.uid]);
 
   const effectivePhone = useMemo(() => {
-    if (DEV_SWITCH_ENABLED && impersonatePhone) return toCanonical(impersonatePhone);
     return toCanonical(resolvedPhone || cleanPhoneFromProfile);
-  }, [DEV_SWITCH_ENABLED, impersonatePhone, resolvedPhone, cleanPhoneFromProfile]);
+  }, [resolvedPhone, cleanPhoneFromProfile]);
 
   const currentContractVersion = Number(globalConfig?.contractVersion || 1);
   const acceptedVersion = Number(profile?.contractAcceptedVersion || 0);
@@ -177,21 +154,9 @@ useEffect(() => {
         const snap = await getDoc(userRef);
 
         if (!snap.exists()) {
-          await setDoc(
-            userRef,
-            {
-              uid: user.uid,
-              email: (user.email || "").toLowerCase(),
-              name: user.displayName || "",
-              phone: "",
-              role: "patient",
-              createdAt: new Date(),
-              lastSeen: new Date(),
-              contractAcceptedVersion: 0,
-              contractAcceptedAt: null,
-            },
-            { merge: true }
-          );
+          // ✅ Segurança: o perfil (users/{uid}) é criado pelo Admin (whitelist).
+          // Se não existe, orienta o paciente a contatar a clínica.
+          showToast("Seu acesso ainda não foi liberado. Peça à clínica para atualizar seu cadastro.", "error");
         } else {
           await setDoc(userRef, { lastSeen: new Date() }, { merge: true });
         }
@@ -384,26 +349,6 @@ useEffect(() => {
     }
   }
 
-  const handleDevApply = () => {
-    const p = onlyDigits(impersonateInput);
-    if (!p) {
-      showToast("Digite um telefone válido (DDD + número).", "error");
-      return;
-    }
-    setImpersonatePhone(p);
-    if (typeof window !== "undefined") window.localStorage.setItem(DEV_IMP_KEY, p);
-    showToast("Visualização alterada para esse paciente (agenda).", "success");
-    setDevPanelOpen(false);
-  };
-
-  const handleDevClear = () => {
-    setImpersonatePhone("");
-    setImpersonateInput("");
-    if (typeof window !== "undefined") window.localStorage.removeItem(DEV_IMP_KEY);
-    showToast("Voltando para o seu painel.", "success");
-    setDevPanelOpen(false);
-  };
-
   const nextLabel = useMemo(() => {
     const dt = nextAppointment ? startDateTimeFromAppointment(nextAppointment) : null;
     return dt ? relativeLabelForDate(dt) : null;
@@ -443,51 +388,11 @@ useEffect(() => {
           <PatientHeader
             patientName={patientName}
             patientPhone={resolvedPhone || cleanPhoneFromProfile}
-            devSwitchEnabled={DEV_SWITCH_ENABLED}
-            impersonatePhone={impersonatePhone}
-            setDevPanelOpen={setDevPanelOpen}
             onLogout={onLogout}
             contractText={contractText}
             needsContractAcceptance={needsContractAcceptance}
             currentContractVersion={currentContractVersion}
           />
-
-          {/* DEV painel */}
-          {DEV_SWITCH_ENABLED && devPanelOpen && (
-            <Card>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-bold text-slate-900 flex items-center gap-2">
-                    <Users size={18} className="text-violet-600" />
-                    Trocar paciente (DEV)
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">Digite o telefone do paciente para visualizar a agenda (sem alterar login).</div>
-                </div>
-                <button type="button" onClick={() => setDevPanelOpen(false)} className="text-slate-400 hover:text-slate-700" aria-label="Fechar">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="mt-4 flex flex-col sm:flex-row gap-2">
-                <input
-                  className="flex-1 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200 text-slate-700"
-                  placeholder="DDD + número (ex: 11999998888)"
-                  value={impersonateInput}
-                  onChange={(e) => setImpersonateInput(onlyDigits(e.target.value))}
-                />
-                <Button onClick={handleDevApply} className="sm:w-auto w-full">
-                  Aplicar
-                </Button>
-                <Button onClick={handleDevClear} variant="secondary" className="sm:w-auto w-full">
-                  Voltar
-                </Button>
-              </div>
-
-              <div className="mt-3 text-[11px] text-slate-400">
-                * Esse recurso aparece somente quando <b>NEXT_PUBLIC_DEV_LOGIN=true</b>.
-              </div>
-            </Card>
-          )}
 
           {/* Mantra fixo (topo) */}
           <PatientTopMantraBar />

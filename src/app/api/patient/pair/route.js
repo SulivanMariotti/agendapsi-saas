@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import crypto from "crypto";
+import { rateLimit } from "@/lib/server/rateLimit";
 export const runtime = "nodejs";
 
 /**
@@ -87,6 +88,19 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: "Informe o código de vinculação." }, { status: 400 });
     }
 
+    // Rate limit (best-effort) para evitar tentativa de força-bruta de código.
+    const rl = await rateLimit(req, {
+      bucket: "auth:patient:pair",
+      uid: phoneCanonical,
+      limit: 20,
+      windowMs: 15 * 60_000,
+      errorMessage: "Muitas tentativas. Aguarde um pouco e tente novamente.",
+    });
+    if (!rl.ok) return rl.res;
+
+    const AUTH_FAIL =
+      "Não foi possível vincular. Verifique telefone e código. Se persistir, peça ajuda à clínica.";
+
     initAdmin();
     const db = admin.firestore();
 
@@ -108,7 +122,7 @@ export async function POST(req) {
 
     if (q.empty) {
       return NextResponse.json(
-        { ok: false, error: "Telefone não autorizado. Peça atualização à clínica." },
+        { ok: false, error: AUTH_FAIL },
         { status: 403 }
       );
     }
@@ -131,7 +145,7 @@ export async function POST(req) {
 
     if (isInactiveUser(userData)) {
       return NextResponse.json(
-        { ok: false, error: "Cadastro inativo. Fale com a clínica para reativação." },
+        { ok: false, error: AUTH_FAIL },
         { status: 403 }
       );
     }
@@ -142,7 +156,7 @@ export async function POST(req) {
 
     if (!salt || !expectedHash || status !== "active") {
       return NextResponse.json(
-        { ok: false, error: "Código indisponível. Peça um novo código à clínica." },
+        { ok: false, error: AUTH_FAIL },
         { status: 403 }
       );
     }
@@ -151,7 +165,7 @@ export async function POST(req) {
 
     if (computed !== expectedHash) {
       return NextResponse.json(
-        { ok: false, error: "Código inválido. Verifique e tente novamente." },
+        { ok: false, error: AUTH_FAIL },
         { status: 403 }
       );
     }
@@ -191,7 +205,10 @@ export async function POST(req) {
 
     return NextResponse.json({ ok: true, token, uid });
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: e?.message || "Erro" }, { status: 500 });
+    console.error("[PATIENT_PAIR] Error", e);
+    return NextResponse.json(
+      { ok: false, error: "Erro interno. Tente novamente." },
+      { status: 500 }
+    );
   }
 }
