@@ -6,6 +6,7 @@ import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
 import { writeHistory } from "@/lib/server/historyLog";
+import { asPlainObject, enforceAllowedKeys, getString, readJsonBody } from "@/lib/server/payloadSchema";
 export const runtime = "nodejs";
 /**
  * Admin server-side: desativar (soft-delete) paciente
@@ -114,17 +115,89 @@ export async function POST(req) {
     if (!rl.ok) return rl.res;
 
 
-    const body = await req.json().catch(() => ({}));
+    const rb = await readJsonBody(req, { maxBytes: 20_000 });
+    if (!rb.ok) {
+      return NextResponse.json({ ok: false, error: rb.error }, { status: 400 });
+    }
 
-    const uid = String(body?.uid || "").trim() || null;
-    const email = String(body?.email || "").trim().toLowerCase() || null;
-    const patientExternalId = String(body?.patientExternalId || "").trim() || null;
+    const po = asPlainObject(rb.value);
+    if (!po.ok) {
+      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
+    }
 
-    const phoneCanonical = normalizePhoneCanonical(
-      body?.phoneCanonical || body?.phone || ""
-    ) || null;
+    const ek = enforceAllowedKeys(po.value, ["uid", "email", "patientExternalId", "phoneCanonical", "phone", "reason"], {
+      label: "PatientDelete",
+    });
+    if (!ek.ok) {
+      return NextResponse.json({ ok: false, error: ek.error }, { status: 400 });
+    }
 
-    const reason = String(body?.reason || "admin_ui_remove").trim();
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+    const uidRes = getString(po.value, "uid", {
+      required: false,
+      trim: true,
+      max: 160,
+      defaultValue: "",
+      label: "uid",
+    });
+    if (!uidRes.ok) return NextResponse.json({ ok: false, error: uidRes.error }, { status: 400 });
+
+    const emailRes = getString(po.value, "email", {
+      required: false,
+      trim: true,
+      toLower: true,
+      max: 160,
+      pattern: emailPattern,
+      defaultValue: "",
+      label: "email",
+    });
+    if (!emailRes.ok) return NextResponse.json({ ok: false, error: emailRes.error }, { status: 400 });
+
+    const extRes = getString(po.value, "patientExternalId", {
+      required: false,
+      trim: true,
+      max: 120,
+      defaultValue: "",
+      label: "patientExternalId",
+    });
+    if (!extRes.ok) return NextResponse.json({ ok: false, error: extRes.error }, { status: 400 });
+
+    const phoneRes = getString(po.value, "phoneCanonical", {
+      required: false,
+      trim: true,
+      max: 40,
+      defaultValue: "",
+      label: "phoneCanonical",
+    });
+    if (!phoneRes.ok) return NextResponse.json({ ok: false, error: phoneRes.error }, { status: 400 });
+
+    const phoneRawRes = getString(po.value, "phone", {
+      required: false,
+      trim: true,
+      max: 40,
+      defaultValue: "",
+      label: "phone",
+    });
+    if (!phoneRawRes.ok) return NextResponse.json({ ok: false, error: phoneRawRes.error }, { status: 400 });
+
+    const reasonRes = getString(po.value, "reason", {
+      required: false,
+      trim: true,
+      max: 80,
+      defaultValue: "admin_ui_remove",
+      label: "reason",
+    });
+    if (!reasonRes.ok) return NextResponse.json({ ok: false, error: reasonRes.error }, { status: 400 });
+
+    const uid = String(uidRes.value || "").trim() || null;
+    const email = String(emailRes.value || "").trim() || null;
+    const patientExternalId = String(extRes.value || "").trim() || null;
+
+    const phoneCanonical =
+      normalizePhoneCanonical(phoneRes.value || phoneRawRes.value || "") || null;
+
+    const reason = String(reasonRes.value || "admin_ui_remove").trim();
 
     if (!uid && !phoneCanonical && !email && !patientExternalId) {
       return NextResponse.json(

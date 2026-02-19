@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { enforceSameOrigin } from "@/lib/server/originGuard";
 import { writeHistory } from "@/lib/server/historyLog";
+import { asPlainObject, enforceAllowedKeys, getString, readJsonBody } from "@/lib/server/payloadSchema";
 export const runtime = "nodejs";
 
 /**
@@ -84,9 +85,53 @@ export async function POST(req) {
     });
     if (!originCheck.ok) return originCheck.res;
 
-    const body = await req.json().catch(() => ({}));
-    const phoneRaw = String(body?.phone || "").trim();
-    const codeRaw = String(body?.code || "").trim();
+    // Anti-abuso por IP (além do limiter por telefone)
+    const rlIp = await rateLimit(req, {
+      bucket: "auth:patient:pair:ip",
+      global: true,
+      limit: 60,
+      windowMs: 15 * 60_000,
+      errorMessage: "Muitas tentativas. Aguarde um pouco e tente novamente.",
+    });
+    if (!rlIp.ok) return rlIp.res;
+
+    const rb = await readJsonBody(req, { maxBytes: 10_000 });
+    if (!rb.ok) {
+      return NextResponse.json({ ok: false, error: rb.error }, { status: 400 });
+    }
+
+    const po = asPlainObject(rb.value);
+    if (!po.ok) {
+      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
+    }
+
+    const ek = enforceAllowedKeys(po.value, ["phone", "code"], { showKeys: false });
+    if (!ek.ok) {
+      return NextResponse.json({ ok: false, error: "Payload inválido." }, { status: 400 });
+    }
+
+    const phoneRes = getString(po.value, "phone", {
+      required: true,
+      max: 40,
+      maxBytes: 120,
+      label: "Telefone",
+    });
+    if (!phoneRes.ok) {
+      return NextResponse.json({ ok: false, error: phoneRes.error }, { status: 400 });
+    }
+
+    const codeRes = getString(po.value, "code", {
+      required: true,
+      max: 80,
+      maxBytes: 200,
+      label: "Código",
+    });
+    if (!codeRes.ok) {
+      return NextResponse.json({ ok: false, error: codeRes.error }, { status: 400 });
+    }
+
+    const phoneRaw = phoneRes.value;
+    const codeRaw = codeRes.value;
 
     const phoneCanonical = toPhoneCanonical(phoneRaw);
     const code = normalizeCode(codeRaw);

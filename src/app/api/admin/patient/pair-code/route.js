@@ -7,6 +7,7 @@ import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
 import { writeHistory } from "@/lib/server/historyLog";
+import { asPlainObject, enforceAllowedKeys, getString, readJsonBody } from "@/lib/server/payloadSchema";
 
 export const runtime = "nodejs";
 
@@ -56,9 +57,33 @@ export async function POST(req) {
     });
     if (!rl.ok) return rl.res;
 
-    const body = await req.json().catch(() => ({}));
-    const uid = String(body?.uid || "").trim();
-    if (!uid) return NextResponse.json({ ok: false, error: "uid obrigatório" }, { status: 400 });
+    const rb = await readJsonBody(req, { maxBytes: 6_000 });
+    if (!rb.ok) {
+      return NextResponse.json({ ok: false, error: rb.error }, { status: 400 });
+    }
+
+    const po = asPlainObject(rb.value);
+    if (!po.ok) {
+      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
+    }
+
+    const ek = enforceAllowedKeys(po.value, ["uid"], { label: "PairCode" });
+    if (!ek.ok) {
+      return NextResponse.json({ ok: false, error: ek.error }, { status: 400 });
+    }
+
+    const uidRes = getString(po.value, "uid", {
+      required: true,
+      trim: true,
+      max: 160,
+      maxBytes: 220,
+      label: "uid",
+    });
+    if (!uidRes.ok) {
+      return NextResponse.json({ ok: false, error: uidRes.error }, { status: 400 });
+    }
+
+    const uid = String(uidRes.value || "").trim();
 
     initAdmin();
     const db = admin.firestore();

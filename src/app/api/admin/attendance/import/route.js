@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
 import { writeHistory } from "@/lib/server/historyLog";
+import { asPlainObject, enforceAllowedKeys, getBoolean, getEnum, getObject, getString, readJsonBody } from "@/lib/server/payloadSchema";
 export const runtime = "nodejs";
 /**
  * POST /api/admin/attendance/import
@@ -64,6 +65,24 @@ function normalizeTime(raw) {
   if (!m) return t;
   return `${m[1].padStart(2, "0")}:${m[2]}`;
 }
+
+function normalizeToISODateTimeParts(raw) {
+  const s0 = String(raw || "").trim();
+  if (!s0) return { isoDate: "", time: "" };
+
+  // tolera: "dd/mm/aaaa HH:MM", "yyyy-mm-dd HH:MM", "yyyy-mm-ddTHH:MM", com ou sem segundos
+  const s = s0.replace(/[,]+/g, " ").replace(/\s+/g, " ").trim();
+  const tm = s.match(/(\d{1,2}:\d{2})/);
+  if (!tm) return { isoDate: "", time: "" };
+
+  const time = normalizeTime(tm[1]);
+  const datePartRaw = s.slice(0, tm.index).trim().replace(/[T\s]+$/g, "").trim();
+  const isoDate = normalizeToISODate(datePartRaw);
+
+  if (!isoDate || !time) return { isoDate: "", time: "" };
+  return { isoDate, time };
+}
+
 
 function parseCSVLine(line) {
   const sep = line.includes(";") && !line.includes(",") ? ";" : ",";
@@ -184,50 +203,251 @@ export async function POST(req) {
     });
     if (!rl.ok) return rl.res;
 
+    const rb = await readJsonBody(req, { maxBytes: 3_000_000 });
+    if (!rb.ok) {
+      return NextResponse.json({ ok: false, error: rb.error }, { status: 400 });
+    }
 
-    const body = await req.json().catch(() => ({}));
+    const po = asPlainObject(rb.value);
+    if (!po.ok) {
+      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
+    }
 
+    const ek = enforceAllowedKeys(po.value, ["csvText", "source", "defaultStatus", "dryRun", "reportMode", "columnMap"], { label: "Import" });
+    if (!ek.ok) {
+      return NextResponse.json({ ok: false, error: ek.error }, { status: 400 });
+    }
 
-    const csvText = String(body.csvText || "").trim();
-    if (!csvText) return NextResponse.json({ ok: false, error: "csvText vazio" }, { status: 400 });
+    const csvRes = getString(po.value, "csvText", {
+      required: true,
+      trim: true,
+      maxBytes: 2_500_000, // ~2.5MB (evita abuso e timeouts)
+      label: "csvText",
+    });
+    if (!csvRes.ok) {
+      return NextResponse.json({ ok: false, error: csvRes.error }, { status: 400 });
+    }
 
-    const source = String(body.source || "attendance_import").trim();
-    const dryRun = Boolean(body.dryRun);
-    const defaultStatus = normalizeDefaultStatus(body.defaultStatus);
+    const sourceRes = getString(po.value, "source", {
+      required: false,
+      trim: true,
+      max: 80,
+      defaultValue: "attendance_import",
+      label: "source",
+    });
+    if (!sourceRes.ok) {
+      return NextResponse.json({ ok: false, error: sourceRes.error }, { status: 400 });
+    }
+
+    const dryRunRes = getBoolean(po.value, "dryRun", { required: false, defaultValue: false, label: "dryRun" });
+    if (!dryRunRes.ok) {
+      return NextResponse.json({ ok: false, error: dryRunRes.error }, { status: 400 });
+    }
+
+    const defaultStatusRes = getEnum(po.value, "defaultStatus", ["present", "absent"], {
+      required: false,
+      defaultValue: "absent",
+      label: "defaultStatus",
+    });
+    if (!defaultStatusRes.ok) {
+      return NextResponse.json({ ok: false, error: defaultStatusRes.error }, { status: 400 });
+    }
+
+    const reportModeRes = getEnum(po.value, "reportMode", ["auto", "mapped"], {
+      required: false,
+      defaultValue: "auto",
+      label: "reportMode",
+    });
+    if (!reportModeRes.ok) {
+      return NextResponse.json({ ok: false, error: reportModeRes.error }, { status: 400 });
+    }
+
+    const columnMapRes = getObject(po.value, "columnMap", {
+      required: false,
+      defaultValue: null,
+      allowedKeys: [
+        "id",
+        "name",
+        "date",
+        "time",
+        "datetime",
+        "profissional",
+        "service",
+        "location",
+        "status",
+      ],
+      maxKeys: 20,
+      label: "columnMap",
+    });
+    if (!columnMapRes.ok) {
+      return NextResponse.json({ ok: false, error: columnMapRes.error }, { status: 400 });
+    }
+
+    const csvText = csvRes.value;
+    const source = sourceRes.value;
+    const dryRun = dryRunRes.value;
+    const defaultStatus = normalizeDefaultStatus(defaultStatusRes.value);
+    const reportMode = reportModeRes.value;
+    const columnMap = columnMapRes.value;
 
     const lines = csvText
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter(Boolean);
 
-    if (lines.length < 2) return NextResponse.json({ ok: false, error: "CSV sem dados" }, { status: 400 });
-
-    const header = parseCSVLine(lines[0]).map(normalizeHeaderKey);
-
-    const idxId = header.findIndex((h) => ["id", "codigo", "código", "patientid", "patient_id"].includes(h));
-    const idxName = header.findIndex((h) => ["nome", "name", "paciente"].includes(h));
-    const idxDate = header.findIndex((h) => ["data", "date", "dia"].includes(h));
-    const idxTime = header.findIndex((h) => ["hora", "time", "horario", "horário"].includes(h));
-    const idxProf = header.findIndex((h) => ["profissional", "profissional(a)", "prof"].includes(h));
-    const idxService = header.findIndex((h) => ["servico", "serviço", "servicos", "serviços", "service", "tipo"].includes(h));
-    const idxLocation = header.findIndex((h) => ["local", "location", "sala"].includes(h));
-    const idxStatus = header.findIndex((h) => ["status", "presenca", "presença", "presenca/falta", "falta"].includes(h));    const missing = [];
-    if (idxId === -1) missing.push("ID");
-    if (idxName === -1) missing.push("NOME");
-    if (idxDate === -1) missing.push("DATA");
-    if (idxTime === -1) missing.push("HORA");
-    if (idxProf === -1) missing.push("PROFISSIONAL");
-    if (idxService === -1) missing.push("SERVIÇOS");
-    if (idxLocation === -1) missing.push("LOCAL");
-
-    if (missing.length) {
+    const MAX_CSV_LINES = 30001; // header + 30k linhas
+    if (lines.length > MAX_CSV_LINES) {
       return NextResponse.json(
-        { ok: false, error: `CSV sem coluna(s): ${missing.join(", ")}` },
+        {
+          ok: false,
+          error:
+            "CSV grande demais para processar de uma vez. Divida em partes (até 30.000 linhas) e reimporte.",
+        },
         { status: 400 }
       );
     }
 
-    const db = admin.firestore();
+
+    if (lines.length < 2) return NextResponse.json({ ok: false, error: "CSV sem dados" }, { status: 400 });
+
+    const header = parseCSVLine(lines[0]).map(normalizeHeaderKey);
+
+    
+    // Detecta coluna combinada Data/Hora quando existir (fallback)
+    const idxDateTimeAuto = header.findIndex((h) =>
+      [
+        "datahora",
+        "data_hora",
+        "data/hora",
+        "data e hora",
+        "datetime",
+        "dt_hr",
+        "dt_hr_inicio",
+        "inicio_datahora",
+        "inicio_dt_hr",
+      ].includes(h)
+    );
+
+    let idxId = header.findIndex((h) =>
+      [
+        "id",
+        "codigo",
+        "código",
+        "patientid",
+        "patient_id",
+        "idpaciente",
+        "id_paciente",
+      ].includes(h)
+    );
+    let idxName = header.findIndex((h) =>
+      ["nome", "name", "paciente", "cliente", "paciente_nome", "nomepaciente"].includes(h)
+    );
+    let idxDate = header.findIndex((h) =>
+      ["data", "date", "dia", "data da sessao", "data sessao", "data_sessao", "dt"].includes(h)
+    );
+    let idxTime = header.findIndex((h) =>
+      [
+        "hora",
+        "time",
+        "horario",
+        "horário",
+        "inicio",
+        "start",
+        "hora sessao",
+        "hora da sessao",
+        "horario sessao",
+        "horario da sessao",
+      ].includes(h)
+    );
+    let idxProf = header.findIndex((h) =>
+      [
+        "profissional",
+        "profissional(a)",
+        "prof",
+        "terapeuta",
+        "psicologo",
+        "psicóloga",
+        "psicologo(a)",
+        "responsavel",
+      ].includes(h)
+    );
+    let idxService = header.findIndex((h) =>
+      [
+        "servico",
+        "serviço",
+        "servicos",
+        "serviços",
+        "service",
+        "tipo",
+        "procedimento",
+        "atendimento",
+      ].includes(h)
+    );
+    let idxLocation = header.findIndex((h) =>
+      ["local", "location", "sala", "unidade"].includes(h)
+    );
+    let idxStatus = header.findIndex((h) =>
+      [
+        "status",
+        "presenca",
+        "presença",
+        "presenca/falta",
+        "falta",
+        "situacao",
+        "situação",
+        "compareceu",
+      ].includes(h)
+    );
+    let idxDateTime = idxDateTimeAuto;
+
+    // Modo MAPEADO: permite importar relatórios alternativos (2ª planilha) com headers incomuns
+    const mappedIndex = (val) => {
+      if (val === null || val === undefined || val === "") return -1;
+      if (typeof val === "number") {
+        const n = Number(val);
+        return Number.isFinite(n) && n >= 0 && n < header.length ? n : -1;
+      }
+      const key = normalizeHeaderKey(String(val));
+      if (!key) return -1;
+      return header.findIndex((h) => h === key);
+    };
+
+    if (reportMode === "mapped") {
+      idxId = mappedIndex(columnMap?.id);
+      idxName = mappedIndex(columnMap?.name);
+      idxDate = mappedIndex(columnMap?.date);
+      idxTime = mappedIndex(columnMap?.time);
+      idxDateTime = mappedIndex(columnMap?.datetime);
+      idxProf = mappedIndex(columnMap?.profissional);
+      idxService = mappedIndex(columnMap?.service);
+      idxLocation = mappedIndex(columnMap?.location);
+      idxStatus = mappedIndex(columnMap?.status);
+    }// Obrigatórias (alinhado com docs/26_ATTENDANCE_IMPORT_SPEC.md)
+    
+    // Obrigatórias (alinhado com docs/26_ATTENDANCE_IMPORT_SPEC.md)
+    // - ID
+    // - (DATA + HORA) OU (DATA/HORA combinada)
+    const missing = [];
+    if (idxId === -1) missing.push("ID");
+
+    const hasDateAndTime = idxDate !== -1 && idxTime !== -1;
+    const hasDateTime = idxDateTime !== -1;
+
+    if (!hasDateAndTime && !hasDateTime) missing.push("DATA+HORA (ou DATA/HORA)");
+
+    if (missing.length) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            (reportMode === "mapped"
+              ? "Mapeamento inválido. "
+              : "CSV inválido. ") + `Faltando: ${missing.join(", ")}`,
+        },
+        { status: 400 }
+      );
+    }
+const db = admin.firestore();
     const nowTs = admin.firestore.Timestamp.now();
 
     const candidates = Math.max(0, lines.length - 1);
@@ -241,6 +461,29 @@ export async function POST(req) {
     let warned = 0;
     let skippedDuplicateInFile = 0;
     let warnedNoPhone = 0;
+
+    // Avisos de cabeçalho (colunas opcionais ausentes)
+    const headerOptionalMissing = [];
+    if (idxName === -1) headerOptionalMissing.push("NOME");
+    if (idxProf === -1) headerOptionalMissing.push("PROFISSIONAL");
+    if (idxService === -1) headerOptionalMissing.push("SERVIÇOS");
+    if (idxLocation === -1) headerOptionalMissing.push("LOCAL");
+    if (idxStatus === -1) headerOptionalMissing.push("STATUS");
+
+    if (headerOptionalMissing.length) {
+      warned += 1;
+      warnings.push({
+        type: "warning",
+        line: 1,
+        code: "missing_optional_columns",
+        field: "HEADER",
+        warning:
+          `CSV sem coluna(s) opcional(is): ${headerOptionalMissing.join(", ")}. ` +
+          "O import funciona (ID/DATA/HORA), mas esses campos ajudam a qualificar insights e evitar colisões (ex.: PROFISSIONAL).",
+        value: headerOptionalMissing.join(", "),
+        rawLine: lines[0] || null,
+      });
+    }
 
     // Preview normalizado (apenas em dryRun): linhas que seriam importadas
     const MAX_NORMALIZED_PREVIEW_ROWS = 5000;
@@ -270,16 +513,28 @@ export async function POST(req) {
 
       const patientId = String(cols[idxId] || "").trim();
       const name = idxName >= 0 ? String(cols[idxName] || "").trim() : "";
-      const rawDate = String(cols[idxDate] || "").trim();
-      const rawTime = String(cols[idxTime] || "").trim();
+      
+      const rawDate = idxDate >= 0 ? String(cols[idxDate] || "").trim() : "";
+      const rawTime = idxTime >= 0 ? String(cols[idxTime] || "").trim() : "";
+      const rawDateTime = idxDateTime >= 0 ? String(cols[idxDateTime] || "").trim() : "";
+
       const profissional = idxProf >= 0 ? String(cols[idxProf] || "").trim() : "";
       const service = idxService >= 0 ? String(cols[idxService] || "").trim() : "";
       const location = idxLocation >= 0 ? String(cols[idxLocation] || "").trim() : "";
 
-      const isoDate = normalizeToISODate(rawDate);
-      const time = normalizeTime(rawTime);
+      let isoDate = normalizeToISODate(rawDate);
+      let time = normalizeTime(rawTime);
 
-      const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
+      // Fallback: se o relatório vier com Data/Hora em uma única coluna
+      if ((!isoDate || !time) && rawDateTime) {
+        const parts = normalizeToISODateTimeParts(rawDateTime);
+        if (parts.isoDate && parts.time) {
+          isoDate = parts.isoDate;
+          time = parts.time;
+        }
+      }
+
+const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
       const status = mapStatus(statusRaw, defaultStatus);
       const statusKnown = isKnownStatus(statusRaw);
 
@@ -303,6 +558,7 @@ export async function POST(req) {
         name: name || null,
         rawDate: rawDate || null,
         rawTime: rawTime || null,
+        rawDateTime: rawDateTime || null,
         profissional: profissional || null,
         service: service || null,
         location: location || null,
@@ -348,7 +604,7 @@ export async function POST(req) {
       }
       if (!isoDate) {
         skipped += 1;
-        pushError("invalid_date", "DATA", "DATA inválida. Esperado dd/mm/aaaa ou yyyy-mm-dd", rawDate);
+        pushError("invalid_date", "DATA", "DATA inválida. Esperado dd/mm/aaaa ou yyyy-mm-dd", rawDate || rawDateTime);
         sampleRow.result = "skip";
         sampleRow.reason = "invalid_date";
         if (sample.length < 10) sample.push(sampleRow);
@@ -356,14 +612,14 @@ export async function POST(req) {
       }
       if (!time) {
         skipped += 1;
-        pushError("invalid_time", "HORA", "HORA inválida. Esperado HH:MM (ex.: 14:00)", rawTime);
+        pushError("invalid_time", "HORA", "HORA inválida. Esperado HH:MM (ex.: 14:00)", rawTime || rawDateTime);
         sampleRow.result = "skip";
         sampleRow.reason = "invalid_time";
         if (sample.length < 10) sample.push(sampleRow);
         continue;
       }
 
-      const profSlug = safeSlug(profissional || "prof", 12) || "prof";
+      const profSlug = safeSlug(profissional || service || location || "x", 12) || "x";
       const docId = `${patientId}_${isoDate}_${time.replace(":", "")}_${profSlug}`.slice(0, 180);
 
       if (seenDocIds.has(docId)) {
@@ -384,10 +640,33 @@ export async function POST(req) {
         if (!sampleRow.reason) sampleRow.reason = reason;
       };
 
-      if (!name) warnRow("missing_name", "missing_name", "NOME", "NOME vazio (importado, mas recomenda-se completar)", "");
-      if (!profissional) warnRow("missing_profissional", "missing_profissional", "PROFISSIONAL", "PROFISSIONAL vazio (importado, mas recomenda-se completar)", "");
-      if (!service) warnRow("missing_service", "missing_service", "SERVIÇOS", "SERVIÇOS vazio (importado, mas recomenda-se completar)", "");
-      if (!location) warnRow("missing_location", "missing_location", "LOCAL", "LOCAL vazio (importado, mas recomenda-se completar)", "");
+      // Só avisa por linha se a coluna existir no CSV.
+      if (idxName >= 0 && !name)
+        warnRow("missing_name", "missing_name", "NOME", "NOME vazio (importado, mas recomenda-se completar)", "");
+      if (idxProf >= 0 && !profissional)
+        warnRow(
+          "missing_profissional",
+          "missing_profissional",
+          "PROFISSIONAL",
+          "PROFISSIONAL vazio (importado, mas recomenda-se completar)",
+          ""
+        );
+      if (idxService >= 0 && !service)
+        warnRow(
+          "missing_service",
+          "missing_service",
+          "SERVIÇOS",
+          "SERVIÇOS vazio (importado, mas recomenda-se completar)",
+          ""
+        );
+      if (idxLocation >= 0 && !location)
+        warnRow(
+          "missing_location",
+          "missing_location",
+          "LOCAL",
+          "LOCAL vazio (importado, mas recomenda-se completar)",
+          ""
+        );
       if (!statusKnown && String(statusRaw || "").trim()) warnRow("unknown_status", "unknown_status", "STATUS", "STATUS não reconhecido (usando status padrão)", String(statusRaw || ""));
 
       let user = userCache.get(patientId);
@@ -427,6 +706,7 @@ export async function POST(req) {
             service: service || null,
             location: location || null,
             status,
+            importMode: reportMode,
             source,
             createdAt: nowTs,
             updatedAt: nowTs,
@@ -479,7 +759,7 @@ export async function POST(req) {
       actorUid: auth.uid,
       actorEmail: auth.decoded?.email || null,
       action: dryRun ? "attendance_import_preview" : "attendance_import_commit",
-      meta: { source, dryRun, candidates, imported, skipped, skippedDuplicateInFile, warned, warnedNoPhone },
+      meta: { source, dryRun, reportMode, mapped: reportMode === "mapped", candidates, imported, skipped, skippedDuplicateInFile, warned, warnedNoPhone },
     });
 
     if (dryRun) {
@@ -487,6 +767,7 @@ export async function POST(req) {
         {
           ok: true,
           dryRun: true,
+          reportMode,
           candidates,
           wouldImport: imported,
           skipped,

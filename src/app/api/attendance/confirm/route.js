@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { requirePatient } from "@/lib/server/requirePatient";
+import { asPlainObject, enforceAllowedKeys, getString, readJsonBody } from "@/lib/server/payloadSchema";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,15 @@ export async function POST(req) {
 
     const uid = auth.uid;
 
+    const rlIp = await rateLimit(req, {
+      bucket: "patient:attendance:confirm:ip",
+      global: true,
+      limit: 120,
+      windowMs: 10 * 60_000,
+      errorMessage: "Muitas tentativas. Aguarde um pouco e tente novamente.",
+    });
+    if (!rlIp.ok) return rlIp.res;
+
     const rl = await rateLimit(req, {
       bucket: "patient:attendance:confirm",
       global: true,
@@ -34,13 +44,45 @@ export async function POST(req) {
     });
     if (!rl.ok) return rl.res;
 
-    const body = await req.json().catch(() => ({}));
-    const appointmentId = String(body?.appointmentId || "").trim();
-    const channel = String(body?.channel || "web").trim() || "web";
-
-    if (!appointmentId) {
-      return NextResponse.json({ ok: false, error: "Missing appointmentId." }, { status: 400 });
+    const rb = await readJsonBody(req, { maxBytes: 6_000 });
+    if (!rb.ok) {
+      return NextResponse.json({ ok: false, error: rb.error }, { status: 400 });
     }
+
+    const po = asPlainObject(rb.value);
+    if (!po.ok) {
+      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
+    }
+
+    const ek = enforceAllowedKeys(po.value, ["appointmentId", "channel"], { showKeys: false });
+    if (!ek.ok) {
+      return NextResponse.json({ ok: false, error: "Payload inválido." }, { status: 400 });
+    }
+
+    const appointmentRes = getString(po.value, "appointmentId", {
+      required: true,
+      trim: true,
+      max: 160,
+      maxBytes: 300,
+      label: "appointmentId",
+    });
+    if (!appointmentRes.ok) {
+      return NextResponse.json({ ok: false, error: appointmentRes.error }, { status: 400 });
+    }
+
+    const channelRes = getString(po.value, "channel", {
+      required: false,
+      trim: true,
+      max: 20,
+      defaultValue: "web",
+      label: "channel",
+    });
+    if (!channelRes.ok) {
+      return NextResponse.json({ ok: false, error: channelRes.error }, { status: 400 });
+    }
+
+    const appointmentId = appointmentRes.value;
+    const channel = channelRes.value || "web";
 
     const db = admin.firestore();
 

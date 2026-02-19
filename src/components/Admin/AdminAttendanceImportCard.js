@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle, X, Upload, FileText, AlertTriangle } from 'lucide-react';
 import { Button, Card } from '../DesignSystem';
 
@@ -13,6 +13,10 @@ export default function AdminAttendanceImportCard({
   setAttendanceImportSource,
   attendanceImportDefaultStatus,
   setAttendanceImportDefaultStatus,
+  attendanceImportMode,
+  setAttendanceImportMode,
+  attendanceImportColumnMap,
+  setAttendanceImportColumnMap,
   attendanceImportText,
   setAttendanceImportText,
   attendanceImportLoading,
@@ -27,6 +31,82 @@ export default function AdminAttendanceImportCard({
   const fileRef = useRef(null);
   const [fileName, setFileName] = useState('');
   const [fileError, setFileError] = useState(null);
+
+  const [csvColumns, setCsvColumns] = useState([]);
+  const [csvSeparator, setCsvSeparator] = useState(',');
+
+  const normalizeKey = (h) =>
+    String(h || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+  const guessSeparator = (line) => {
+    const s = String(line || '');
+    const commas = (s.match(/,/g) || []).length;
+    const semis = (s.match(/;/g) || []).length;
+    const tabs = (s.match(/\t/g) || []).length;
+    if (tabs > commas && tabs > semis) return '\t';
+    if (semis > commas) return ';';
+    return ',';
+  };
+
+  const splitLine = (line, sep) =>
+    String(line || '')
+      .split(sep)
+      .map((x) => String(x || '').trim());
+
+  const parseHeaderColumns = (csvText) => {
+    const lines = String(csvText || '')
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (!lines.length) return { columns: [], sep: ',' };
+    const sep = guessSeparator(lines[0]);
+    const columns = splitLine(lines[0], sep).filter((c) => c !== '');
+    return { columns, sep };
+  };
+
+  const autoDetectColumn = (columns, candidates) => {
+    const normCols = columns.map((c) => normalizeKey(c));
+    for (const cand of candidates) {
+      const idx = normCols.findIndex((c) => c === normalizeKey(cand));
+      if (idx >= 0) return columns[idx];
+    }
+    return '';
+  };
+
+  const buildAutoMap = (columns) => {
+    return {
+      id: autoDetectColumn(columns, ['id', 'codigo', 'código', 'patientid', 'patient_id', 'idpaciente', 'id_paciente']),
+      name: autoDetectColumn(columns, ['nome', 'name', 'paciente', 'cliente', 'paciente_nome', 'nomepaciente']),
+      date: autoDetectColumn(columns, ['data', 'date', 'dia', 'data da sessao', 'data sessao', 'data_sessao', 'dt']),
+      time: autoDetectColumn(columns, ['hora', 'time', 'horario', 'horário', 'hora sessao', 'hora da sessao', 'horario sessao', 'horario da sessao', 'inicio', 'start']),
+      datetime: autoDetectColumn(columns, ['datahora', 'data_hora', 'data/hora', 'data e hora', 'datetime', 'dt_hr', 'dt_hr_inicio', 'inicio_datahora', 'inicio_dt_hr']),
+      profissional: autoDetectColumn(columns, ['profissional', 'profissional(a)', 'prof', 'terapeuta', 'psicologo', 'psicóloga', 'psicologo(a)', 'responsavel']),
+      service: autoDetectColumn(columns, ['servico', 'serviço', 'servicos', 'serviços', 'service', 'tipo', 'procedimento', 'atendimento']),
+      location: autoDetectColumn(columns, ['local', 'location', 'sala', 'unidade']),
+      status: autoDetectColumn(columns, ['status', 'presenca', 'presença', 'presenca/falta', 'falta', 'situacao', 'situação', 'compareceu']),
+    };
+  };
+
+  useEffect(() => {
+    const { columns, sep } = parseHeaderColumns(attendanceImportText);
+    setCsvColumns(columns);
+    setCsvSeparator(sep);
+
+    // Se o admin escolheu modo "mapeado", tenta pré-preencher o mapa ao carregar arquivo
+    if (attendanceImportMode === 'mapped' && columns.length) {
+      const current = attendanceImportColumnMap || {};
+      const hasAny = Object.values(current).some((v) => String(v || '').trim());
+      if (!hasAny) {
+        setAttendanceImportColumnMap(buildAutoMap(columns));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attendanceImportText, attendanceImportMode]);
+
 
   const safeFilePart = (s) =>
     String(s || "")
@@ -172,6 +252,17 @@ export default function AdminAttendanceImportCard({
     downloadTextFile(`preview_normalizado_${srcPart}_${datePart}${truncPart}.csv`, csv);
   };
 
+
+  const setMapField = (key, value) => {
+    setAttendanceImportColumnMap((prev) => ({
+      ...(prev || {}),
+      [key]: value,
+    }));
+  };
+
+  const colOptions = [''].concat(csvColumns || []);
+
+
   const onPickFile = (e) => {
     const file = e?.target?.files?.[0];
     setFileError(null);
@@ -214,12 +305,12 @@ export default function AdminAttendanceImportCard({
             Faça upload do CSV para alimentar <b>attendance_logs</b>. Primeiro valide (Verificar) e só então importe.
           </p>
           <p className="text-xs text-slate-500 mt-1">
-            Cabeçalho esperado: <code className="px-1 py-0.5 rounded bg-slate-100">ID, NOME, DATA, HORA, PROFISSIONAL, SERVIÇOS, LOCAL, STATUS</code>
+            Campos mínimos: <code className="px-1 py-0.5 rounded bg-slate-100">ID, DATA, HORA</code> (ou <code className="px-1 py-0.5 rounded bg-slate-100">DATA/HORA</code>). As demais colunas são opcionais.
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-4">
         <div>
           <label className="text-sm text-slate-600">Fonte</label>
           <input
@@ -240,6 +331,22 @@ export default function AdminAttendanceImportCard({
             <option value="absent">Falta</option>
             <option value="present">Presença</option>
           </select>
+        </div>
+
+
+        <div>
+          <label className="text-sm text-slate-600">Modo</label>
+          <select
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200"
+            value={attendanceImportMode}
+            onChange={(e) => setAttendanceImportMode(e.target.value)}
+          >
+            <option value="auto">Automático (recomendado)</option>
+            <option value="mapped">Mapear colunas (relatório alternativo)</option>
+          </select>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Use “Mapear colunas” para a 2ª planilha/relatório com cabeçalhos diferentes. Obrigatório: <b>ID</b> e <b>DATA+HORA</b> (ou <b>DATA/HORA</b>).
+          </p>
         </div>
 
         <div>
@@ -284,6 +391,195 @@ export default function AdminAttendanceImportCard({
           )}
         </div>
       </div>
+
+
+      {attendanceImportMode === 'mapped' && (
+        <div className="mt-4 rounded-2xl border border-slate-100 bg-white p-4">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-800">Mapeamento de colunas</h4>
+              <p className="text-xs text-slate-500 mt-1">
+                Para a 2ª planilha/relatório (cabeçalhos diferentes). O servidor valida isso ao clicar em <b>Verificar</b>.
+              </p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Separador detectado:{" "}
+                <code className="px-1 py-0.5 rounded bg-slate-100">
+                  {csvSeparator === '\t' ? 'TAB' : csvSeparator}
+                </code>{" "}
+                • Colunas: {csvColumns.length}
+              </p>
+            </div>
+
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => setAttendanceImportColumnMap(buildAutoMap(csvColumns))}
+              disabled={!csvColumns.length || attendanceImportLoading}
+              icon={FileText}
+              className="shrink-0"
+            >
+              Auto-preencher
+            </Button>
+          </div>
+
+          {!csvColumns.length ? (
+            <div className="mt-3 text-sm text-slate-500">
+              Envie um CSV para listar as colunas e habilitar o mapeamento.
+            </div>
+          ) : (
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm text-slate-600">
+                  ID <span className="text-red-500">*</span>
+                </label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200"
+                  value={attendanceImportColumnMap?.id || ''}
+                  onChange={(e) => setMapField('id', e.target.value)}
+                >
+                  {colOptions.map((c) => (
+                    <option key={`id_${c}`} value={c}>
+                      {c || '— selecione —'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-slate-600">STATUS (opcional)</label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200"
+                  value={attendanceImportColumnMap?.status || ''}
+                  onChange={(e) => setMapField('status', e.target.value)}
+                >
+                  {colOptions.map((c) => (
+                    <option key={`status_${c}`} value={c}>
+                      {c || '— (usar status padrão) —'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-slate-600">DATA</label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200"
+                  value={attendanceImportColumnMap?.date || ''}
+                  onChange={(e) => setMapField('date', e.target.value)}
+                >
+                  {colOptions.map((c) => (
+                    <option key={`date_${c}`} value={c}>
+                      {c || '— (opcional se usar DATA/HORA) —'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-slate-600">HORA</label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200"
+                  value={attendanceImportColumnMap?.time || ''}
+                  onChange={(e) => setMapField('time', e.target.value)}
+                >
+                  {colOptions.map((c) => (
+                    <option key={`time_${c}`} value={c}>
+                      {c || '— (opcional se usar DATA/HORA) —'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-slate-600">
+                  DATA/HORA <span className="text-red-500">*</span>
+                </label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200"
+                  value={attendanceImportColumnMap?.datetime || ''}
+                  onChange={(e) => setMapField('datetime', e.target.value)}
+                >
+                  {colOptions.map((c) => (
+                    <option key={`datetime_${c}`} value={c}>
+                      {c || '— (usar DATA + HORA) —'}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Se escolher DATA/HORA, pode deixar DATA e HORA em branco.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm text-slate-600">NOME (opcional)</label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200"
+                  value={attendanceImportColumnMap?.name || ''}
+                  onChange={(e) => setMapField('name', e.target.value)}
+                >
+                  {colOptions.map((c) => (
+                    <option key={`name_${c}`} value={c}>
+                      {c || '—'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-slate-600">PROFISSIONAL (opcional)</label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200"
+                  value={attendanceImportColumnMap?.profissional || ''}
+                  onChange={(e) => setMapField('profissional', e.target.value)}
+                >
+                  {colOptions.map((c) => (
+                    <option key={`prof_${c}`} value={c}>
+                      {c || '—'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-slate-600">SERVIÇOS (opcional)</label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200"
+                  value={attendanceImportColumnMap?.service || ''}
+                  onChange={(e) => setMapField('service', e.target.value)}
+                >
+                  {colOptions.map((c) => (
+                    <option key={`service_${c}`} value={c}>
+                      {c || '—'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-slate-600">LOCAL (opcional)</label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200"
+                  value={attendanceImportColumnMap?.location || ''}
+                  onChange={(e) => setMapField('location', e.target.value)}
+                >
+                  {colOptions.map((c) => (
+                    <option key={`loc_${c}`} value={c}>
+                      {c || '—'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3 rounded-xl bg-slate-50 border border-slate-100 p-3">
+            <p className="text-xs text-slate-600">
+              Obrigatório: <b>ID</b> e (<b>DATA</b>+<b>HORA</b> ou <b>DATA/HORA</b>). O objetivo aqui não é “policiar”:
+              é sustentar continuidade e permitir cuidado ativo quando houver afastamento.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <Button

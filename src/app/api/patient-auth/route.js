@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { enforceSameOrigin } from "@/lib/server/originGuard";
+import { asPlainObject, getString } from "@/lib/server/payloadSchema";
 export const runtime = "nodejs";
 /**
  * Patient Login (email) - server-side (Firebase Admin)
@@ -138,14 +139,27 @@ export async function POST(req) {
         },
         { status: 403 }
       );
+    }    const rawBody = await req.json().catch(() => ({}));
+    const po = asPlainObject(rawBody);
+    if (!po.ok) {
+      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
     }
 
-    const body = await req.json().catch(() => ({}));
-    const email = String(body?.email || "").trim().toLowerCase();
-
-    if (!email || !email.includes("@")) {
-      return NextResponse.json({ ok: false, error: "E-mail inválido." }, { status: 400 });
+    const emailRes = getString(po.value, "email", {
+      required: true,
+      trim: true,
+      toLower: true,
+      max: 254,
+      maxBytes: 400,
+      // validação simples: evita payloads estranhos, sem tentar "validar RFC"
+      pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+      label: "E-mail",
+    });
+    if (!emailRes.ok) {
+      return NextResponse.json({ ok: false, error: emailRes.error }, { status: 400 });
     }
+
+    const email = emailRes.value;
 
     initAdmin();
 

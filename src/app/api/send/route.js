@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
 import { writeHistory } from "@/lib/server/historyLog";
+import { asPlainObject, enforceAllowedKeys, readJsonBody } from "@/lib/server/payloadSchema";
 export const runtime = "nodejs";
 function getServiceAccount() {
   const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
@@ -100,8 +101,26 @@ export async function POST(req) {
     if (!rl.ok) return rl.res;
 
 
-    const body = await req.json();
-    const items = Array.isArray(body?.items) ? body.items : [];
+    const rb = await readJsonBody(req, { maxBytes: 2_000_000 });
+    if (!rb.ok) {
+      return NextResponse.json({ ok: false, error: rb.error }, { status: 400 });
+    }
+
+    const po = asPlainObject(rb.value);
+    if (!po.ok) {
+      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
+    }
+
+    const ek = enforceAllowedKeys(po.value, ["items"], { label: "LegacySend" });
+    if (!ek.ok) {
+      return NextResponse.json({ ok: false, error: ek.error }, { status: 400 });
+    }
+
+    const items = Array.isArray(po.value?.items) ? po.value.items : [];
+
+    if (items.length > 2500) {
+      return NextResponse.json({ ok: false, error: "Lista de itens muito grande (limite: 2500)." }, { status: 400 });
+    }
 
     if (!items.length) {
       return NextResponse.json({ ok: false, error: "Nenhum item para envio." }, { status: 400 });

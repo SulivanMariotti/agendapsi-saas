@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
 import { writeHistory } from "@/lib/server/historyLog";
+import { asPlainObject, enforceAllowedKeys, readJsonBody } from "@/lib/server/payloadSchema";
 
 export const runtime = "nodejs";
 
@@ -232,9 +233,27 @@ export async function POST(req) {
     });
     if (!rl.ok) return rl.res;
 
-    const body = await req.json().catch(() => ({}));
-    const uploadId = body?.uploadId ? String(body.uploadId) : null;
-    const remindersRaw = Array.isArray(body?.reminders) ? body.reminders : [];
+    const rb = await readJsonBody(req, { maxBytes: 2_000_000 });
+    if (!rb.ok) {
+      return NextResponse.json({ ok: false, error: rb.error }, { status: 400 });
+    }
+
+    const po = asPlainObject(rb.value);
+    if (!po.ok) {
+      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
+    }
+
+    const ek = enforceAllowedKeys(po.value, ["uploadId", "reminders"], { label: "RemindersSend" });
+    if (!ek.ok) {
+      return NextResponse.json({ ok: false, error: ek.error }, { status: 400 });
+    }
+
+    const uploadId = po.value?.uploadId ? String(po.value.uploadId) : null;
+    const remindersRaw = Array.isArray(po.value?.reminders) ? po.value.reminders : [];
+
+    if (remindersRaw.length > 2500) {
+      return NextResponse.json({ ok: false, error: "Lista de lembretes muito grande (limite: 2500)." }, { status: 400 });
+    }
 
     const reminders = remindersRaw
       .map((r) => ({

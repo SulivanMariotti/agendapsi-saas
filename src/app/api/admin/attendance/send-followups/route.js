@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+import { asPlainObject, enforceAllowedKeys, getBoolean, getNumber, getString, readJsonBody } from "@/lib/server/payloadSchema";
 
 export const runtime = "nodejs";
 
@@ -174,7 +175,89 @@ export async function POST(req) {
     initAdmin();
     const db = admin.firestore();
 
-    const body = await req.json().catch(() => ({}));
+    const rb = await readJsonBody(req, { maxBytes: 30_000 });
+    if (!rb.ok) {
+      return NextResponse.json({ ok: false, error: rb.error }, { status: 400 });
+    }
+
+    const po = asPlainObject(rb.value);
+    if (!po.ok) {
+      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
+    }
+
+    const ek = enforceAllowedKeys(po.value, ["dryRun", "days", "fromIsoDate", "toIsoDate", "limit"], {
+      label: "Followups",
+    });
+    if (!ek.ok) {
+      return NextResponse.json({ ok: false, error: ek.error }, { status: 400 });
+    }
+
+    const dryRunRes = getBoolean(po.value, "dryRun", {
+      required: false,
+      defaultValue: false,
+      label: "dryRun",
+    });
+    if (!dryRunRes.ok) {
+      return NextResponse.json({ ok: false, error: dryRunRes.error }, { status: 400 });
+    }
+
+    const daysRes = getNumber(po.value, "days", {
+      required: false,
+      defaultValue: 30,
+      min: 1,
+      max: 365,
+      integer: true,
+      label: "days",
+    });
+    if (!daysRes.ok) {
+      return NextResponse.json({ ok: false, error: daysRes.error }, { status: 400 });
+    }
+
+    const isoPattern = /^\\d{4}-\\d{2}-\\d{2}$/;
+    const fromRes = getString(po.value, "fromIsoDate", {
+      required: false,
+      trim: true,
+      max: 16,
+      pattern: isoPattern,
+      defaultValue: "",
+      label: "fromIsoDate",
+    });
+    if (!fromRes.ok) {
+      return NextResponse.json({ ok: false, error: fromRes.error }, { status: 400 });
+    }
+
+    const toRes = getString(po.value, "toIsoDate", {
+      required: false,
+      trim: true,
+      max: 16,
+      pattern: isoPattern,
+      defaultValue: "",
+      label: "toIsoDate",
+    });
+    if (!toRes.ok) {
+      return NextResponse.json({ ok: false, error: toRes.error }, { status: 400 });
+    }
+
+    const limitRes = getNumber(po.value, "limit", {
+      required: false,
+      defaultValue: 200,
+      min: 1,
+      max: 1000,
+      integer: true,
+      label: "limit",
+    });
+    if (!limitRes.ok) {
+      return NextResponse.json({ ok: false, error: limitRes.error }, { status: 400 });
+    }
+
+    const body = {
+      dryRun: dryRunRes.value,
+      days: daysRes.value,
+      fromIsoDate: fromRes.value || null,
+      toIsoDate: toRes.value || null,
+      limit: limitRes.value,
+    };
+
     const dryRun = !!body.dryRun;
 
     const { fromIsoDate, toIsoDate, days } = parseBodyRange(body);

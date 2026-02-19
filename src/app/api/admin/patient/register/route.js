@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
 import { writeHistory } from "@/lib/server/historyLog";
+import { asPlainObject, enforceAllowedKeys, getString, readJsonBody } from "@/lib/server/payloadSchema";
 export const runtime = "nodejs";
 /**
  * POST /api/admin/patient/register
@@ -74,15 +75,107 @@ export async function POST(req) {
     if (!rl.ok) return rl.res;
 
 
-    const body = await req.json().catch(() => ({}));
-    const name = String(body.name || "").trim();
-    const email = String(body.email || "").trim().toLowerCase();
-    const phoneCanonical = normalizePhoneCanonical(body.phone);
+    const rb = await readJsonBody(req, { maxBytes: 30_000 });
+    if (!rb.ok) {
+      return NextResponse.json({ ok: false, error: rb.error }, { status: 400 });
+    }
 
-    const patientExternalId = String(body.patientExternalId || "").trim() || null;
+    const po = asPlainObject(rb.value);
+    if (!po.ok) {
+      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
+    }
 
-    const previousPhoneCanonical = normalizePhoneCanonical(body.previousPhoneCanonical || "");
-    const previousEmail = String(body.previousEmail || "").trim().toLowerCase();
+    const ek = enforceAllowedKeys(
+      po.value,
+      ["name", "email", "phone", "patientExternalId", "previousPhoneCanonical", "previousEmail"],
+      { label: "PatientRegister" }
+    );
+    if (!ek.ok) {
+      return NextResponse.json({ ok: false, error: ek.error }, { status: 400 });
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+    const nameRes = getString(po.value, "name", {
+      required: true,
+      trim: true,
+      max: 120,
+      maxBytes: 420,
+      label: "Nome",
+    });
+    if (!nameRes.ok) {
+      return NextResponse.json({ ok: false, error: nameRes.error }, { status: 400 });
+    }
+
+    const emailRes = getString(po.value, "email", {
+      required: true,
+      trim: true,
+      toLower: true,
+      max: 160,
+      maxBytes: 260,
+      pattern: emailPattern,
+      label: "Email",
+    });
+    if (!emailRes.ok) {
+      return NextResponse.json({ ok: false, error: emailRes.error }, { status: 400 });
+    }
+
+    const phoneRes = getString(po.value, "phone", {
+      required: true,
+      trim: true,
+      max: 40,
+      maxBytes: 120,
+      label: "Telefone",
+    });
+    if (!phoneRes.ok) {
+      return NextResponse.json({ ok: false, error: phoneRes.error }, { status: 400 });
+    }
+
+    const extRes = getString(po.value, "patientExternalId", {
+      required: false,
+      trim: true,
+      max: 80,
+      maxBytes: 120,
+      defaultValue: "",
+      label: "ID externo",
+    });
+    if (!extRes.ok) {
+      return NextResponse.json({ ok: false, error: extRes.error }, { status: 400 });
+    }
+
+    const prevPhoneRes = getString(po.value, "previousPhoneCanonical", {
+      required: false,
+      trim: true,
+      max: 40,
+      maxBytes: 120,
+      defaultValue: "",
+      label: "Telefone anterior",
+    });
+    if (!prevPhoneRes.ok) {
+      return NextResponse.json({ ok: false, error: prevPhoneRes.error }, { status: 400 });
+    }
+
+    const prevEmailRes = getString(po.value, "previousEmail", {
+      required: false,
+      trim: true,
+      toLower: true,
+      max: 160,
+      maxBytes: 260,
+      pattern: emailPattern,
+      defaultValue: "",
+      label: "Email anterior",
+    });
+    if (!prevEmailRes.ok) {
+      return NextResponse.json({ ok: false, error: prevEmailRes.error }, { status: 400 });
+    }
+
+    const name = nameRes.value;
+    const email = emailRes.value;
+    const phoneCanonical = normalizePhoneCanonical(phoneRes.value);
+    const patientExternalId = String(extRes.value || "").trim() || null;
+
+    const previousPhoneCanonical = normalizePhoneCanonical(prevPhoneRes.value || "");
+    const previousEmail = String(prevEmailRes.value || "").trim();
 
     if (!name || !email || !(phoneCanonical.length === 10 || phoneCanonical.length === 11)) {
       return NextResponse.json({ ok: false, error: "Dados inválidos" }, { status: 400 });

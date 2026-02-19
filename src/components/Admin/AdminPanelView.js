@@ -56,6 +56,12 @@ export default function AdminPanelView({
     total: 0,
     rate: 0,
     topAbsent: [],
+    byDay: [],
+    daysWithData: 0,
+    daysWithoutData: 0,
+    attention: [],
+    range: null,
+    computedAt: null,
   });
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [attendanceError, setAttendanceError] = useState(null);
@@ -105,6 +111,20 @@ export default function AdminPanelView({
 
   const [attendanceImportDryRunResult, setAttendanceImportDryRunResult] = useState(null);
   const [attendanceImportValidatedHash, setAttendanceImportValidatedHash] = useState(null);
+
+
+  const [attendanceImportMode, setAttendanceImportMode] = useState('auto'); // auto|mapped (relatórios alternativos)
+  const [attendanceImportColumnMap, setAttendanceImportColumnMap] = useState({
+    id: '',
+    name: '',
+    date: '',
+    time: '',
+    datetime: '',
+    status: '',
+    profissional: '',
+    service: '',
+    location: '',
+  });
 
   // Configuração Local (usada pelo Schedule e pela aba Configurações)
   const [localConfig, setLocalConfig] = useState({
@@ -174,9 +194,27 @@ export default function AdminPanelView({
           topAbsent: Array.isArray(data.topMisses)
             ? data.topMisses.map((x) => ({ phoneCanonical: x.phoneCanonical, count: x.misses }))
             : [],
+          byDay: Array.isArray(data.byDay) ? data.byDay : [],
+          daysWithData: Number(data.daysWithData || 0),
+          daysWithoutData: Number(data.daysWithoutData || 0),
+          attention: Array.isArray(data.attention) ? data.attention : [],
+          range: data.range || null,
+          computedAt: data.computedAt || null,
         });
       } catch (e) {
-        setAttendanceStats({ present: 0, absent: 0, total: 0, rate: 0, topAbsent: [] });
+        setAttendanceStats({
+          present: 0,
+          absent: 0,
+          total: 0,
+          rate: 0,
+          topAbsent: [],
+          byDay: [],
+          daysWithData: 0,
+          daysWithoutData: 0,
+          attention: [],
+          range: null,
+          computedAt: null,
+        });
         setAttendanceError(e?.message || 'Erro ao carregar constância');
       } finally {
         setAttendanceLoading(false);
@@ -224,6 +262,8 @@ export default function AdminPanelView({
           csvText: attendanceImportText,
           source: attendanceImportSource,
           defaultStatus: attendanceImportDefaultStatus,
+          reportMode: attendanceImportMode,
+          columnMap: attendanceImportMode === 'mapped' ? attendanceImportColumnMap : null,
           dryRun: true,
         }),
       });
@@ -270,6 +310,8 @@ export default function AdminPanelView({
           csvText: attendanceImportText,
           source: attendanceImportSource,
           defaultStatus: attendanceImportDefaultStatus,
+          reportMode: attendanceImportMode,
+          columnMap: attendanceImportMode === 'mapped' ? attendanceImportColumnMap : null,
           dryRun: false,
         }),
       });
@@ -309,6 +351,18 @@ export default function AdminPanelView({
     setAttendanceImportDryRunResult(null);
     setAttendanceImportValidatedHash(null);
     setAttendanceImportResult(null);
+    setAttendanceImportMode('auto');
+    setAttendanceImportColumnMap({
+      id: '',
+      name: '',
+      date: '',
+      time: '',
+      datetime: '',
+      status: '',
+      profissional: '',
+      service: '',
+      location: '',
+    });
   };
 
 
@@ -614,6 +668,10 @@ export default function AdminPanelView({
             setAttendanceImportSource={setAttendanceImportSource}
             attendanceImportDefaultStatus={attendanceImportDefaultStatus}
             setAttendanceImportDefaultStatus={setAttendanceImportDefaultStatus}
+            attendanceImportMode={attendanceImportMode}
+            setAttendanceImportMode={setAttendanceImportMode}
+            attendanceImportColumnMap={attendanceImportColumnMap}
+            setAttendanceImportColumnMap={setAttendanceImportColumnMap}
             attendanceImportText={attendanceImportText}
             setAttendanceImportText={setAttendanceImportText}
             attendanceImportLoading={attendanceImportLoading}

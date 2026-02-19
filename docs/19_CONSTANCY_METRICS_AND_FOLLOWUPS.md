@@ -14,7 +14,7 @@ Coleção para registrar presença/falta por sessão (importada por planilha ou 
 **Campos (alinhado com o endpoint atual)**
 - `attendance_logs/{id}`:
   - `patientId` (string) ✅ chave externa (se existir)
-  - `patientPhoneCanonical` (string) ✅ chave operacional (preferido)
+  - `phoneCanonical` (string) ✅ chave operacional (preferido)
   - `name` (string) *(opcional; denormalizado para UI)*
   - `isoDate` (string `YYYY-MM-DD`) ✅ data da sessão
   - `time` (string `HH:mm`) *(opcional)*

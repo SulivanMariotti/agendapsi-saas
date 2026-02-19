@@ -26,11 +26,33 @@ function getMemoryStore() {
 }
 
 function getClientIp(req) {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  const xri = req.headers.get("x-real-ip");
-  if (xri) return xri.trim();
-  return "unknown";
+  // Prefer infra headers (CDN/proxy). Keep a stable, normalized key.
+  const candidates = [
+    req.headers.get("cf-connecting-ip"),
+    req.headers.get("x-forwarded-for"),
+    req.headers.get("x-real-ip"),
+  ].filter(Boolean);
+
+  let ip = "";
+  for (const c of candidates) {
+    const first = String(c).split(",")[0].trim();
+    if (!first) continue;
+    if (first.toLowerCase() === "unknown") continue;
+    ip = first;
+    break;
+  }
+
+  if (!ip) return "unknown";
+
+  // Remove port if present (e.g., 1.2.3.4:1234)
+  ip = ip.replace(/:\d+$/, "");
+
+  // IPv6 mapped IPv4: ::ffff:1.2.3.4
+  if (ip.startsWith("::ffff:")) ip = ip.slice("::ffff:".length);
+
+  // Keep bounded
+  if (ip.length > 64) ip = ip.slice(0, 64);
+  return ip;
 }
 
 function keyFor({ bucket, ip, uid }) {

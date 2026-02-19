@@ -1,10 +1,10 @@
 # 26_ATTENDANCE_IMPORT_SPEC
 
 Especificação do import de **Presença/Faltas** (planilha/relatório) para alimentar:
-- painel de constância
+- painel de constância (7/30/90 dias)
 - disparos futuros (parabenizar presença / orientar em caso de falta)
 
-> Objetivo clínico: transformar dado operacional em suporte de vínculo.
+> Objetivo clínico: transformar dado operacional em suporte de vínculo.  
 > A terapia não se sustenta em “uma boa sessão”, mas na **continuidade**.
 
 ---
@@ -13,17 +13,25 @@ Especificação do import de **Presença/Faltas** (planilha/relatório) para ali
 
 ### 1.1 Formato aceito
 - CSV (recomendado)
-- Separador: `,` (padrão) ou `;`
+- Separador: `,` (padrão) ou `;` (e, em alguns relatórios, `TAB`)
 
-### 1.2 Cabeçalho esperado
+### 1.2 Cabeçalho (exemplo mais comum)
 ```
 ID, NOME, DATA, HORA, PROFISSIONAL, SERVIÇOS, LOCAL, STATUS
 ```
 
+Notas:
+- No **Modo Automático**, o sistema tenta reconhecer sinônimos comuns de cabeçalho.
+- No **Modo Mapeado** (relatório alternativo / 2ª planilha), o Admin seleciona quais colunas representam cada campo.
+
 ### 1.3 Colunas obrigatórias
 - `ID` → **ID do paciente no sistema externo** (não é ID da sessão)
-- `DATA` → `DD/MM/AAAA` ou `YYYY-MM-DD`
-- `HORA` → `HH:mm`
+- `DATA` + `HORA`  
+  - `DATA` → `DD/MM/AAAA` ou `YYYY-MM-DD`
+  - `HORA` → `HH:mm`
+**ou**
+- `DATA/HORA` (coluna única)  
+  - Ex.: `18/02/2026 14:00`, `2026-02-18 14:00`, `2026-02-18T14:00`
 
 ### 1.4 Colunas opcionais
 - `NOME`
@@ -32,18 +40,47 @@ ID, NOME, DATA, HORA, PROFISSIONAL, SERVIÇOS, LOCAL, STATUS
 - `LOCAL`
 - `STATUS` → se ausente/vazio, usa o **Status padrão** selecionado no Admin
 
+Observação:
+- Se alguma coluna opcional **não existir no cabeçalho**, o import segue normalmente e gera **um aviso no cabeçalho** (sem warnings repetidos por linha).
+
+### 1.5 Relatórios alternativos (2ª planilha) — Modo Mapeado
+Quando o relatório vier com cabeçalhos “fora do padrão”, o Admin pode usar:
+- **Modo:** `mapped`
+- **columnMap:** objeto com o nome exato das colunas do CSV
+
+Exemplo:
+```json
+{
+  "reportMode": "mapped",
+  "columnMap": {
+    "id": "Código",
+    "datetime": "Início",
+    "status": "Compareceu",
+    "name": "Paciente"
+  }
+}
+```
+
+Campos possíveis no `columnMap`:
+- `id` (obrigatório)
+- `date`, `time` (alternativa ao `datetime`)
+- `datetime` (alternativa a `date+time`)
+- `status`, `name`, `profissional`, `service`, `location` (opcionais)
+
 ---
 
 ## 2) Normalização
 
 Cada linha vira um registro normalizado com:
-- `patientId` (string) ← coluna `ID`
-- `isoDate` (string `YYYY-MM-DD`) ← coluna `DATA`
-- `time` (string `HH:mm`) ← coluna `HORA`
-- `status` ∈ `{present, absent}` ← coluna `STATUS` (ou fallback)
+- `patientId` (string) ← `ID`
+- `isoDate` (string `YYYY-MM-DD`) ← `DATA` (ou parte data de `DATA/HORA`)
+- `time` (string `HH:mm`) ← `HORA` (ou parte hora de `DATA/HORA`)
+- `status` ∈ `{present, absent}` ← `STATUS` (ou fallback)
 
 ### 2.1 Mapeamento de status
-Aceita variações comuns (ex.: `presença`, `presente`, `compareceu`, `ok`, `1`, `true` → `present`; `falta`, `faltou`, `não`, `0`, `false` → `absent`).
+Aceita variações comuns:
+- `presença`, `presente`, `compareceu`, `ok`, `sim`, `1`, `true` → `present`
+- `falta`, `faltou`, `não`, `0`, `false`, `no_show` → `absent`
 
 Quando `STATUS` vier preenchido mas não reconhecido:
 - continua importando
@@ -55,12 +92,12 @@ Quando `STATUS` vier preenchido mas não reconhecido:
 
 ### 3.1 Erros (bloqueiam a linha)
 - `missing_id` → `ID` vazio
-- `invalid_date` → `DATA` inválida
-- `invalid_time` → `HORA` inválida
+- `invalid_date` → data inválida (em `DATA` ou em `DATA/HORA`)
+- `invalid_time` → hora inválida (em `HORA` ou em `DATA/HORA`)
 - `duplicate_in_file` → linha duplicada no mesmo upload (mesma chave lógica)
 
 ### 3.2 Avisos (não bloqueiam)
-- campos vazios (`NOME`, `PROFISSIONAL`, `SERVIÇOS`, `LOCAL`)
+- campos vazios (`NOME`, `PROFISSIONAL`, `SERVIÇOS`, `LOCAL`) — quando a coluna existir
 - `unknown_status` → status não reconhecido
 - `no_phone_for_patient` → paciente sem `phoneCanonical` resolvido (impacta follow-ups)
 
@@ -82,11 +119,11 @@ Observação clínica/operacional:
 
 Para permitir múltiplas sessões por paciente e evitar colisões, o docId do log segue:
 ```
-{patientId}_{isoDate}_{HHmm}_{profSlug}
+{patientId}_{isoDate}_{HHmm}_{slug}
 ```
 
 - `HHmm` = `time` sem `:`
-- `profSlug` = slug curto derivado de `PROFISSIONAL` (fallback: `prof`)
+- `slug` = slug curto derivado de `PROFISSIONAL` (fallback: `SERVIÇOS` → `LOCAL` → `x`)
 
 > Reimportar o mesmo arquivo não “duplica”: o `docId` determinístico garante merge.
 
@@ -108,6 +145,7 @@ Para permitir múltiplas sessões por paciente e evitar colisões, o docId do lo
 - `service` (string|null)
 - `location` (string|null)
 - `status` (`present|absent`)
+- `importMode` (`auto|mapped`)
 - `source` (string)
 - `createdAt` / `updatedAt` (timestamp)
 
@@ -118,10 +156,18 @@ Quando `dryRun=false`, salva um resumo em `history`:
 
 ---
 
-## 7) DryRun (auditoria antes de gravar)
+## 7) API (DryRun e Commit)
 
 Endpoint:
 - `POST /api/admin/attendance/import`
+
+Payload:
+- `csvText` (string, obrigatório)
+- `source` (string, opcional)
+- `defaultStatus` (string, opcional)
+- `reportMode` = `auto` | `mapped` (opcional; padrão `auto`)
+- `columnMap` (objeto, opcional; só usado quando `reportMode=mapped`)
+- `dryRun` (boolean)
 
 Quando `dryRun=true`, retorna:
 - contagens (`candidates`, `wouldImport`, `skipped`, `skippedDuplicateInFile`, `warned`, `warnedNoPhone`)
@@ -129,6 +175,7 @@ Quando `dryRun=true`, retorna:
 - `sample[]` (até 10 linhas)
 - `normalizedRows[]` → preview normalizado **para export** (até 5000 linhas)
 - `normalizedRowsTruncated: true|false`
+- `reportMode`
 
 > Privacidade: telefone do preview/export é retornado mascarado quando disponível.
 
@@ -137,14 +184,19 @@ Quando `dryRun=true`, retorna:
 ## 8) UX no Admin (Presença/Faltas)
 
 Fluxo:
-1) **Upload do CSV** (botão “Escolher arquivo”)
-2) **Verificar** (dryRun)
-3) Revisar resumo + erros/avisos
-4) Exportar:
+1) **Fonte / Status padrão**
+2) **Modo**:
+   - Automático (recomendado)
+   - Mapear colunas (2ª planilha/relatório)
+3) **Upload do CSV**
+4) Se “Mapear colunas”: ajustar **mapeamento** (opcional “Auto-preencher”)
+5) **Verificar** (dryRun)
+6) Revisar resumo + erros/avisos
+7) Exportar:
    - **Baixar inconsistências (CSV)**
    - **Baixar preview normalizado (CSV)**
-5) **Importar** (grava no Firestore)
-6) **Limpar**
+8) **Importar** (grava no Firestore)
+9) **Limpar**
 
 Critério de segurança operacional:
 - **Importar** só fica habilitado se o upload atual foi **validado** (hash de validação).
@@ -155,6 +207,7 @@ Critério de segurança operacional:
 
 - Import é simples e previsível.
 - Admin consegue auditar o que será gravado antes de gravar.
+- Relatórios alternativos não travam a operação (mapeamento resolve).
 - Mensagens futuras reforçam:
   - Presença: “continuidade é cuidado”
   - Falta: “retomar é parte do cuidado” (sem julgamento)

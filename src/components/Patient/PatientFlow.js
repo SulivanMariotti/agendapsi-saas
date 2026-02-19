@@ -11,11 +11,7 @@ import PatientMantraCard from "../../features/patient/components/PatientMantraCa
 import {
   app,
   db } from "../../app/firebase";
-import { doc,
-  getDoc,
-  onSnapshot,
-  updateDoc,
-  setDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 
 import { Toast } from "../DesignSystem";
 import { onlyDigits, toCanonical, normalizeWhatsappPhone } from "../../features/patient/lib/phone";
@@ -86,17 +82,6 @@ useEffect(() => {
       if (!clean) return;
 
       if (!cancelled) setResolvedPhone(clean);
-
-      // tenta gravar no perfil para evitar esse fallback no futuro
-      try {
-        await setDoc(
-          doc(db, "users", user.uid),
-          { phone: clean, phoneNumber: clean, phoneCanonical: clean, updatedAt: new Date() },
-          { merge: true }
-        );
-      } catch (_) {
-        // sem impacto: pode falhar por regras
-      }
     } catch (_) {
       // silencioso
     }
@@ -133,11 +118,8 @@ useEffect(() => {
     onToast: showToast,
   });
 
-  const phoneForNote = (resolvedPhone || cleanPhoneFromProfile) || "";
-  const { notes, loadingNotes, saveNote, deleteNote } = usePatientNotes({
-    db,
+  const { notes, loadingNotes, notesError, refreshNotes, saveNote, deleteNote } = usePatientNotes({
     user,
-    phoneForNote,
     onToast: showToast,
   });
   // Perfil
@@ -158,7 +140,17 @@ useEffect(() => {
           // Se não existe, orienta o paciente a contatar a clínica.
           showToast("Seu acesso ainda não foi liberado. Peça à clínica para atualizar seu cadastro.", "error");
         } else {
-          await setDoc(userRef, { lastSeen: new Date() }, { merge: true });
+          // 🔒 Hardening: não depender de write client-side no Firestore.
+          // Atualiza lastSeen via API (Admin SDK), best-effort.
+          try {
+            const idToken = await user.getIdToken();
+            await fetch("/api/patient/ping", {
+              method: "POST",
+              headers: { authorization: `Bearer ${idToken}` },
+            });
+          } catch (_) {
+            // ignora: não deve bloquear o painel
+          }
         }
 
         if (cancelled) return;
@@ -236,10 +228,14 @@ useEffect(() => {
 
       setAcceptContractBusy(true);
 
-      await updateDoc(doc(db, "users", user.uid), {
-        contractAcceptedVersion: currentContractVersion,
-        contractAcceptedAt: new Date(),
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/patient/contract/accept", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ version: currentContractVersion }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) throw new Error(data?.error || "Erro ao aceitar contrato.");
 
       showToast("Contrato aceito com sucesso!", "success");
     } catch (e) {
@@ -443,6 +439,8 @@ useEffect(() => {
             notes={notes}
             nextSessionDateTimeLabel={nextSessionDateTimeLabel}
             loadingNotes={loadingNotes}
+            error={notesError}
+            onRetry={refreshNotes}
             saveNote={saveNote}
             deleteNote={deleteNote}
             showToast={showToast}
