@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { enforceSameOrigin } from "@/lib/server/originGuard";
-import { asPlainObject, getString } from "@/lib/server/payloadSchema";
+import { asPlainObject, getString, unknownKeys } from "@/lib/server/payloadSchema";
 export const runtime = "nodejs";
 /**
  * Patient Login (email) - server-side (Firebase Admin)
@@ -21,21 +21,20 @@ export const runtime = "nodejs";
  *   { ok: true, token, uid, phoneCanonical? }
  */
 
-function getServiceAccount() {
-  const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
-  if (b64) {
-    const json = Buffer.from(b64, "base64").toString("utf-8");
-    return JSON.parse(json);
-  }
-  const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
-  if (!raw) throw new Error("Missing FIREBASE_ADMIN_SERVICE_ACCOUNT(_B64) env var");
-  return JSON.parse(raw);
-}
-
-function initAdmin() {
-  if (admin.apps?.length) return;
-  const serviceAccount = getServiceAccount();
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+function legacyDisabled() {
+  // Em produção, pareça que não existe.
+  const status = process.env.NODE_ENV === "production" ? 404 : 410;
+  const body =
+    status === 404
+      ? { ok: false, error: "Not found" }
+      : {
+          ok: false,
+          error:
+            "Login por e-mail está desativado por segurança. Use telefone + código de vinculação fornecido pela clínica.",
+          hint:
+            'Para habilitar APENAS em testes/legado, configure ENABLE_INSECURE_PATIENT_EMAIL_LOGIN="true" no servidor e NEXT_PUBLIC_ENABLE_INSECURE_PATIENT_EMAIL_LOGIN="true" no client.',
+        };
+  return NextResponse.json(body, { status });
 }
 
 function isInactiveUser(u) {
@@ -131,18 +130,18 @@ export async function POST(req) {
     //   ENABLE_INSECURE_PATIENT_EMAIL_LOGIN="true"
     const enabled = String(process.env.ENABLE_INSECURE_PATIENT_EMAIL_LOGIN || "").toLowerCase() === "true";
     if (!enabled) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Login por e-mail está desativado por segurança. Use telefone + código de vinculação fornecido pela clínica.",
-        },
-        { status: 403 }
-      );
-    }    const rawBody = await req.json().catch(() => ({}));
+      return legacyDisabled();
+    }
+
+    const rawBody = await req.json().catch(() => ({}));
     const po = asPlainObject(rawBody);
     if (!po.ok) {
       return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
+    }
+
+    const uk = unknownKeys(po.value, ["email"]);
+    if (uk.length) {
+      return NextResponse.json({ ok: false, error: "Payload inválido." }, { status: 400 });
     }
 
     const emailRes = getString(po.value, "email", {
@@ -160,8 +159,6 @@ export async function POST(req) {
     }
 
     const email = emailRes.value;
-
-    initAdmin();
 
     const db = admin.firestore();
 
