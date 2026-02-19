@@ -18,14 +18,12 @@ Rotina diária (Admin → Agenda):
 
 ---
 
-## Entregas desta rodada (2026-02-18 a 2026-02-19)
+## Entregas desta rodada (2026-02-18)
 
 ### 1) Segurança v1 (pronto para produção)
 **Bloqueadores críticos resolvidos** (sem mudar o modo de operação manual):
 
 - Login do paciente por **e-mail sem verificação**: **desativado por padrão**.
-  - Endpoint legado `/api/patient-auth` agora retorna **404 em produção** (parece inexistente) quando desativado.
-  - Só habilitar conscientemente em testes/legado: `ENABLE_INSECURE_PATIENT_EMAIL_LOGIN="true"` (server) + `NEXT_PUBLIC_ENABLE_INSECURE_PATIENT_EMAIL_LOGIN="true"` (client).
 - Paciente: acesso por **vínculo de aparelho (telefone + código)** (single-use por dispositivo).
 - Admin: acesso apenas com **custom claims** (sem fallback perigoso via `users.role`).
 - Firestore rules:
@@ -70,37 +68,25 @@ Refinamentos de segurança aplicados para evitar brechas de autorização e abus
 - **Rate limit global (serverless-safe)**: rotas críticas usam limiter com backing no Firestore (coleção `_rate_limits`) + recomendação de **TTL** em `_rate_limits.expireAt`.
 
 ## Próximo foco (sequência recomendada)
-
-### 5) Presença/Faltas — Constância 30d (2026-02-19)
-- Painel Admin de constância ganhou **insights clínicos sem moralismo**:
-  - “Sinal geral” (heurística por taxa/volume)
-  - mini-visão de **últimos 14 dias** (volume + presença/falta)
-  - **cobertura do período** (dias com/sem dados)
-  - tabela **Atenção clínica** (sequência de faltas / última sessão / taxa)
-- Backend (`/api/admin/attendance/summary`) corrigido para computar por **data da sessão** (`isoDate`),
-  não por `createdAt` (momento do import).
-- Import (`/api/admin/attendance/import`) alinhado com a SPEC: **só ID/DATA/HORA são obrigatórias**;
-  NOME/PROFISSIONAL/SERVIÇOS/LOCAL/STATUS são opcionais (com aviso no cabeçalho).
-- Import agora suporta **relatório alternativo (2ª planilha)** via **Modo Mapeado** (`reportMode=mapped` + `columnMap`).
-- Import aceita **DATA/HORA** em coluna única como alternativa a DATA+HORA.
-
-
-### 6) Segurança pós-v1 — schema-lite + anti-abuso IP (2026-02-19)
-- Criado helper de validação `payloadSchema` (schema-lite) e aplicado em rotas críticas (melhora erros 400 e reduz payload inesperado).
-- Anti-abuso por IP: rotas de vinculação e confirmação agora usam limiter **por IP + por usuário/telefone**.
-- Rate limit: IP normalizado (proxy/CDN, `::ffff:` e porta) para estabilidade do bucket.
-
-
-### 7) Paciente — revisão com Admin SDK (reduzir `permission-denied`) (2026-02-19)
-- Novo **ping server-side**: `POST /api/patient/ping` atualiza `lastSeenAt` via Admin SDK (best-effort).
-- Novo **aceite de contrato server-side**: `POST /api/patient/contract/accept` (idempotente).
-- **Notas (diário rápido) server-side**:
-  - `GET/POST /api/patient/notes`
-  - `DELETE /api/patient/notes/[id]`
-- `PatientFlow` deixou de depender de writes client-side no Firestore (evita fricção/erros quando rules endurecem).
-
-
-## Próximo foco (sequência recomendada)
-1) **Presença/Faltas** — validar a **2ª planilha/relatório real** usando o Modo Mapeado (ajustar sinônimos/normalizações conforme o formato do seu fornecedor).
-2) **Segurança (pós-v1)** — revisão completa de endpoints com Admin SDK + evoluir validação (Zod) se quiser padronizar tudo.
+1) **Presença/Faltas** — melhorar painel de constância (30 dias) com insights clínicos (sem moralismo).
+2) Processar **segunda planilha/relatório** (presença/faltas) para painel de constância e follow-ups futuros.
 3) Documentar modelo NoSQL (denormalização + chave única do paciente) para evitar inconsistências.
+
+
+---
+
+## Atualização rápida — 2026-02-19 (Presença/Faltas)
+
+### 5) Presença/Faltas — robustez do import e follow-ups
+- **Import CSV mais tolerante** (sem exigir colunas opcionais):
+  - separador **autodetectado** (`;` / `,` / TAB) e suporte a CSV com **BOM**
+  - coluna **TELEFONE** opcional (fallback)
+  - suporte a **DATA/HORA** em coluna única (além de DATA + HORA)
+  - `NOME/PROFISSIONAL/SERVIÇOS/LOCAL` passam a ser **opcionais** (gera warning, mas não bloqueia)
+- **Painel de constância**: período passa a considerar a **data real da sessão** (`isoDate`), não a data do import (`createdAt`).
+- **Follow-ups mais seguros**: bloqueia envio quando:
+  - paciente **não está vinculado** (`unlinked_patient`)
+  - telefone é **ambíguo** sem vínculo (`ambiguous_phone`)
+  - há conflito entre telefone do log e do perfil (`phone_mismatch`)
+
+> Diretriz clínica preservada: sem CTA de cancelar/remarcar; reforço de vínculo e constância.

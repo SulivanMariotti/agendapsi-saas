@@ -29,3 +29,8 @@
 
 ## Próximo foco
 - Presença/Faltas: **painel de constância (30 dias)** com insights clínicos + suporte a segunda planilha/relatório.
+
+
+---
+
+> Continuação: veja `docs/10_ATUALIZACAO_2026-02-19.md` (Presença/Faltas: robustez do import + bloqueios seguros de follow-up).

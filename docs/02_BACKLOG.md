@@ -1,4 +1,4 @@
-# Backlog (lista viva — atualizado em 2026-02-18)
+# Backlog (lista viva — atualizado em 2026-02-19)
 
 > Marque com [x] quando concluir.
 
@@ -34,7 +34,9 @@
 
 ## 4) Presença/Faltas (Admin)
 - [x] Importar planilha de presença/faltas
+- [x] Robustez do import (BOM + separador autodetect + TELEFONE opcional + DATA/HORA em coluna única + colunas opcionais não bloqueiam)
 - [x] Follow-ups com idempotência (anti-spam): `attendance_logs.followup.sentAt`
+- [x] Bloqueios de segurança em follow-ups: unlinked_patient / ambiguous_phone (sem vínculo) / phone_mismatch
 - [ ] **Melhorar painel de constância (30 dias)**:
   - métricas (presenças/faltas/adiamentos) + tendência
   - insights clínicos (sem moralismo) e reforço de constância

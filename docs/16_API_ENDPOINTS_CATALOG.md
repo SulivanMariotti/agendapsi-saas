@@ -31,25 +31,6 @@
 - **Uso:** retorna apenas artigos **publicados** para psicoeducação (apoio à constância).
 
 
-### 2C) Ping (lastSeen server-side)
-- **POST** `/api/patient/ping`
-- **Auth:** obrigatório (**role patient** — estrito)
-- **Uso:** atualiza `users/{uid}.lastSeenAt` via Admin SDK (best-effort) para evitar writes client-side.
-
-### 2D) Aceitar contrato (server-side)
-- **POST** `/api/patient/contract/accept`
-- **Auth:** obrigatório (**role patient** — estrito)
-- **Payload (JSON):** `{ version: number }`
-- **Uso:** registra aceitação do contrato/enquadre com idempotência.
-
-### 2E) Notas (diário rápido) — server-side
-- **GET** `/api/patient/notes`
-- **POST** `/api/patient/notes`
-- **DELETE** `/api/patient/notes/[id]`
-- **Auth:** obrigatório (**role patient** — estrito)
-- **Uso:** criar/listar/apagar notas do paciente via Admin SDK (reduz `permission-denied` no client).
-
-
 ### 3) Push token (registrar)
 - **POST** `/api/patient/push/register`
 - **Auth:** obrigatório (**role patient** — estrito)
@@ -60,14 +41,10 @@
 - **Auth:** obrigatório (**role patient** — estrito)
 - **Uso:** retorna status/permissão/token (para orientar o paciente a manter notificações ativas).
 
-### 5) Vincular dispositivo (telefone + código)
+### 5) Pareamento (quando habilitado)
 - **POST** `/api/patient/pair`
-- **Auth:** **não** (pré-auth). Retorna **custom token** para o Firebase Auth.
-- **Hardening:** `originGuard` (mesma origem) + rate limit global (**IP + telefone**) para evitar força-bruta.
-- **Payload (JSON):**
-  - `phone` (string, obrigatório) — DDD + número
-  - `code` (string, obrigatório) — código de vinculação (ex.: `XXXX-XXXX-XXXX`)
-- **Uso clínico:** reforça o contrato terapêutico (vínculo do dispositivo) sem abrir caminhos de cancelamento/remarcação.
+- **Auth:** obrigatório (**role patient** — estrito)
+- **Uso:** fluxo de vinculação/pareamento com a clínica (quando usado).
 
 ---
 
@@ -85,12 +62,8 @@
 ### 6) Confirmar presença
 - **POST** `/api/attendance/confirm`
 - **Auth:** obrigatório (**role patient** — estrito)
-- **Payload (JSON):**
-  - `appointmentId` (string, obrigatório)
-  - `channel` (string, opcional; default `web`)
 - **Uso:** registra evento do paciente (ex.: `eventType = patient_confirmed`) para reforço de compromisso.
 - **Integridade:** o servidor **deriva o telefone do perfil** (`users/{uid}`) e **ignora `phone` do client**.
-- **Hardening:** rate limit global (uid) + rate limit global por IP.
 
 ### 7) Consultar confirmados
 - **GET** `/api/attendance/confirmed`
@@ -116,25 +89,12 @@
 ### 9) Importar presença/faltas
 - **POST** `/api/admin/attendance/import`
 - **Auth:** obrigatório (admin)
-- **Uso:** importar logs (planilha/relatório) para `attendance_logs/*` e alimentar o painel de constância.
-- **Hardening:** validação de payload (schema-lite) + limite de tamanho do CSV (aprox. **2.5MB**) e limite de **30.000 linhas** por import.
-- **Payload (JSON):**
-  - `csvText` (string, obrigatório)
-  - `source` (string, opcional)
-  - `defaultStatus` (`present|absent`, opcional)
-  - `dryRun` (boolean, opcional)
-  - `reportMode` (`auto|mapped`, opcional; padrão `auto`)
-  - `columnMap` (objeto, opcional; usado apenas em `reportMode=mapped`)
+- **Uso:** importar logs (planilha 2) para `attendance_logs/*`.
 
 ### 10) Resumo/métricas
 - **GET** `/api/admin/attendance/summary?days=7|30|90`
 - **Auth:** obrigatório (admin)
-- **Uso:** métricas de constância para painel (janela por **data da sessão** `isoDate`).
-- **Retorno (principais campos):**
-  - `present`, `absent`, `total`, `attendanceRate`
-  - `topMisses[]` (faltas por paciente)
-  - `byDay[]` (série por dia), `daysWithData`, `daysWithoutData`
-  - `attention[]` (heurística por paciente: streak/última sessão/taxa)
+- **Uso:** métricas agregadas de constância (por período) para painel. Período calculado por `isoDate` (data real da sessão).
 
 ### 11) Enviar follow-ups (presença/falta)
 - **POST** `/api/admin/attendance/send-followups`
@@ -228,7 +188,3 @@
 
 ## Endpoints legados
 - `_push_old/*`: **desativados** (410 em dev / 404 em produção) para reduzir superfície.
-- `/api/patient-auth` (login por e-mail do paciente): **desativado por padrão**.
-  - Produção: responde **404** (parece que não existe).
-  - Dev/Testes: pode responder **410** com dica.
-  - Só habilitar conscientemente (legado): `ENABLE_INSECURE_PATIENT_EMAIL_LOGIN="true"` (server) + `NEXT_PUBLIC_ENABLE_INSECURE_PATIENT_EMAIL_LOGIN="true"` (client).

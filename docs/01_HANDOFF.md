@@ -1,4 +1,4 @@
-# Lembrete Psi — Handoff para novo chat (2026-02-18)
+# Lembrete Psi — Handoff para novo chat (2026-02-19)
 
 Este pack serve para iniciar um novo chat e continuar o desenvolvimento **de onde paramos**, sem perder decisões clínicas/técnicas.
 
@@ -36,6 +36,13 @@ Rotina diária (Admin → Agenda):
 ### Biblioteca (Paciente + Admin)
 - Paciente: menu **Biblioteca** com modal rolável, busca, “Para levar para a sessão” e mantra fixo.
 - Admin: repositório de artigos (CRUD) com publicação; categorias (CRUD) + criação inline no editor.
+
+
+### Presença/Faltas (Admin)
+- Import CSV aceita `;`/`,`/TAB (autodetect) e remove BOM.
+- Colunas obrigatórias: **ID** + (**DATA/HORA** ou **DATA**+**HORA**).
+- Colunas opcionais: NOME/PROFISSIONAL/SERVIÇOS/LOCAL/STATUS/**TELEFONE** (gera warnings, não bloqueia).
+- Follow-ups: envio fica **bloqueado** quando paciente não está vinculado (segurança contra envio para pessoa errada).
 
 ---
 

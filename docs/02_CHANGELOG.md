@@ -60,56 +60,20 @@
 - Admin: repositório de artigos (CRUD) com status (rascunho/publicado).
 - Categorias: CRUD + ativar/desativar/ordenar + criação inline no editor do artigo.
 
----
-
-## 2026-02-19 — Constância 30d + Import mais tolerante
-
-- **Correção de métrica:** `/api/admin/attendance/summary` agora computa a janela por **data da sessão** (`isoDate`),
-  evitando distorção quando o admin importa dias depois.
-- **Série por dia:** endpoint retorna `byDay[]` (últimos N dias), `daysWithData` e `daysWithoutData`.
-- **Atenção clínica (heurística):** endpoint retorna `attention[]` (sequência de faltas, última sessão, taxa) para apoiar cuidado ativo.
-- **Import alinhado com SPEC:** `/api/admin/attendance/import` exige apenas **ID/DATA/HORA**; demais colunas são opcionais
-  e geram aviso no cabeçalho (sem warnings repetidos por linha quando a coluna não existe).
-- **UI Admin (Presença/Faltas):** painel ganhou seção “Insights clínicos” + tabela “Atenção clínica (sinais de afastamento)”.
-
-
-
-- **Import (2ª planilha/relatório):** suporte a **Modo Mapeado** (`reportMode=mapped`) com `columnMap` para cabeçalhos incomuns.
-- **DATA/HORA combinada:** import aceita coluna única de data+hora (ex.: `18/02/2026 14:00`, `2026-02-18T14:00`) como alternativa a DATA+HORA.
-- **UI Admin (Import):** seletor de modo + painel de mapeamento com “Auto-preencher” baseado no cabeçalho detectado.
 
 
 ---
 
-## 2026-02-19 — Segurança pós-v1 (schema-lite + anti-abuso IP)
+## 2026-02-19 — Presença/Faltas (robustez + segurança)
 
-- **Validação de payload (schema-lite):** criado helper `payloadSchema` e aplicado em rotas críticas (reduz payload inesperado e melhora erros 400).
-  - Admin: `/api/admin/attendance/import` (limite de tamanho do CSV + validação de campos e `columnMap`).
-  - Paciente: `/api/patient/pair` (telefone/código) e `/api/attendance/confirm` (appointmentId/channel).
-  - Admin: `/api/admin/reminders/send` (limite de lista + chaves permitidas) e `/api/admin/patient/*` (register/delete/pair-code) com validação de payload.
-  - Legado: `/api/send` (envio push antigo) com chaves permitidas + limite de lista.
-  - Legado inseguro: `/api/patient-auth` (email) — validação mais forte quando habilitado em ambiente controlado.
-- **Anti-abuso por IP:** adicionada dupla proteção (limiter por IP + limiter por usuário/telefone) nas rotas de vinculação e confirmação.
-- **Normalização de IP no rate-limit:** melhora robustez em ambientes com proxy/CDN (ex.: `::ffff:` e porta).
-
----
-
-## 2026-02-19 — Revisão de endpoints (Admin SDK) — bloqueio do login por e-mail do paciente
-
-- **`/api/patient-auth` (email) agora parece inexistente em produção:** retorna **404** quando o endpoint está desativado (padrão), reduzindo descoberta/enumeração.
-- **Habilitação explícita para testes/legado:** exige `ENABLE_INSECURE_PATIENT_EMAIL_LOGIN="true"` (server) e `NEXT_PUBLIC_ENABLE_INSECURE_PATIENT_EMAIL_LOGIN="true"` (client).
-- **Payload mais estrito:** rejeita chaves desconhecidas (apenas `email`).
-
----
-
-## 2026-02-19 — Paciente (Admin SDK) — ping/contrato/notas server-side
-
-- **Novo `POST /api/patient/ping`:** atualiza `users/{uid}.lastSeenAt` via Admin SDK (best-effort), reduzindo dependência de writes no client.
-- **Novo `POST /api/patient/contract/accept`:** aceita contrato/enquadre via Admin SDK com idempotência por versão.
-- **Novo `GET/POST /api/patient/notes` + `DELETE /api/patient/notes/[id]`:** notas (diário rápido) passaram a ser carregadas e gravadas via API,
-  evitando `permission-denied` quando rules endurecem.
-- **PatientFlow:** removeu `setDoc/updateDoc` do client para lastSeen/contrato; notas migradas para API (`usePatientNotes`).
-
-### Hotfix — 2026-02-19 — Apagar nota (ID via URL fallback)
-
-- **`DELETE /api/patient/notes/[id]`:** adicionada extração de `id` pelo `pathname` como fallback quando `ctx.params` vem vazio/indefinido em alguns ambientes.
+- **Import CSV mais tolerante**:
+  - separador autodetectado (`;`/`,`/TAB) + suporte a CSV com **BOM**
+  - `NOME/PROFISSIONAL/SERVIÇOS/LOCAL` são **opcionais** (warnings, não bloqueiam)
+  - suporte a **DATA/HORA** em coluna única (além de DATA + HORA)
+  - coluna **TELEFONE** opcional como fallback; grava `phoneSource/isLinked/linkedUserId` quando possível
+- **Painel de constância**: `GET /api/admin/attendance/summary` passa a usar **`isoDate`** (data real da sessão) para o período.
+- **Follow-ups mais seguros**: `POST /api/admin/attendance/send-followups` bloqueia envio quando
+  - paciente não está vinculado (`unlinked_patient`)
+  - telefone é ambíguo sem vínculo (`ambiguous_phone`)
+  - conflito entre telefone do log e do perfil (`phone_mismatch`)
+- **UI (Admin → Follow-ups)**: resumo exibe contadores dos novos bloqueios + rótulos legíveis + card de orientação clínica/segurança.

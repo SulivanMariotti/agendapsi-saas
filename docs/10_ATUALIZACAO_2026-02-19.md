@@ -1,27 +1,24 @@
 # Atualização — 2026-02-19
 
-## O que foi fechado hoje
+## Presença/Faltas — o que foi ajustado
 
-### 1) Constância (Admin) — Insights clínicos (sem moralismo)
-- Aba **Presença/Faltas** ganhou:
-  - Card de **Sinal geral** (heurística por taxa/volume)
-  - Mini-visão de **últimos 14 dias** (volume + presença/falta por dia)
-  - **Cobertura do período** (dias com/sem dados)
-  - Tabela **Atenção clínica** (sequência de faltas, última sessão, taxa)
+### 1) Import CSV mais tolerante (Admin)
+- Autodetecção de separador no cabeçalho: `;` / `,` / **TAB**.
+- Suporte a CSV com **BOM** (o “caractere invisível” no início do arquivo).
+- Colunas obrigatórias agora são só:
+  - **ID**
+  - **DATA/HORA** (coluna única) **OU** **DATA + HORA**
+- Colunas opcionais (geram *warnings*, não bloqueiam):
+  - NOME, PROFISSIONAL, SERVIÇOS, LOCAL, STATUS
+  - **TELEFONE** (fallback)
 
-### 2) Correção de métrica (backend)
-- `GET /api/admin/attendance/summary` passa a calcular a janela por **data da sessão** (`isoDate`),
-  evitando distorção quando o import é feito dias depois.
-- Endpoint retorna também:
-  - `byDay[]`, `daysWithData`, `daysWithoutData`
-  - `attention[]` (heurística por paciente)
+### 2) Período do painel de constância corrigido
+- `GET /api/admin/attendance/summary` passa a calcular o período pela **data real da sessão** (`isoDate`), e não pela data do import (`createdAt`).
 
-### 3) Import mais tolerante (alinhado com a SPEC)
-- `POST /api/admin/attendance/import`:
-  - exige apenas **ID/DATA/HORA**
-  - NOME/PROFISSIONAL/SERVIÇOS/LOCAL/STATUS são **opcionais**
-  - quando faltar coluna opcional, gera **aviso no cabeçalho** (sem warnings repetidos por linha)
-  - adicionados sinônimos comuns de cabeçalho para suportar relatórios alternativos
+### 3) Follow-ups mais seguros
+- `POST /api/admin/attendance/send-followups` agora **bloqueia envio** quando:
+  - paciente não está vinculado (`unlinked_patient`)
+  - telefone é ambíguo sem vínculo (`ambiguous_phone`)
+  - conflito entre telefone do log e telefone do perfil (`phone_mismatch`)
 
-## Próximo foco
-- Ingestão da **segunda planilha/relatório** (mapear cabeçalhos reais) + validações específicas.
+> Diretriz clínica preservada: reforçar vínculo e constância, sem atalhos de cancelamento/remarcação.

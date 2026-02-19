@@ -5,34 +5,29 @@ import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
 import { writeHistory } from "@/lib/server/historyLog";
-import { asPlainObject, enforceAllowedKeys, getBoolean, getEnum, getObject, getString, readJsonBody } from "@/lib/server/payloadSchema";
+
 export const runtime = "nodejs";
+
 /**
  * POST /api/admin/attendance/import
  *
- * PADRÃO DA PLANILHA (CSV) — PRESENÇA/FALTAS
- * ID, NOME, DATA, HORA, PROFISSIONAL, SERVIÇOS, LOCAL, STATUS
+ * Importa CSV de Presença/Faltas para `attendance_logs` (Admin SDK).
+ * Objetivo clínico: sustentar constância e vínculo.
  *
- * ⚠️ IMPORTANTE:
- * - ID = ID DO PACIENTE (no seu sistema atual), NÃO é ID da sessão.
- * - Para permitir o MESMO paciente ter várias datas (presente em um dia e falta em outro),
- *   o registro em attendance_logs é gravado com chave composta:
- *     {patientId}_{isoDate}_{hora}_{profissionalSlug}
- *
- * Como obtemos o telefone (caso pai/filho usem o mesmo número):
- * - O telefone é do RESPONSÁVEL (contato). Ele pode ser compartilhado.
- * - Buscamos o telefone em `users` via campo `patientExternalId` (ou `patientId`).
- *   - userDoc.phoneCanonical deve existir.
- *
- * Server-side (Admin SDK) para evitar rules no client.
- * NÃO cria/permite reagendar/cancelar.
- * Registra resumo em history (type=attendance_import_summary) apenas quando dryRun=false.
+ * Aceita CSV com:
+ * - Separador autodetectado pelo cabeçalho: `;` | `,` | `TAB`
+ * - UTF-8 com BOM (removido do header)
+ * - Colunas opcionais (além das obrigatórias)
+ * - Telefone opcional como fallback (sem forçar envio de followups quando vínculo é incerto)
+ * - DATA/HORA em colunas separadas OU em coluna única (DATAHORA)
  *
  * Body:
  * - csvText: string (obrigatório)
  * - source: string (opcional)
- * - defaultStatus: "present"|"absent" (opcional, usado se coluna STATUS faltar ou vier vazia)
- * - dryRun: boolean (opcional) -> valida/normaliza e retorna preview sem gravar no Firestore
+ * - defaultStatus: "present"|"absent" (opcional)
+ * - dryRun: boolean (opcional)
+ * - reportMode: "auto"|"mapped" (opcional)
+ * - columnMap: objeto (opcional, quando reportMode="mapped")
  */
 
 function getServiceAccount() {
@@ -48,6 +43,88 @@ function initAdmin() {
   admin.initializeApp({ credential: admin.credential.cert(getServiceAccount()) });
 }
 
+function stripBOM(s) {
+  const str = String(s ?? "");
+  return str.replace(/^\uFEFF/, "");
+}
+
+function normalizeHeaderKey(h) {
+  return stripBOM(h)
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function detectSeparator(headerLine) {
+  const line = String(headerLine ?? "");
+  const seps = [";", ",", "\t"];
+
+  const countOutsideQuotes = (sep) => {
+    let count = 0;
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        // "" dentro de aspas
+        if (inQuotes && line[i + 1] === '"') {
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+      if (!inQuotes && ch === sep) count += 1;
+    }
+    return count;
+  };
+
+  let best = ";";
+  let bestCount = -1;
+  for (const s of seps) {
+    const c = countOutsideQuotes(s);
+    if (c > bestCount) {
+      best = s;
+      bestCount = c;
+    }
+  }
+  return best;
+}
+
+function splitCSVLine(line, sep) {
+  const out = [];
+  let cur = "";
+  let inQuotes = false;
+
+  const s = String(line ?? "");
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+
+    if (ch === '"') {
+      if (inQuotes && s[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && ch === sep) {
+      out.push(cur);
+      cur = "";
+      continue;
+    }
+
+    cur += ch;
+  }
+
+  out.push(cur);
+  return out.map((x) => String(x ?? "").trim());
+}
+
 function normalizeToISODate(dateStr) {
   const s = String(dateStr || "").trim();
   if (!s) return "";
@@ -61,40 +138,33 @@ function normalizeToISODate(dateStr) {
 function normalizeTime(raw) {
   const t = String(raw || "").trim();
   if (!t) return "";
-  const m = t.match(/^(\d{1,2}):(\d{2})$/);
+  // HH:MM or HH:MM:SS
+  const m = t.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
   if (!m) return t;
   return `${m[1].padStart(2, "0")}:${m[2]}`;
 }
 
-function normalizeToISODateTimeParts(raw) {
-  const s0 = String(raw || "").trim();
-  if (!s0) return { isoDate: "", time: "" };
+function normalizeDateTime(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return { isoDate: "", time: "" };
 
-  // tolera: "dd/mm/aaaa HH:MM", "yyyy-mm-dd HH:MM", "yyyy-mm-ddTHH:MM", com ou sem segundos
-  const s = s0.replace(/[,]+/g, " ").replace(/\s+/g, " ").trim();
-  const tm = s.match(/(\d{1,2}:\d{2})/);
-  if (!tm) return { isoDate: "", time: "" };
+  // yyyy-mm-ddTHH:MM or yyyy-mm-dd HH:MM
+  let m = s.match(/^(\d{4}[/-]\d{2}[/-]\d{2})[ T](\d{1,2}:\d{2})(?::\d{2})?$/);
+  if (m) {
+    const isoDate = normalizeToISODate(m[1]);
+    const time = normalizeTime(m[2]);
+    return { isoDate, time };
+  }
 
-  const time = normalizeTime(tm[1]);
-  const datePartRaw = s.slice(0, tm.index).trim().replace(/[T\s]+$/g, "").trim();
-  const isoDate = normalizeToISODate(datePartRaw);
+  // dd/mm/yyyy HH:MM
+  m = s.match(/^(\d{2}[/-]\d{2}[/-]\d{4})[ T](\d{1,2}:\d{2})(?::\d{2})?$/);
+  if (m) {
+    const isoDate = normalizeToISODate(m[1]);
+    const time = normalizeTime(m[2]);
+    return { isoDate, time };
+  }
 
-  if (!isoDate || !time) return { isoDate: "", time: "" };
-  return { isoDate, time };
-}
-
-
-function parseCSVLine(line) {
-  const sep = line.includes(";") && !line.includes(",") ? ";" : ",";
-  return line.split(sep).map((x) => String(x || "").trim());
-}
-
-function normalizeHeaderKey(h) {
-  return String(h || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+  return { isoDate: "", time: "" };
 }
 
 function safeSlug(str, max = 18) {
@@ -137,6 +207,7 @@ function mapStatus(raw, fallbackStatus = "absent") {
       "f",
       "faltou",
       "falta",
+      "ausente",
       "absent",
       "missed",
       "nao",
@@ -149,20 +220,57 @@ function mapStatus(raw, fallbackStatus = "absent") {
   )
     return "absent";
 
-  // default: absent (clínica: ausência precisa ser conscientizada)
   return fallbackStatus;
 }
 
 function isKnownStatus(raw) {
   const v = String(raw || "").trim().toLowerCase();
   if (!v) return true;
+
   const yes = [
-    "p","presente","presenca","presença","present","compareceu","ok","sim","1","true"
+    "p",
+    "presente",
+    "presenca",
+    "presença",
+    "present",
+    "compareceu",
+    "ok",
+    "sim",
+    "1",
+    "true",
   ];
   const no = [
-    "f","faltou","falta","absent","missed","nao","não","0","false","no_show","noshow"
+    "f",
+    "faltou",
+    "falta",
+    "ausente",
+    "absent",
+    "missed",
+    "nao",
+    "não",
+    "0",
+    "false",
+    "no_show",
+    "noshow",
   ];
+
   return yes.includes(v) || no.includes(v);
+}
+
+function normalizeDigits(s) {
+  return String(s || "").replace(/\D+/g, "");
+}
+
+function canonicalPhone(raw) {
+  const d = normalizeDigits(raw);
+  if (!d) return "";
+  if (d.length >= 12 && d.startsWith("55")) return d.slice(2);
+  return d;
+}
+
+function isValidPhoneCanonical(pc) {
+  const d = canonicalPhone(pc);
+  return d.length === 10 || d.length === 11;
 }
 
 function maskPhoneCanonical(pc) {
@@ -176,15 +284,42 @@ async function findUserByPatientId(db, patientId) {
   const pid = String(patientId || "").trim();
   if (!pid) return null;
 
-  // 1) tenta patientExternalId
-  const q1 = await db.collection("users").where("patientExternalId", "==", pid).limit(1).get();
-  if (!q1.empty) return q1.docs[0].data() || null;
+  // 1) patientExternalId
+  const q1 = await db
+    .collection("users")
+    .where("patientExternalId", "==", pid)
+    .limit(1)
+    .get();
+  if (!q1.empty) return { id: q1.docs[0].id, ...q1.docs[0].data() };
 
   // 2) fallback patientId
-  const q2 = await db.collection("users").where("patientId", "==", pid).limit(1).get();
-  if (!q2.empty) return q2.docs[0].data() || null;
+  const q2 = await db
+    .collection("users")
+    .where("patientId", "==", pid)
+    .limit(1)
+    .get();
+  if (!q2.empty) return { id: q2.docs[0].id, ...q2.docs[0].data() };
 
   return null;
+}
+
+function resolveIdxAuto(headerKeys, candidates) {
+  for (const c of candidates) {
+    const idx = headerKeys.findIndex((h) => h === c);
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
+function resolveIdxMapped(headerKeys, colValue) {
+  if (colValue == null) return -1;
+  if (typeof colValue === "number" && Number.isFinite(colValue)) {
+    const idx = Math.trunc(colValue);
+    return idx >= 0 && idx < headerKeys.length ? idx : -1;
+  }
+  const key = normalizeHeaderKey(String(colValue));
+  if (!key) return -1;
+  return headerKeys.findIndex((h) => h === key);
 }
 
 export async function POST(req) {
@@ -203,255 +338,125 @@ export async function POST(req) {
     });
     if (!rl.ok) return rl.res;
 
-    const rb = await readJsonBody(req, { maxBytes: 3_000_000 });
-    if (!rb.ok) {
-      return NextResponse.json({ ok: false, error: rb.error }, { status: 400 });
-    }
+    const body = await req.json().catch(() => ({}));
 
-    const po = asPlainObject(rb.value);
-    if (!po.ok) {
-      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
-    }
+    const csvText = String(body.csvText || "").trim();
+    if (!csvText)
+      return NextResponse.json({ ok: false, error: "csvText vazio" }, { status: 400 });
 
-    const ek = enforceAllowedKeys(po.value, ["csvText", "source", "defaultStatus", "dryRun", "reportMode", "columnMap"], { label: "Import" });
-    if (!ek.ok) {
-      return NextResponse.json({ ok: false, error: ek.error }, { status: 400 });
-    }
+    const source = String(body.source || "attendance_import").trim();
+    const dryRun = Boolean(body.dryRun);
+    const defaultStatus = normalizeDefaultStatus(body.defaultStatus);
 
-    const csvRes = getString(po.value, "csvText", {
-      required: true,
-      trim: true,
-      maxBytes: 2_500_000, // ~2.5MB (evita abuso e timeouts)
-      label: "csvText",
-    });
-    if (!csvRes.ok) {
-      return NextResponse.json({ ok: false, error: csvRes.error }, { status: 400 });
-    }
+    const reportMode = String(body.reportMode || "auto").trim();
+    const columnMap = body && typeof body.columnMap === "object" ? body.columnMap : null;
 
-    const sourceRes = getString(po.value, "source", {
-      required: false,
-      trim: true,
-      max: 80,
-      defaultValue: "attendance_import",
-      label: "source",
-    });
-    if (!sourceRes.ok) {
-      return NextResponse.json({ ok: false, error: sourceRes.error }, { status: 400 });
-    }
-
-    const dryRunRes = getBoolean(po.value, "dryRun", { required: false, defaultValue: false, label: "dryRun" });
-    if (!dryRunRes.ok) {
-      return NextResponse.json({ ok: false, error: dryRunRes.error }, { status: 400 });
-    }
-
-    const defaultStatusRes = getEnum(po.value, "defaultStatus", ["present", "absent"], {
-      required: false,
-      defaultValue: "absent",
-      label: "defaultStatus",
-    });
-    if (!defaultStatusRes.ok) {
-      return NextResponse.json({ ok: false, error: defaultStatusRes.error }, { status: 400 });
-    }
-
-    const reportModeRes = getEnum(po.value, "reportMode", ["auto", "mapped"], {
-      required: false,
-      defaultValue: "auto",
-      label: "reportMode",
-    });
-    if (!reportModeRes.ok) {
-      return NextResponse.json({ ok: false, error: reportModeRes.error }, { status: 400 });
-    }
-
-    const columnMapRes = getObject(po.value, "columnMap", {
-      required: false,
-      defaultValue: null,
-      allowedKeys: [
-        "id",
-        "name",
-        "date",
-        "time",
-        "datetime",
-        "profissional",
-        "service",
-        "location",
-        "status",
-      ],
-      maxKeys: 20,
-      label: "columnMap",
-    });
-    if (!columnMapRes.ok) {
-      return NextResponse.json({ ok: false, error: columnMapRes.error }, { status: 400 });
-    }
-
-    const csvText = csvRes.value;
-    const source = sourceRes.value;
-    const dryRun = dryRunRes.value;
-    const defaultStatus = normalizeDefaultStatus(defaultStatusRes.value);
-    const reportMode = reportModeRes.value;
-    const columnMap = columnMapRes.value;
-
-    const lines = csvText
+    const rawLines = csvText
       .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
+      .map((l) => String(l ?? ""))
+      .filter((l) => l.trim().length > 0);
 
-    const MAX_CSV_LINES = 30001; // header + 30k linhas
-    if (lines.length > MAX_CSV_LINES) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "CSV grande demais para processar de uma vez. Divida em partes (até 30.000 linhas) e reimporte.",
-        },
-        { status: 400 }
-      );
-    }
+    if (rawLines.length < 2)
+      return NextResponse.json({ ok: false, error: "CSV sem dados" }, { status: 400 });
 
+    const headerLine = rawLines[0];
+    const sep = detectSeparator(headerLine);
 
-    if (lines.length < 2) return NextResponse.json({ ok: false, error: "CSV sem dados" }, { status: 400 });
+    const headerCells = splitCSVLine(headerLine, sep);
+    const headerKeys = headerCells.map(normalizeHeaderKey);
 
-    const header = parseCSVLine(lines[0]).map(normalizeHeaderKey);
+    const auto = reportMode !== "mapped";
 
-    
-    // Detecta coluna combinada Data/Hora quando existir (fallback)
-    const idxDateTimeAuto = header.findIndex((h) =>
-      [
+    const idx = {
+      id: -1,
+      name: -1,
+      date: -1,
+      time: -1,
+      dateTime: -1,
+      profissional: -1,
+      service: -1,
+      location: -1,
+      status: -1,
+      phone: -1,
+    };
+
+    if (auto) {
+      idx.id = resolveIdxAuto(headerKeys, ["id", "codigo", "código", "patientid", "patient_id"]);
+      idx.name = resolveIdxAuto(headerKeys, ["nome", "name", "paciente"]);
+      idx.date = resolveIdxAuto(headerKeys, ["data", "date", "dia"]);
+      idx.time = resolveIdxAuto(headerKeys, ["hora", "time", "horario", "horário"]);
+      idx.dateTime = resolveIdxAuto(headerKeys, [
         "datahora",
-        "data_hora",
+        "data hora",
         "data/hora",
         "data e hora",
+        "data_hora",
+        "dt",
         "datetime",
-        "dt_hr",
-        "dt_hr_inicio",
-        "inicio_datahora",
-        "inicio_dt_hr",
-      ].includes(h)
-    );
-
-    let idxId = header.findIndex((h) =>
-      [
-        "id",
-        "codigo",
-        "código",
-        "patientid",
-        "patient_id",
-        "idpaciente",
-        "id_paciente",
-      ].includes(h)
-    );
-    let idxName = header.findIndex((h) =>
-      ["nome", "name", "paciente", "cliente", "paciente_nome", "nomepaciente"].includes(h)
-    );
-    let idxDate = header.findIndex((h) =>
-      ["data", "date", "dia", "data da sessao", "data sessao", "data_sessao", "dt"].includes(h)
-    );
-    let idxTime = header.findIndex((h) =>
-      [
-        "hora",
-        "time",
-        "horario",
-        "horário",
         "inicio",
-        "start",
-        "hora sessao",
-        "hora da sessao",
-        "horario sessao",
-        "horario da sessao",
-      ].includes(h)
-    );
-    let idxProf = header.findIndex((h) =>
-      [
-        "profissional",
-        "profissional(a)",
-        "prof",
-        "terapeuta",
-        "psicologo",
-        "psicóloga",
-        "psicologo(a)",
-        "responsavel",
-      ].includes(h)
-    );
-    let idxService = header.findIndex((h) =>
-      [
+        "início",
+        "inicio da sessao",
+        "início da sessão",
+      ]);
+      idx.profissional = resolveIdxAuto(headerKeys, ["profissional", "profissional(a)", "prof", "terapeuta"]);
+      idx.service = resolveIdxAuto(headerKeys, [
         "servico",
         "serviço",
         "servicos",
         "serviços",
         "service",
         "tipo",
-        "procedimento",
-        "atendimento",
-      ].includes(h)
-    );
-    let idxLocation = header.findIndex((h) =>
-      ["local", "location", "sala", "unidade"].includes(h)
-    );
-    let idxStatus = header.findIndex((h) =>
-      [
+      ]);
+      idx.location = resolveIdxAuto(headerKeys, ["local", "location", "sala", "modalidade"]);
+      idx.status = resolveIdxAuto(headerKeys, [
         "status",
         "presenca",
         "presença",
         "presenca/falta",
         "falta",
-        "situacao",
-        "situação",
-        "compareceu",
-      ].includes(h)
-    );
-    let idxDateTime = idxDateTimeAuto;
+        "comparecimento",
+      ]);
+      idx.phone = resolveIdxAuto(headerKeys, [
+        "telefone",
+        "tel",
+        "celular",
+        "whatsapp",
+        "fone",
+        "phone",
+      ]);
+    } else {
+      idx.id = resolveIdxMapped(headerKeys, columnMap?.id);
+      idx.name = resolveIdxMapped(headerKeys, columnMap?.name);
+      idx.date = resolveIdxMapped(headerKeys, columnMap?.date);
+      idx.time = resolveIdxMapped(headerKeys, columnMap?.time);
+      idx.dateTime = resolveIdxMapped(headerKeys, columnMap?.dateTime);
+      idx.profissional = resolveIdxMapped(headerKeys, columnMap?.profissional);
+      idx.service = resolveIdxMapped(headerKeys, columnMap?.service);
+      idx.location = resolveIdxMapped(headerKeys, columnMap?.location);
+      idx.status = resolveIdxMapped(headerKeys, columnMap?.status);
+      idx.phone = resolveIdxMapped(headerKeys, columnMap?.phone);
+    }
 
-    // Modo MAPEADO: permite importar relatórios alternativos (2ª planilha) com headers incomuns
-    const mappedIndex = (val) => {
-      if (val === null || val === undefined || val === "") return -1;
-      if (typeof val === "number") {
-        const n = Number(val);
-        return Number.isFinite(n) && n >= 0 && n < header.length ? n : -1;
-      }
-      const key = normalizeHeaderKey(String(val));
-      if (!key) return -1;
-      return header.findIndex((h) => h === key);
-    };
-
-    if (reportMode === "mapped") {
-      idxId = mappedIndex(columnMap?.id);
-      idxName = mappedIndex(columnMap?.name);
-      idxDate = mappedIndex(columnMap?.date);
-      idxTime = mappedIndex(columnMap?.time);
-      idxDateTime = mappedIndex(columnMap?.datetime);
-      idxProf = mappedIndex(columnMap?.profissional);
-      idxService = mappedIndex(columnMap?.service);
-      idxLocation = mappedIndex(columnMap?.location);
-      idxStatus = mappedIndex(columnMap?.status);
-    }// Obrigatórias (alinhado com docs/26_ATTENDANCE_IMPORT_SPEC.md)
-    
-    // Obrigatórias (alinhado com docs/26_ATTENDANCE_IMPORT_SPEC.md)
-    // - ID
-    // - (DATA + HORA) OU (DATA/HORA combinada)
     const missing = [];
-    if (idxId === -1) missing.push("ID");
+    if (idx.id === -1) missing.push("ID");
 
-    const hasDateAndTime = idxDate !== -1 && idxTime !== -1;
-    const hasDateTime = idxDateTime !== -1;
+    const hasDateTime = idx.dateTime !== -1;
+    const hasDateTimeParts = idx.date !== -1 && idx.time !== -1;
 
-    if (!hasDateAndTime && !hasDateTime) missing.push("DATA+HORA (ou DATA/HORA)");
+    if (!hasDateTime && !hasDateTimeParts) missing.push("DATA/HORA");
 
     if (missing.length) {
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            (reportMode === "mapped"
-              ? "Mapeamento inválido. "
-              : "CSV inválido. ") + `Faltando: ${missing.join(", ")}`,
-        },
+        { ok: false, error: `CSV sem coluna(s) obrigatória(s): ${missing.join(", ")}` },
         { status: 400 }
       );
     }
-const db = admin.firestore();
+
+    const db = admin.firestore();
     const nowTs = admin.firestore.Timestamp.now();
 
-    const candidates = Math.max(0, lines.length - 1);
-        let imported = 0; // dryRun: "wouldImport"
+    const candidates = Math.max(0, rawLines.length - 1);
+    let imported = 0; // dryRun: "wouldImport"
     let skipped = 0;
 
     const errors = [];
@@ -462,30 +467,6 @@ const db = admin.firestore();
     let skippedDuplicateInFile = 0;
     let warnedNoPhone = 0;
 
-    // Avisos de cabeçalho (colunas opcionais ausentes)
-    const headerOptionalMissing = [];
-    if (idxName === -1) headerOptionalMissing.push("NOME");
-    if (idxProf === -1) headerOptionalMissing.push("PROFISSIONAL");
-    if (idxService === -1) headerOptionalMissing.push("SERVIÇOS");
-    if (idxLocation === -1) headerOptionalMissing.push("LOCAL");
-    if (idxStatus === -1) headerOptionalMissing.push("STATUS");
-
-    if (headerOptionalMissing.length) {
-      warned += 1;
-      warnings.push({
-        type: "warning",
-        line: 1,
-        code: "missing_optional_columns",
-        field: "HEADER",
-        warning:
-          `CSV sem coluna(s) opcional(is): ${headerOptionalMissing.join(", ")}. ` +
-          "O import funciona (ID/DATA/HORA), mas esses campos ajudam a qualificar insights e evitar colisões (ex.: PROFISSIONAL).",
-        value: headerOptionalMissing.join(", "),
-        rawLine: lines[0] || null,
-      });
-    }
-
-    // Preview normalizado (apenas em dryRun): linhas que seriam importadas
     const MAX_NORMALIZED_PREVIEW_ROWS = 5000;
     const normalizedRows = [];
     let normalizedRowsTruncated = false;
@@ -495,11 +476,16 @@ const db = admin.firestore();
     // cache de user por patientId
     const userCache = new Map();
 
+    // avisos por paciente (evita spam)
+    const warnedUnlinked = new Set();
+    const warnedPhoneFromCsv = new Set();
+    const warnedInvalidPhone = new Set();
+
     let batch = db.batch();
     let ops = 0;
 
     async function commitIfNeeded(force = false) {
-      if (dryRun) return; // nunca commita em dryRun
+      if (dryRun) return;
       if (ops >= 450 || (force && ops > 0)) {
         await batch.commit();
         batch = db.batch();
@@ -507,36 +493,37 @@ const db = admin.firestore();
       }
     }
 
-    for (let i = 1; i < lines.length; i++) {
-      const cols = parseCSVLine(lines[i]);
-      const rawLine = lines[i];
+    for (let i = 1; i < rawLines.length; i++) {
+      const rawLine = rawLines[i];
+      const cols = splitCSVLine(rawLine, sep);
 
-      const patientId = String(cols[idxId] || "").trim();
-      const name = idxName >= 0 ? String(cols[idxName] || "").trim() : "";
-      
-      const rawDate = idxDate >= 0 ? String(cols[idxDate] || "").trim() : "";
-      const rawTime = idxTime >= 0 ? String(cols[idxTime] || "").trim() : "";
-      const rawDateTime = idxDateTime >= 0 ? String(cols[idxDateTime] || "").trim() : "";
+      const patientId = String(cols[idx.id] || "").trim();
+      const name = idx.name >= 0 ? String(cols[idx.name] || "").trim() : "";
 
-      const profissional = idxProf >= 0 ? String(cols[idxProf] || "").trim() : "";
-      const service = idxService >= 0 ? String(cols[idxService] || "").trim() : "";
-      const location = idxLocation >= 0 ? String(cols[idxLocation] || "").trim() : "";
+      let isoDate = "";
+      let time = "";
 
-      let isoDate = normalizeToISODate(rawDate);
-      let time = normalizeTime(rawTime);
-
-      // Fallback: se o relatório vier com Data/Hora em uma única coluna
-      if ((!isoDate || !time) && rawDateTime) {
-        const parts = normalizeToISODateTimeParts(rawDateTime);
-        if (parts.isoDate && parts.time) {
-          isoDate = parts.isoDate;
-          time = parts.time;
-        }
+      if (hasDateTime) {
+        const rawDT = String(cols[idx.dateTime] || "").trim();
+        const dt = normalizeDateTime(rawDT);
+        isoDate = dt.isoDate;
+        time = dt.time;
+      } else {
+        const rawDate = String(cols[idx.date] || "").trim();
+        const rawTime = String(cols[idx.time] || "").trim();
+        isoDate = normalizeToISODate(rawDate);
+        time = normalizeTime(rawTime);
       }
 
-const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
+      const profissional = idx.profissional >= 0 ? String(cols[idx.profissional] || "").trim() : "";
+      const service = idx.service >= 0 ? String(cols[idx.service] || "").trim() : "";
+      const location = idx.location >= 0 ? String(cols[idx.location] || "").trim() : "";
+
+      const statusRaw = idx.status >= 0 ? cols[idx.status] : "";
       const status = mapStatus(statusRaw, defaultStatus);
       const statusKnown = isKnownStatus(statusRaw);
+
+      const rawPhone = idx.phone >= 0 ? String(cols[idx.phone] || "").trim() : "";
 
       const sampleRow = {
         line: i + 1,
@@ -549,23 +536,22 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
         location: location || null,
         status,
         phone: null,
+        phoneSource: null,
+        isLinked: null,
         result: "ok",
         reason: null,
-
       };
+
       const issueContext = {
         patientId: patientId || null,
         name: name || null,
-        rawDate: rawDate || null,
-        rawTime: rawTime || null,
-        rawDateTime: rawDateTime || null,
+        isoDate: isoDate || null,
+        time: time || null,
         profissional: profissional || null,
         service: service || null,
         location: location || null,
         statusRaw: String(statusRaw || "").trim() || null,
         status,
-        isoDate: isoDate || null,
-        time: time || null,
         rawLine: rawLine || null,
       };
 
@@ -594,6 +580,12 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
         });
       };
 
+      const warnRow = (reason, code, field, warning, value) => {
+        pushWarning(code, field, warning, value);
+        if (sampleRow.result !== "skip") sampleRow.result = "warn";
+        if (!sampleRow.reason) sampleRow.reason = reason;
+      };
+
       if (!patientId) {
         skipped += 1;
         pushError("missing_id", "ID", "ID vazio (coluna ID)", "");
@@ -602,30 +594,42 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
         if (sample.length < 10) sample.push(sampleRow);
         continue;
       }
+
       if (!isoDate) {
         skipped += 1;
-        pushError("invalid_date", "DATA", "DATA inválida. Esperado dd/mm/aaaa ou yyyy-mm-dd", rawDate || rawDateTime);
+        pushError(
+          "invalid_date",
+          "DATA",
+          "DATA inválida. Esperado dd/mm/aaaa ou yyyy-mm-dd (ou DATA/HORA válida)",
+          ""
+        );
         sampleRow.result = "skip";
         sampleRow.reason = "invalid_date";
         if (sample.length < 10) sample.push(sampleRow);
         continue;
       }
+
       if (!time) {
         skipped += 1;
-        pushError("invalid_time", "HORA", "HORA inválida. Esperado HH:MM (ex.: 14:00)", rawTime || rawDateTime);
+        pushError("invalid_time", "HORA", "HORA inválida. Esperado HH:MM (ex.: 14:00)", "");
         sampleRow.result = "skip";
         sampleRow.reason = "invalid_time";
         if (sample.length < 10) sample.push(sampleRow);
         continue;
       }
 
-      const profSlug = safeSlug(profissional || service || location || "x", 12) || "x";
+      const profSlug = safeSlug(profissional || "prof", 12) || "prof";
       const docId = `${patientId}_${isoDate}_${time.replace(":", "")}_${profSlug}`.slice(0, 180);
 
       if (seenDocIds.has(docId)) {
         skipped += 1;
         skippedDuplicateInFile += 1;
-        pushError("duplicate_in_file", "LINHA", "Linha duplicada no arquivo (mesmo ID/data/hora/prof.)", docId);
+        pushError(
+          "duplicate_in_file",
+          "LINHA",
+          "Linha duplicada no arquivo (mesmo ID/data/hora/prof.)",
+          docId
+        );
         sampleRow.result = "skip";
         sampleRow.reason = "duplicate_in_file";
         if (sample.length < 10) sample.push(sampleRow);
@@ -633,17 +637,16 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
       }
       seenDocIds.add(docId);
 
-      // Avisos (não bloqueiam importação)
-      const warnRow = (reason, code, field, warning, value) => {
-        pushWarning(code, field, warning, value);
-        if (sampleRow.result !== "skip") sampleRow.result = "warn";
-        if (!sampleRow.reason) sampleRow.reason = reason;
-      };
-
-      // Só avisa por linha se a coluna existir no CSV.
-      if (idxName >= 0 && !name)
-        warnRow("missing_name", "missing_name", "NOME", "NOME vazio (importado, mas recomenda-se completar)", "");
-      if (idxProf >= 0 && !profissional)
+      // Avisos de completude (não bloqueiam)
+      if (!name)
+        warnRow(
+          "missing_name",
+          "missing_name",
+          "NOME",
+          "NOME vazio (importado, mas recomenda-se completar)",
+          ""
+        );
+      if (!profissional)
         warnRow(
           "missing_profissional",
           "missing_profissional",
@@ -651,7 +654,7 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
           "PROFISSIONAL vazio (importado, mas recomenda-se completar)",
           ""
         );
-      if (idxService >= 0 && !service)
+      if (!service)
         warnRow(
           "missing_service",
           "missing_service",
@@ -659,7 +662,7 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
           "SERVIÇOS vazio (importado, mas recomenda-se completar)",
           ""
         );
-      if (idxLocation >= 0 && !location)
+      if (!location)
         warnRow(
           "missing_location",
           "missing_location",
@@ -667,7 +670,14 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
           "LOCAL vazio (importado, mas recomenda-se completar)",
           ""
         );
-      if (!statusKnown && String(statusRaw || "").trim()) warnRow("unknown_status", "unknown_status", "STATUS", "STATUS não reconhecido (usando status padrão)", String(statusRaw || ""));
+      if (!statusKnown && String(statusRaw || "").trim())
+        warnRow(
+          "unknown_status",
+          "unknown_status",
+          "STATUS",
+          "STATUS não reconhecido (usando status padrão)",
+          String(statusRaw || "")
+        );
 
       let user = userCache.get(patientId);
       if (user === undefined) {
@@ -675,30 +685,99 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
         userCache.set(patientId, user);
       }
 
-      const phoneCanonical = user ? String(user.phoneCanonical || user.phone || "").trim() : "";
-      sampleRow.phone = phoneCanonical ? maskPhoneCanonical(phoneCanonical) : null;
+      const profilePhoneRaw = user ? String(user.phoneCanonical || user.phone || "").trim() : "";
+      const profilePhone = isValidPhoneCanonical(profilePhoneRaw) ? canonicalPhone(profilePhoneRaw) : "";
 
-      if (!phoneCanonical) {
+      const csvPhone = isValidPhoneCanonical(rawPhone) ? canonicalPhone(rawPhone) : "";
+      const csvPhoneInvalid = rawPhone && !csvPhone;
+
+      let phoneCanonicalFinal = "";
+      let phoneSource = null;
+      let isLinked = false;
+      let linkedUserId = null;
+
+      if (user) {
+        isLinked = true;
+        linkedUserId = user.id || null;
+        if (profilePhone) {
+          phoneCanonicalFinal = profilePhone;
+          phoneSource = "profile";
+        } else if (csvPhone) {
+          phoneCanonicalFinal = csvPhone;
+          phoneSource = "csv";
+          if (!warnedPhoneFromCsv.has(patientId)) {
+            warnedPhoneFromCsv.add(patientId);
+            pushWarning(
+              "phone_from_csv",
+              "TELEFONE",
+              "Perfil sem phoneCanonical: usando TELEFONE do CSV (verifique o cadastro para maior segurança).",
+              maskPhoneCanonical(csvPhone)
+            );
+          }
+        }
+      } else {
+        // sem vínculo de cadastro
+        if (!warnedUnlinked.has(patientId)) {
+          warnedUnlinked.add(patientId);
+          pushWarning(
+            "unlinked_patient",
+            "ID",
+            "Paciente não vinculado (users). Importado para constância; follow-ups ficam bloqueados até vincular.",
+            patientId
+          );
+        }
+        if (csvPhone) {
+          phoneCanonicalFinal = csvPhone;
+          phoneSource = "csv";
+          if (!warnedPhoneFromCsv.has(patientId)) {
+            warnedPhoneFromCsv.add(patientId);
+            pushWarning(
+              "phone_from_csv",
+              "TELEFONE",
+              "TELEFONE do CSV registrado para constância (sem vínculo). Follow-ups continuam bloqueados até vincular.",
+              maskPhoneCanonical(csvPhone)
+            );
+          }
+        }
+      }
+
+      if (!phoneCanonicalFinal) {
         warnedNoPhone += 1;
-        // Importa para constância, mas alerta: followups dependem de telefone ou vínculo correto
         pushWarning(
           "no_phone_for_patient",
-          "PHONE",
-          "Sem phoneCanonical: paciente não vinculado/sem telefone. Importado para constância; ajuste o cadastro para enviar followups.",
+          "TELEFONE",
+          "Sem telefone resolvido (perfil/CSV). Importado para constância; follow-ups exigem telefone e vínculo correto.",
           patientId
         );
         if (sampleRow.result !== "skip") sampleRow.result = "warn";
         if (!sampleRow.reason) sampleRow.reason = "no_phone_for_patient";
       }
 
+      if (csvPhoneInvalid && !warnedInvalidPhone.has(patientId)) {
+        warnedInvalidPhone.add(patientId);
+        pushWarning(
+          "invalid_phone",
+          "TELEFONE",
+          "TELEFONE inválido no CSV (esperado DDD+numero com 10 ou 11 dígitos).",
+          rawPhone
+        );
+      }
+
+      sampleRow.phone = phoneCanonicalFinal ? maskPhoneCanonical(phoneCanonicalFinal) : null;
+      sampleRow.phoneSource = phoneSource;
+      sampleRow.isLinked = isLinked;
+
       if (!dryRun) {
         const ref = db.collection("attendance_logs").doc(docId);
         batch.set(
           ref,
           {
-            patientId, // ID do paciente (do seu sistema)
-            phoneCanonical: phoneCanonical || null, // pode ser compartilhado (responsável)
-            hasPhone: Boolean(phoneCanonical),
+            patientId,
+            phoneCanonical: phoneCanonicalFinal || null,
+            phoneSource: phoneSource || null,
+            isLinked,
+            linkedUserId: linkedUserId || null,
+            hasPhone: Boolean(phoneCanonicalFinal),
             name: name || (user ? user.name || null : null),
             isoDate,
             time,
@@ -706,7 +785,6 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
             service: service || null,
             location: location || null,
             status,
-            importMode: reportMode,
             source,
             createdAt: nowTs,
             updatedAt: nowTs,
@@ -719,7 +797,7 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
 
       imported += 1;
 
-    if (dryRun) {
+      if (dryRun) {
         if (normalizedRows.length < MAX_NORMALIZED_PREVIEW_ROWS) {
           normalizedRows.push({
             line: sampleRow.line,
@@ -732,6 +810,8 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
             location: sampleRow.location,
             status: sampleRow.status,
             phone: sampleRow.phone,
+            phoneSource: sampleRow.phoneSource,
+            isLinked: sampleRow.isLinked,
           });
         } else {
           normalizedRowsTruncated = true;
@@ -759,7 +839,18 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
       actorUid: auth.uid,
       actorEmail: auth.decoded?.email || null,
       action: dryRun ? "attendance_import_preview" : "attendance_import_commit",
-      meta: { source, dryRun, reportMode, mapped: reportMode === "mapped", candidates, imported, skipped, skippedDuplicateInFile, warned, warnedNoPhone },
+      meta: {
+        source,
+        dryRun,
+        candidates,
+        imported,
+        skipped,
+        skippedDuplicateInFile,
+        warned,
+        warnedNoPhone,
+        reportMode,
+        separator: sep === "\t" ? "TAB" : sep,
+      },
     });
 
     if (dryRun) {
@@ -767,7 +858,6 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
         {
           ok: true,
           dryRun: true,
-          reportMode,
           candidates,
           wouldImport: imported,
           skipped,
@@ -798,6 +888,11 @@ const statusRaw = idxStatus >= 0 ? cols[idxStatus] : "";
       { status: 200 }
     );
   } catch (e) {
-    return adminError({ req, auth: auth?.ok ? auth : null, action: "attendance_import", err: e });
+    return adminError({
+      req,
+      auth: auth?.ok ? auth : null,
+      action: "attendance_import",
+      err: e,
+    });
   }
 }

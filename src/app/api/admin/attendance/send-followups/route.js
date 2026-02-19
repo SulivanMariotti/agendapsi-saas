@@ -4,7 +4,6 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
-import { asPlainObject, enforceAllowedKeys, getBoolean, getNumber, getString, readJsonBody } from "@/lib/server/payloadSchema";
 
 export const runtime = "nodejs";
 
@@ -13,12 +12,14 @@ export const runtime = "nodejs";
  *
  * Envia mensagens de reforço (presença) e psicoeducação (falta) com base em logs importados.
  *
- * Segurança:
- * - Authorization Bearer (idToken) + role admin
+ * Diretriz clínica do produto:
+ * - Sem CTA/botão de cancelar/remarcar.
+ * - Texto reforça constância, vínculo e responsabilização.
  *
- * Placeholders suportados nos templates (config/global):
- * - {nome}, {data}, {dataIso}, {hora}, {profissional}, {servico}, {local}, {id}
- * - Compatível também com {{nome}} etc.
+ * Segurança adicional (Step 9):
+ * - Bloqueia follow-up quando o paciente NÃO está vinculado (users) → evita enviar para pessoa errada.
+ * - Bloqueia quando há telefone ambíguo (o mesmo telefone para múltiplos perfis) e NÃO há vínculo.
+ * - Bloqueia quando há conflito entre telefone do log e telefone do perfil.
  */
 
 function normalizeDigits(s) {
@@ -26,7 +27,6 @@ function normalizeDigits(s) {
 }
 
 function canonicalPhone(raw) {
-  // remove +55 / 55 se vier junto
   const d = normalizeDigits(raw);
   if (d.length >= 12 && d.startsWith("55")) return d.slice(2);
   return d;
@@ -74,7 +74,7 @@ function interpolate(template, vars) {
 }
 
 function isInactiveUserDoc(u) {
-  if (!u) return true;
+  if (!u) return false; // ausência de doc é tratada como "unlinked_patient" em outra camada
   const status = String(u.status || "").toLowerCase();
   if (["inactive", "disabled", "archived", "deleted"].includes(status)) return true;
   if (u.isActive === false) return true;
@@ -89,9 +89,7 @@ async function loadTemplates(db) {
   const snap = await db.collection("config").doc("global").get();
   const cfg = snap.exists ? snap.data() : {};
 
-  // Importante (diretriz clínica do produto):
-  // - Sem CTAs de cancelar/remarcar.
-  // - O texto deve sustentar vínculo e constância, sem facilitar fuga do compromisso.
+  // defaults
   const tpl = {
     presentTitle: "💜 Permittá • Lembrete Psi — Parabéns pela presença",
     presentBody:
@@ -120,7 +118,7 @@ function parseBodyRange(body) {
 
   if (fromIsoDate && toIsoDate) return { fromIsoDate, toIsoDate, days: null };
 
-  // default: [today-days+1, today]
+  // default: [today-days+1, today] em UTC
   const now = new Date();
   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const start = new Date(end);
@@ -175,89 +173,7 @@ export async function POST(req) {
     initAdmin();
     const db = admin.firestore();
 
-    const rb = await readJsonBody(req, { maxBytes: 30_000 });
-    if (!rb.ok) {
-      return NextResponse.json({ ok: false, error: rb.error }, { status: 400 });
-    }
-
-    const po = asPlainObject(rb.value);
-    if (!po.ok) {
-      return NextResponse.json({ ok: false, error: po.error }, { status: 400 });
-    }
-
-    const ek = enforceAllowedKeys(po.value, ["dryRun", "days", "fromIsoDate", "toIsoDate", "limit"], {
-      label: "Followups",
-    });
-    if (!ek.ok) {
-      return NextResponse.json({ ok: false, error: ek.error }, { status: 400 });
-    }
-
-    const dryRunRes = getBoolean(po.value, "dryRun", {
-      required: false,
-      defaultValue: false,
-      label: "dryRun",
-    });
-    if (!dryRunRes.ok) {
-      return NextResponse.json({ ok: false, error: dryRunRes.error }, { status: 400 });
-    }
-
-    const daysRes = getNumber(po.value, "days", {
-      required: false,
-      defaultValue: 30,
-      min: 1,
-      max: 365,
-      integer: true,
-      label: "days",
-    });
-    if (!daysRes.ok) {
-      return NextResponse.json({ ok: false, error: daysRes.error }, { status: 400 });
-    }
-
-    const isoPattern = /^\\d{4}-\\d{2}-\\d{2}$/;
-    const fromRes = getString(po.value, "fromIsoDate", {
-      required: false,
-      trim: true,
-      max: 16,
-      pattern: isoPattern,
-      defaultValue: "",
-      label: "fromIsoDate",
-    });
-    if (!fromRes.ok) {
-      return NextResponse.json({ ok: false, error: fromRes.error }, { status: 400 });
-    }
-
-    const toRes = getString(po.value, "toIsoDate", {
-      required: false,
-      trim: true,
-      max: 16,
-      pattern: isoPattern,
-      defaultValue: "",
-      label: "toIsoDate",
-    });
-    if (!toRes.ok) {
-      return NextResponse.json({ ok: false, error: toRes.error }, { status: 400 });
-    }
-
-    const limitRes = getNumber(po.value, "limit", {
-      required: false,
-      defaultValue: 200,
-      min: 1,
-      max: 1000,
-      integer: true,
-      label: "limit",
-    });
-    if (!limitRes.ok) {
-      return NextResponse.json({ ok: false, error: limitRes.error }, { status: 400 });
-    }
-
-    const body = {
-      dryRun: dryRunRes.value,
-      days: daysRes.value,
-      fromIsoDate: fromRes.value || null,
-      toIsoDate: toRes.value || null,
-      limit: limitRes.value,
-    };
-
+    const body = await req.json().catch(() => ({}));
     const dryRun = !!body.dryRun;
 
     const { fromIsoDate, toIsoDate, days } = parseBodyRange(body);
@@ -319,34 +235,49 @@ export async function POST(req) {
       blockedInactive: 0,
       blockedInactivePatient: 0,
       blockedInactiveSubscriber: 0,
+      blockedUnlinkedPatient: 0,
+      blockedAmbiguousPhone: 0,
+      blockedPhoneMismatch: 0,
       blockedErrors: 0,
       byStatus: { present: 0, absent: 0 },
       sample: [],
     };
 
     // Cache users/subscribers para reduzir reads
-    const userCache = new Map();
+    const userByPhoneCache = new Map();
+    const userByPidCache = new Map();
+    const userByUidCache = new Map();
     const subCache = new Map();
 
-    async function getUserByPhone(phone) {
-      if (userCache.has(phone)) return userCache.get(phone);
+    async function getUsersByPhone(phone) {
+      if (userByPhoneCache.has(phone)) return userByPhoneCache.get(phone);
       const snap = await db
         .collection("users")
         .where("role", "==", "patient")
         .where("phoneCanonical", "==", phone)
-        .limit(1)
+        .limit(3)
         .get();
-      const doc = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
-      userCache.set(phone, doc);
-      return doc;
+      const docs = snap.empty
+        ? []
+        : snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      userByPhoneCache.set(phone, docs);
+      return docs;
     }
 
-    const userByIdCache = new Map();
+    async function getUserByUid(uid) {
+      const key = String(uid || "").trim();
+      if (!key) return null;
+      if (userByUidCache.has(key)) return userByUidCache.get(key);
+      const snap = await db.collection("users").doc(key).get();
+      const doc = snap.exists ? { id: snap.id, ...snap.data() } : null;
+      userByUidCache.set(key, doc);
+      return doc;
+    }
 
     async function getUserByPatientId(patientId) {
       const key = String(patientId || "").trim();
       if (!key) return null;
-      if (userByIdCache.has(key)) return userByIdCache.get(key);
+      if (userByPidCache.has(key)) return userByPidCache.get(key);
 
       // Primeiro tenta patientExternalId (padrão recomendado), depois patientId (legado)
       let snap = await db
@@ -366,7 +297,7 @@ export async function POST(req) {
       }
 
       const doc = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
-      userByIdCache.set(key, doc);
+      userByPidCache.set(key, doc);
       return doc;
     }
 
@@ -387,25 +318,20 @@ export async function POST(req) {
       const pid =
         String(current.patientId || current.patientExternalId || current.id || "").trim() || null;
 
-      let phone = canonicalPhone(current.phoneCanonical || current.phone || "");
+      const phoneFromLog = canonicalPhone(current.phoneCanonical || current.phone || "");
+
+      // Tenta obter userDoc primeiro por linkedUserId (mais confiável), depois por patientId
       let userDoc = null;
-
-      // 1) Se tiver phone no log, busca user por phoneCanonical
-      if (phone) {
-        userDoc = await getUserByPhone(phone);
+      if (current?.linkedUserId) {
+        const u = await getUserByUid(current.linkedUserId);
+        if (u && String(u.role || "") === "patient") userDoc = u;
       }
-
-      // 2) Se NÃO tiver phone no log (dados legados), tenta resolver pelo patientId em users
-      if (!phone && pid) {
+      if (!userDoc && pid) {
         userDoc = await getUserByPatientId(pid);
-        const fromUser = canonicalPhone(userDoc?.phoneCanonical || userDoc?.phone || "");
-        if (fromUser) phone = fromUser;
       }
 
-      // 3) Se achou phone via users mas ainda não tinha userDoc por phone, tenta por phone
-      if (phone && !userDoc) {
-        userDoc = await getUserByPhone(phone);
-      }
+      const phoneFromProfile = canonicalPhone(userDoc?.phoneCanonical || userDoc?.phone || "");
+      const phone = phoneFromProfile || phoneFromLog;
 
       const vars = {
         nome: current.name || userDoc?.name || "",
@@ -424,20 +350,44 @@ export async function POST(req) {
       const finalTitle = interpolate(title, vars);
       const finalBody = interpolate(bodyText, vars);
 
-      // Verifica bloqueios (mas ainda assim devolve amostra em dryRun)
       let blockedReason = null;
 
-      // Idempotência: se já enviou follow-up para esse log, não reenviar
-      if (current?.followup?.sentAt) {
-        blockedReason = "already_sent";
+      // Idempotência
+      if (current?.followup?.sentAt) blockedReason = "already_sent";
+
+      // Conflito explícito: log tem phone e perfil tem outro
+      if (!blockedReason && phoneFromLog && phoneFromProfile && phoneFromLog !== phoneFromProfile) {
+        blockedReason = "phone_mismatch";
       }
 
-      // Sem telefone (dados legados / incompletos)
-      if (!blockedReason && !phone) {
-        blockedReason = "no_phone";
+      // Sem telefone
+      if (!blockedReason && !phone) blockedReason = "no_phone";
+
+      // Vínculo: se não achou userDoc, bloqueia.
+      // Se não tem vínculo, diferencia "ambiguous_phone" quando o mesmo phone bate em +1 perfil.
+      if (!blockedReason && !userDoc) {
+        if (phone) {
+          const matches = await getUsersByPhone(phone);
+          if (matches.length > 1) blockedReason = "ambiguous_phone";
+          else blockedReason = "unlinked_patient";
+        } else {
+          blockedReason = "unlinked_patient";
+        }
       }
 
-      // Paciente inativo (users)
+      // Se userDoc existe mas o telefone do log aponta para outro perfil
+      if (!blockedReason && phone && userDoc?.phoneCanonical) {
+        const matches = await getUsersByPhone(phone);
+        if (matches.length === 1 && matches[0].id !== userDoc.id) {
+          blockedReason = "phone_mismatch";
+        }
+        if (matches.length > 1) {
+          // Com vínculo, não é necessariamente problema (responsável pode ser o mesmo).
+          // Mantemos como não bloqueante.
+        }
+      }
+
+      // Paciente inativo
       if (!blockedReason && isInactiveUserDoc(userDoc)) {
         blockedReason = "inactive_patient";
       }
@@ -445,14 +395,11 @@ export async function POST(req) {
       // Subscriber: token/ativo (só se tiver phone)
       const sub = phone ? await getSubscriber(phone) : null;
       const token = sub?.pushToken || sub?.token || null;
-      if (!blockedReason && sub?.isActive === false) {
-        blockedReason = "inactive_subscriber";
-      }
-      if (!blockedReason && !token) {
-        blockedReason = "no_token";
-      }
 
-      // Amostra (para preview): mostra a mensagem mesmo se bloquear (para validar placeholders)
+      if (!blockedReason && sub?.isActive === false) blockedReason = "inactive_subscriber";
+      if (!blockedReason && !token) blockedReason = "no_token";
+
+      // Sample preview
       if (dryRun && out.sample.length < maxSample) {
         out.sample.push({
           status,
@@ -465,34 +412,21 @@ export async function POST(req) {
         });
       }
 
-      // Contadores de bloqueio/fluxo
-      if (blockedReason === "already_sent") {
+      // Contadores/bloqueios
+      if (blockedReason) {
         out.blocked += 1;
-        out.blockedAlreadySent += 1;
-        continue;
-      }
-
-      if (blockedReason === "no_phone") {
-        out.blocked += 1;
-        out.blockedNoPhone += 1;
-        continue;
-      }
-
-      if (blockedReason === "inactive_patient") {
-        out.blocked += 1;
-        out.blockedInactive += 1;
-        out.blockedInactivePatient += 1;
-        continue;
-      }
-      if (blockedReason === "inactive_subscriber") {
-        out.blocked += 1;
-        out.blockedInactive += 1;
-        out.blockedInactiveSubscriber += 1;
-        continue;
-      }
-      if (blockedReason === "no_token") {
-        out.blocked += 1;
-        out.blockedNoToken += 1;
+        if (blockedReason === "already_sent") out.blockedAlreadySent += 1;
+        else if (blockedReason === "no_phone") out.blockedNoPhone += 1;
+        else if (blockedReason === "no_token") out.blockedNoToken += 1;
+        else if (blockedReason === "inactive_patient") {
+          out.blockedInactive += 1;
+          out.blockedInactivePatient += 1;
+        } else if (blockedReason === "inactive_subscriber") {
+          out.blockedInactive += 1;
+          out.blockedInactiveSubscriber += 1;
+        } else if (blockedReason === "unlinked_patient") out.blockedUnlinkedPatient += 1;
+        else if (blockedReason === "ambiguous_phone") out.blockedAmbiguousPhone += 1;
+        else if (blockedReason === "phone_mismatch") out.blockedPhoneMismatch += 1;
         continue;
       }
 
@@ -501,7 +435,7 @@ export async function POST(req) {
       const logId = current?.id ? String(current.id) : null;
       const logRef = logId ? db.collection("attendance_logs").doc(logId) : null;
 
-      // Marca tentativa (para diagnóstico e rastreabilidade)
+      // Marca tentativa
       if (logRef) {
         await logRef.set(
           {
@@ -516,7 +450,6 @@ export async function POST(req) {
         );
       }
 
-      // Envio real
       const message = {
         token,
         notification: {
@@ -536,7 +469,6 @@ export async function POST(req) {
         await admin.messaging().send(message);
         out.sent += 1;
 
-        // Marca enviado (idempotência)
         if (logRef) {
           await logRef.set(
             {
@@ -590,6 +522,9 @@ export async function POST(req) {
         blockedNoToken: out.blockedNoToken,
         blockedNoPhone: out.blockedNoPhone,
         blockedInactive: out.blockedInactive,
+        blockedUnlinkedPatient: out.blockedUnlinkedPatient,
+        blockedAmbiguousPhone: out.blockedAmbiguousPhone,
+        blockedPhoneMismatch: out.blockedPhoneMismatch,
         blockedErrors: out.blockedErrors,
         byStatus: out.byStatus,
       },

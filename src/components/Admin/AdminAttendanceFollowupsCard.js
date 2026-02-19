@@ -42,6 +42,9 @@ export default function AdminAttendanceFollowupsCard({ showToast }) {
       no_token: 'sem pushToken',
       inactive_patient: 'paciente inativo',
       inactive_subscriber: 'subscriber inativo',
+      unlinked_patient: 'não vinculado (ID não encontrado no cadastro)',
+      ambiguous_phone: 'telefone ambíguo (aparece em +1 cadastro)',
+      phone_mismatch: 'conflito entre telefone do log e do cadastro',
     };
     return map[k] || k;
   };
@@ -150,6 +153,21 @@ export default function AdminAttendanceFollowupsCard({ showToast }) {
             <div className="font-semibold">{data.blockedErrors ?? 0}</div>
           </div>
         </div>
+
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <div className="text-xs text-slate-500">não vinculado</div>
+            <div className="font-semibold">{data.blockedUnlinkedPatient ?? 0}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500">telefone ambíguo</div>
+            <div className="font-semibold">{data.blockedAmbiguousPhone ?? 0}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500">conflito telefone</div>
+            <div className="font-semibold">{data.blockedPhoneMismatch ?? 0}</div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -210,6 +228,21 @@ export default function AdminAttendanceFollowupsCard({ showToast }) {
           <Bell className="w-5 h-5 text-violet-600" />
           <span className="text-xs text-slate-500">Follow-up server-side</span>
         </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+        <div className="text-xs font-semibold text-slate-700">Orientação de uso (clínica + segurança)</div>
+        <ul className="mt-2 text-xs text-slate-600 space-y-1 list-disc pl-4">
+          <li>
+            <b>Bloqueios não são “punição”</b>: são barreiras de segurança para evitar mensagem no paciente errado.
+          </li>
+          <li>
+            <b>unlinked_patient</b>: revise o cadastro (ID do relatório ↔ paciente) antes de disparar.
+          </li>
+          <li>
+            <b>ambiguous_phone / phone_mismatch</b>: corrija duplicidade/telefone. O sistema prefere vínculo por ID.
+          </li>
+        </ul>
       </div>
 
       <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
