@@ -59,3 +59,12 @@ Esta rodada fechou os **bloqueadores de produção** e padronizou hardening (CSP
 - ✅ Manter `.env.example` como template (sem valores).
 - ✅ Rodar: `npm run security:check` antes de gerar zip/mandar para terceiros.
 - ✅ Se algum `.env`/service account tiver sido compartilhado por engano: **rotacionar** imediatamente.
+
+
+### Hardening pós-v1 (2026-02-18) — ✅ aplicado
+- [x] **RBAC paciente estrito** (`requirePatient`) em rotas do paciente (nega se `role` ausente/incorreta; fallback seguro via `users/{uid}.role`).
+- [x] **Integridade**: `attendance/confirm` deriva telefone do perfil (ignora `phone` do client).
+- [x] **Metadados**: `/api/appointments/last-sync` **admin-only**.
+- [x] **Superfície**: `_push_old/*` desativado (410 dev / 404 prod).
+- [x] **Rate limit global** (Firestore) em rotas críticas + TTL em `_rate_limits.expireAt`.
+

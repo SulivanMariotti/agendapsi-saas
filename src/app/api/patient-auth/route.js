@@ -117,6 +117,7 @@ export async function POST(req) {
     // Rate limit (mesmo desativado por padrão, evita abuso quando habilitado em testes)
     const rl = await rateLimit(req, {
       bucket: "auth:patient:email",
+      global: true,
       limit: 10,
       windowMs: 10 * 60_000,
       errorMessage: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",

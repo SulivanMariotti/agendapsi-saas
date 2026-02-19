@@ -54,6 +54,7 @@ export async function POST(req) {
     // 2) Rate limit (best-effort)
     const rl = await rateLimit(req, {
       bucket: "auth:admin:password",
+      global: true,
       limit: 10,
       windowMs: 10 * 60_000,
       errorMessage: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",

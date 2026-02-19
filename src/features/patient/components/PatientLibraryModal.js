@@ -2,8 +2,10 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../../components/DesignSystem";
-import { X, Search, ChevronDown, ChevronUp, Sparkles, CheckCircle2 } from "lucide-react";
-import { LIBRARY_ARTICLES, LIBRARY_TOP_MANTRA, SESSION_TAKEAWAYS } from "../content/library";
+import { X, Search, ChevronDown, ChevronUp, Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
+import { getAuth } from "firebase/auth";
+import { LIBRARY_TOP_MANTRA, SESSION_TAKEAWAYS } from "../content/library";
+import { LIBRARY_SEED_ARTICLES } from "../../../lib/shared/librarySeed";
 
 function Chip({ active, onClick, children }) {
   return (
@@ -21,6 +23,47 @@ function Chip({ active, onClick, children }) {
   );
 }
 
+function splitParagraphs(content) {
+  const raw = String(content || "");
+  if (!raw.trim()) return [];
+  return raw
+    .split(/\n\s*\n+/g)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
+function normalizeArticle(a) {
+  const id = String(a?.id || "").trim();
+  const title = String(a?.title || "").trim();
+  const category = String(a?.category || "Geral").trim() || "Geral";
+  const summary = String(a?.summary || "").trim();
+  const readingTime = String(a?.readingTime || "").trim();
+
+  // Aceita tanto `content` (string) quanto `body` (array) do seed legado.
+  const paragraphs = Array.isArray(a?.body)
+    ? a.body.map((p) => String(p || "").trim()).filter(Boolean)
+    : splitParagraphs(a?.content);
+
+  return {
+    id: id || `${category}_${title}`,
+    title,
+    category,
+    summary,
+    readingTime: readingTime || null,
+    paragraphs,
+  };
+}
+
+function computeReadingTimeFromParagraphs(paragraphs) {
+  const text = (paragraphs || []).join(" ").trim();
+  if (!text) return null;
+  const words = text.split(/\s+/g).filter(Boolean).length;
+  const mins = Math.max(1, Math.round(words / 200));
+  if (mins <= 1) return "1 min";
+  if (mins === 2) return "2 min";
+  return `${mins} min`;
+}
+
 function ArticleRow({ article, expanded, onToggle }) {
   return (
     <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white">
@@ -35,10 +78,14 @@ function ArticleRow({ article, expanded, onToggle }) {
             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-slate-50 text-slate-700 border-slate-100">
               {article.category}
             </span>
-            <span className="text-[11px] text-slate-400">{article.readingTime}</span>
+            <span className="text-[11px] text-slate-400">
+              {article.readingTime || computeReadingTimeFromParagraphs(article.paragraphs) || ""}
+            </span>
           </div>
           <div className="mt-2 text-sm font-extrabold text-slate-900">{article.title}</div>
-          <div className="mt-1 text-xs text-slate-600 leading-relaxed">{article.summary}</div>
+          {article.summary ? (
+            <div className="mt-1 text-xs text-slate-600 leading-relaxed">{article.summary}</div>
+          ) : null}
         </div>
         <div className="shrink-0 pt-1 text-slate-500">
           {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -48,8 +95,8 @@ function ArticleRow({ article, expanded, onToggle }) {
       {expanded ? (
         <div className="px-4 pb-4">
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm text-slate-700 leading-relaxed space-y-3">
-            {Array.isArray(article.body)
-              ? article.body.map((p, idx) => (
+            {Array.isArray(article.paragraphs)
+              ? article.paragraphs.map((p, idx) => (
                   <p key={idx} className="whitespace-pre-wrap">
                     {p}
                   </p>
@@ -66,6 +113,11 @@ export default function PatientLibraryModal({ open, onClose }) {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Todas");
   const [expandedId, setExpandedId] = useState(null);
+
+  const [remoteArticles, setRemoteArticles] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [warning, setWarning] = useState(null);
+
   const modalRef = useRef(null);
 
   // Garante que o modal seja fechável mesmo em telas pequenas:
@@ -83,23 +135,87 @@ export default function PatientLibraryModal({ open, onClose }) {
     };
   }, [open]);
 
+  // Carrega artigos publicados via API server-side.
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setWarning(null);
+
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user) {
+          setWarning("Você precisa estar logado para acessar a biblioteca.");
+          setRemoteArticles([]);
+          return;
+        }
+
+        const idToken = await user.getIdToken();
+        const res = await fetch("/api/patient/library/list", {
+          method: "GET",
+          headers: { authorization: `Bearer ${idToken}` },
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data?.ok) {
+          const msg = data?.error || "Não foi possível carregar a biblioteca agora.";
+          setWarning(msg);
+          setRemoteArticles([]);
+          return;
+        }
+
+        const items = Array.isArray(data?.articles) ? data.articles : [];
+        if (!cancelled) {
+          setRemoteArticles(items);
+        }
+      } catch (_) {
+        if (!cancelled) {
+          setWarning("Não foi possível carregar a biblioteca agora.");
+          setRemoteArticles([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const normalizedArticles = useMemo(() => {
+    const base = Array.isArray(remoteArticles) && remoteArticles.length ? remoteArticles : LIBRARY_SEED_ARTICLES;
+    return (base || []).map(normalizeArticle).filter((a) => a.title);
+  }, [remoteArticles]);
+
   const categories = useMemo(() => {
     const set = new Set(["Todas"]);
-    for (const a of LIBRARY_ARTICLES) set.add(a.category);
+    for (const a of normalizedArticles) set.add(a.category);
     return Array.from(set);
-  }, []);
+  }, [normalizedArticles]);
 
   const filtered = useMemo(() => {
     const q = String(query || "").trim().toLowerCase();
 
-    return (LIBRARY_ARTICLES || []).filter((a) => {
+    return (normalizedArticles || []).filter((a) => {
       if (activeCategory && activeCategory !== "Todas" && a.category !== activeCategory) return false;
       if (!q) return true;
 
-      const hay = `${a.title} ${a.summary} ${(a.body || []).join(" ")}`.toLowerCase();
+      const hay = `${a.title} ${a.summary} ${(a.paragraphs || []).join(" ")}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [query, activeCategory]);
+  }, [query, activeCategory, normalizedArticles]);
+
+  // Quando trocar categorias/busca, fecha qualquer item expandido.
+  useEffect(() => {
+    setExpandedId(null);
+  }, [activeCategory, query]);
 
   if (!open) return null;
 
@@ -123,9 +239,7 @@ export default function PatientLibraryModal({ open, onClose }) {
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-extrabold text-slate-900">Biblioteca de Apoio</div>
-              <div className="text-xs text-slate-500">
-                Psicoeducação para sustentar constância — sem substituir a sessão.
-              </div>
+              <div className="text-xs text-slate-500">Psicoeducação para sustentar constância — sem substituir a sessão.</div>
             </div>
 
             <button
@@ -153,6 +267,24 @@ export default function PatientLibraryModal({ open, onClose }) {
               </div>
             </div>
 
+            {/* Aviso (fallback / erro de carga) */}
+            {warning ? (
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white border border-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                    <AlertTriangle size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-extrabold text-amber-900">Aviso</div>
+                    <div className="mt-1 text-xs text-amber-800 leading-relaxed">{warning}</div>
+                    <div className="mt-2 text-[11px] text-amber-800/80">
+                      Se ainda não há artigos publicados, exibimos um conteúdo base para apoiar sua constância.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             {/* Busca */}
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
               <div className="flex-1 relative">
@@ -172,7 +304,6 @@ export default function PatientLibraryModal({ open, onClose }) {
                     active={activeCategory === c}
                     onClick={() => {
                       setActiveCategory(c);
-                      setExpandedId(null);
                     }}
                   >
                     {c}
@@ -183,7 +314,10 @@ export default function PatientLibraryModal({ open, onClose }) {
 
             {/* Artigos */}
             <div className="space-y-3">
-              <div className="text-xs text-slate-400 uppercase tracking-wider">Artigos</div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs text-slate-400 uppercase tracking-wider">Artigos</div>
+                {loading ? <div className="text-[11px] text-slate-400">Carregando…</div> : null}
+              </div>
 
               {filtered.length === 0 ? (
                 <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50 text-sm text-slate-700">

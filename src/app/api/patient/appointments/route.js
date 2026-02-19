@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
+import { requirePatient } from "@/lib/server/requirePatient";
 
 export const runtime = "nodejs";
 
@@ -12,27 +13,10 @@ export const runtime = "nodejs";
  *
  * Segurança:
  * - Authorization Bearer (idToken)
- * - role patient
+ * - role patient (estrito; fallback users/{uid}.role)
  * - Resolve phone pelo users/{uid} e/ou claims
  * - Sem impersonação/override (produção)
  */
-
-function getServiceAccount() {
-  const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
-  if (b64) {
-    const json = Buffer.from(b64, "base64").toString("utf-8");
-    return JSON.parse(json);
-  }
-  const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
-  if (!raw) throw new Error("Missing FIREBASE_ADMIN_SERVICE_ACCOUNT(_B64) env var");
-  return JSON.parse(raw);
-}
-
-function initAdmin() {
-  if (admin.apps?.length) return;
-  const serviceAccount = getServiceAccount();
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-}
 
 function onlyDigits(v) {
   return String(v || "").replace(/\D/g, "");
@@ -74,27 +58,11 @@ export async function GET(req) {
     });
     if (!rl.ok) return rl.res;
 
-    initAdmin();
+    const auth = await requirePatient(req);
+    if (!auth.ok) return auth.res;
 
-    const authHeader = req.headers.get("authorization") || "";
-    const match = authHeader.match(/^Bearer\s+(.+)$/i);
-    const idToken = match?.[1];
-
-    if (!idToken) {
-      return NextResponse.json({ ok: false, error: "Missing Authorization token." }, { status: 401 });
-    }
-
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    const uid = decoded?.uid;
-    if (!uid) return NextResponse.json({ ok: false, error: "Invalid token." }, { status: 401 });
-
-    const role = String(decoded?.role || decoded?.token?.role || "").toLowerCase().trim();
-    if (role && role !== "patient") {
-      return NextResponse.json(
-        { ok: false, error: "Sessão não é de paciente. Faça logout e entre como paciente." },
-        { status: 403 }
-      );
-    }
+    const decoded = auth.decoded;
+    const uid = auth.uid;
 
     const userRef = admin.firestore().collection("users").doc(uid);
     const userSnap = await userRef.get();
@@ -103,10 +71,14 @@ export async function GET(req) {
     const claimPhone =
       decoded?.phoneCanonical || decoded?.patientPhone || decoded?.phone || decoded?.phone_number || "";
 
-    const phoneCanonical =
-      toPhoneCanonical(
-        userData?.phoneCanonical || userData?.phone || userData?.phoneNumber || userData?.phoneE164 || claimPhone || ""
-      );
+    const phoneCanonical = toPhoneCanonical(
+      userData?.phoneCanonical ||
+        userData?.phone ||
+        userData?.phoneNumber ||
+        userData?.phoneE164 ||
+        claimPhone ||
+        ""
+    );
 
     const email = String(decoded?.email || userData?.email || "").trim().toLowerCase();
 
@@ -132,9 +104,6 @@ export async function GET(req) {
     return NextResponse.json({ ok: true, appointments });
   } catch (e) {
     console.error("[PATIENT_APPOINTMENTS] Error", e);
-    return NextResponse.json(
-      { ok: false, error: "Erro interno. Tente novamente." },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: "Erro interno. Tente novamente." }, { status: 500 });
   }
 }

@@ -1,3 +1,10 @@
+## 2026-02-18
+- Segurança (pós-v1): `requirePatient()` aplicado em rotas do paciente (role estrita + fallback seguro).
+- Segurança: `attendance/confirm` deriva telefone do perfil (ignora `phone` do client).
+- Segurança: `/api/appointments/last-sync` agora é **admin-only**.
+- Segurança: endpoints `_push_old/*` desativados (410 dev / 404 prod).
+- Segurança: rate limit **global** (Firestore) para rotas críticas + TTL recomendado em `_rate_limits.expireAt`.
+
 # Changelog
 ## 2026-02-14
 - Fix (Rules): `appointments/*` permite leitura do paciente também por claim `request.auth.token.phoneCanonical` (janela do primeiro acesso pós-pareamento) — remove `permission-denied`.

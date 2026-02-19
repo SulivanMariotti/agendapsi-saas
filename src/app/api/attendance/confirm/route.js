@@ -1,67 +1,63 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
-import { enforceSameOrigin } from "@/lib/server/originGuard";
+import { rateLimit } from "@/lib/server/rateLimit";
+import { requirePatient } from "@/lib/server/requirePatient";
+
 export const runtime = "nodejs";
-function getServiceAccount() {
-  const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
-  if (b64) {
-    const json = Buffer.from(b64, "base64").toString("utf-8");
-    return JSON.parse(json);
-  }
-  const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
-  if (!raw) throw new Error("Missing FIREBASE_ADMIN_SERVICE_ACCOUNT(_B64) env var");
-  return JSON.parse(raw);
+
+function onlyDigits(v) {
+  return String(v || "").replace(/\D/g, "");
 }
 
-function initAdmin() {
-  if (admin.apps.length) return;
-  const serviceAccount = getServiceAccount();
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-}
-
-function getBearerToken(req) {
-  const authHeader = req.headers.get("authorization") || "";
-  const m = authHeader.match(/^Bearer\s+(.+)$/i);
-  return m?.[1] || "";
+function normalizePhoneCanonical(input) {
+  let d = onlyDigits(input).replace(/^0+/, "");
+  if (!d) return "";
+  // Remove DDI 55 (BR) se vier junto
+  if ((d.length === 12 || d.length === 13) && d.startsWith("55")) d = d.slice(2);
+  return d;
 }
 
 export async function POST(req) {
   try {
-    const originCheck = enforceSameOrigin(req, {
-      allowNoOrigin: false,
-      allowNoOriginWithAuth: true,
-      message: "Acesso bloqueado (origem inválida).",
+    const auth = await requirePatient(req);
+    if (!auth.ok) return auth.res;
+
+    const uid = auth.uid;
+
+    const rl = await rateLimit(req, {
+      bucket: "patient:attendance:confirm",
+      global: true,
+      uid,
+      limit: 30,
+      windowMs: 10 * 60_000,
+      errorMessage: "Muitas tentativas. Aguarde um pouco e tente novamente.",
     });
-    if (!originCheck.ok) return originCheck.res;
-
-    initAdmin();
-
-    const idToken = getBearerToken(req);
-    if (!idToken) {
-      return NextResponse.json({ ok: false, error: "Missing Authorization token." }, { status: 401 });
-    }
-
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    const uid = decoded?.uid;
-    if (!uid) {
-      return NextResponse.json({ ok: false, error: "Invalid token." }, { status: 401 });
-    }
+    if (!rl.ok) return rl.res;
 
     const body = await req.json().catch(() => ({}));
     const appointmentId = String(body?.appointmentId || "").trim();
-    const phone = String(body?.phone || "").replace(/\D/g, "");
     const channel = String(body?.channel || "web").trim() || "web";
 
     if (!appointmentId) {
       return NextResponse.json({ ok: false, error: "Missing appointmentId." }, { status: 400 });
     }
-    if (!phone) {
-      return NextResponse.json({ ok: false, error: "Missing phone." }, { status: 400 });
-    }
 
     const db = admin.firestore();
 
-    // PASSO 18/45: Deduplicação + rate limit leve (evita spam / múltiplos cliques)
+    // Segurança/Integridade: NÃO aceitar phone do client.
+    // Deriva do perfil do paciente (users/{uid}) para evitar falsificação/ruído.
+    let phoneCanonical = "";
+    let patientExternalId = null;
+    try {
+      const userSnap = await db.collection("users").doc(uid).get();
+      const u = userSnap.exists ? userSnap.data() || {} : {};
+      phoneCanonical = normalizePhoneCanonical(u.phoneCanonical || u.phone || "");
+      patientExternalId = String(u.patientExternalId || "").trim() || null;
+    } catch (_) {
+      // best-effort (confirmar presença não deve falhar por leitura do perfil)
+    }
+
+    // Deduplicação + rate limit leve (evita spam / múltiplos cliques)
     // 1) Bloqueia confirmações repetidas para o mesmo appointmentId + uid
     const existingSnap = await db
       .collection("attendance_logs")
@@ -89,10 +85,7 @@ export async function POST(req) {
       if (last) {
         const diffMs = Date.now() - last.getTime();
         if (diffMs < 30_000) {
-          return NextResponse.json(
-            { ok: false, error: "Aguarde alguns segundos e tente novamente." },
-            { status: 429 }
-          );
+          return NextResponse.json({ ok: false, error: "Aguarde alguns segundos e tente novamente." }, { status: 429 });
         }
       }
     }
@@ -101,7 +94,10 @@ export async function POST(req) {
       eventType: "patient_confirmed",
       appointmentId,
       patientId: uid,
-      phone,
+      // compatibilidade: alguns fluxos legados leem "phone"; padrão novo: phoneCanonical
+      phone: phoneCanonical || null,
+      phoneCanonical: phoneCanonical || null,
+      patientExternalId,
       channel,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });

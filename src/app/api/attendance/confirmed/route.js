@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
-import { requireAuth } from "@/lib/server/requireAuth";
+import { requirePatient } from "@/lib/server/requirePatient";
 
 export const runtime = "nodejs";
 
@@ -24,37 +24,12 @@ export const runtime = "nodejs";
  * - Apenas reflete confirmações registradas em attendance_logs (eventType=patient_confirmed).
  */
 
-function getServiceAccount() {
-  const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
-  if (b64) {
-    const json = Buffer.from(b64, "base64").toString("utf-8");
-    return JSON.parse(json);
-  }
-  const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
-  if (!raw) throw new Error("Missing FIREBASE_ADMIN_SERVICE_ACCOUNT(_B64) env var");
-  return JSON.parse(raw);
-}
-
-function initAdmin() {
-  if (admin.apps.length) return;
-  const serviceAccount = getServiceAccount();
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-}
-
 export async function GET(req) {
   try {
-    initAdmin();
-
-    const auth = await requireAuth(req);
+    const auth = await requirePatient(req);
     if (!auth.ok) return auth.res;
 
-    const uid = String(auth.decoded?.uid || "").trim();
-    if (!uid) {
-      return NextResponse.json(
-        { ok: false, confirmed: false, appointmentIds: [], error: "Invalid token." },
-        { status: 401 }
-      );
-    }
+    const uid = auth.uid;
 
     const { searchParams } = new URL(req.url);
     const appointmentId = (searchParams.get("appointmentId") || "").trim();
@@ -72,10 +47,7 @@ export async function GET(req) {
         .get();
 
       const confirmed = !snap.empty;
-      return NextResponse.json(
-        { ok: true, confirmed, appointmentIds: confirmed ? [appointmentId] : [] },
-        { status: 200 }
-      );
+      return NextResponse.json({ ok: true, confirmed, appointmentIds: confirmed ? [appointmentId] : [] }, { status: 200 });
     }
 
     // 2) Lista (para chips na agenda)
@@ -98,9 +70,6 @@ export async function GET(req) {
   } catch (e) {
     console.error("GET /api/attendance/confirmed error:", e);
     // Retornar 200 com ok:false evita loops no client e mantém UX estável.
-    return NextResponse.json(
-      { ok: false, confirmed: false, appointmentIds: [], error: e?.message || "Erro" },
-      { status: 200 }
-    );
+    return NextResponse.json({ ok: false, confirmed: false, appointmentIds: [], error: e?.message || "Erro" }, { status: 200 });
   }
 }

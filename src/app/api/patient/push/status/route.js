@@ -1,22 +1,9 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
-export const runtime = "nodejs";
-function getServiceAccount() {
-  const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
-  if (b64) {
-    const json = Buffer.from(b64, "base64").toString("utf-8");
-    return JSON.parse(json);
-  }
-  const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
-  if (!raw) throw new Error("Missing FIREBASE_ADMIN_SERVICE_ACCOUNT(_B64) env var");
-  return JSON.parse(raw);
-}
+import { rateLimit } from "@/lib/server/rateLimit";
+import { requirePatient } from "@/lib/server/requirePatient";
 
-function initAdmin() {
-  if (admin.apps.length) return;
-  const serviceAccount = getServiceAccount();
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-}
+export const runtime = "nodejs";
 
 function onlyDigits(v) {
   return String(v || "").replace(/\D/g, "");
@@ -38,19 +25,20 @@ function toPhoneCanonical(raw) {
 
 export async function GET(req) {
   try {
-    initAdmin();
+    const auth = await requirePatient(req);
+    if (!auth.ok) return auth.res;
 
-    const authHeader = req.headers.get("authorization") || "";
-    const match = authHeader.match(/^Bearer\s+(.+)$/i);
-    const idToken = match?.[1];
+    const uid = auth.uid;
 
-    if (!idToken) {
-      return NextResponse.json({ ok: false, error: "Missing Authorization token." }, { status: 401 });
-    }
-
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    const uid = decoded?.uid;
-    if (!uid) return NextResponse.json({ ok: false, error: "Invalid token." }, { status: 401 });
+    const rl = await rateLimit(req, {
+      bucket: "patient:push:status",
+      global: true,
+      uid,
+      limit: 120,
+      windowMs: 60_000,
+      errorMessage: "Muitas requisições. Aguarde um pouco e tente novamente.",
+    });
+    if (!rl.ok) return rl.res;
 
     const userSnap = await admin.firestore().collection("users").doc(uid).get();
     const userData = userSnap.exists ? userSnap.data() : null;

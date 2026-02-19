@@ -101,6 +101,7 @@ export async function POST(req) {
     // Rate limit (best-effort) para evitar tentativa de força-bruta de código.
     const rl = await rateLimit(req, {
       bucket: "auth:patient:pair",
+      global: true,
       uid: phoneCanonical,
       limit: 20,
       windowMs: 15 * 60_000,

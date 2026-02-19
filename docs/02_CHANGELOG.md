@@ -9,6 +9,16 @@
 
 ---
 
+## 2026-02-18 — Hardening de segurança (pós-v1)
+
+- **RBAC paciente estrito**: `requirePatient()` aplicado em rotas do paciente (nega se `role` ausente/incorreta; fallback seguro via `users/{uid}.role`).
+- **Integridade da confirmação**: `POST /api/attendance/confirm` não aceita mais `phone` do client; deriva do `users/{uid}`.
+- **`/api/appointments/last-sync` admin-only** (reduz vazamento de metadados).
+- **Endpoints legados `_push_old/*` desativados** (410 dev / 404 prod).
+- **Rate limit global (Firestore)** em rotas críticas (`/api/auth`, `/api/patient/pair`, `/api/attendance/confirm`, push) + TTL recomendado para `_rate_limits.expireAt`.
+
+---
+
 ## 2026-02-17 — Entregas
 
 ### A) Operação manual blindada (Admin → Agenda)
@@ -35,69 +45,18 @@
 
 ---
 
-## 2026-02-18 — Segurança (bloqueadores para produção)
+## 2026-02-18 — Entregas
 
-- Paciente: **login por e-mail sem verificação** desativado por padrão (mantido somente telefone+código).
-- Admin: `requireAdmin` passou a aceitar **apenas claim** (`role=admin` ou `admin=true`) — sem fallback em `users.role`.
-- Firestore Rules:
-  - `users/{uid}`: paciente só atualiza `lastSeen` e aceite de contrato (sem editar identidade).
-  - `patient_notes/{id}`: travado para impedir troca de `patientId` no update.
-- Paciente: `PatientFlow` não tenta mais “criar perfil” no Firestore (perfil é whitelist/admin).
-- Novo: `docs/74_SEGURANCA_PLANO_PRODUCAO.md` (checklist vivo para liberar produção).
+### A) Segurança v1 (produção-ready)
+- Login paciente por e-mail **desativado por padrão**; vínculo por **telefone + código** (single-use por dispositivo).
+- Admin via **custom claims** (sem fallback por `users.role`).
+- Firestore rules endurecidas: `users` (sem editar identidade/role), `audit_logs/subscribers` admin-only, `patient_notes` com `patientId` travado.
+- Remoção do botão DEV “Trocar paciente”.
+- Hardening: headers + **CSP ENFORCE em produção**, rate limit, erros seguros, origin guard padronizado.
+- Retenção: `expireAt` + **TTL configurado** em `history` e `audit_logs`.
 
-- Paciente: removido botão/recurso DEV **“Trocar paciente”** do painel.
-
-- Next.js: **hardening de headers** aplicado globalmente:
-  - `Strict-Transport-Security` (HSTS)
-  - `X-Frame-Options` (anti-clickjacking)
-  - `X-Content-Type-Options` (nosniff)
-  - `Referrer-Policy`
-  - `Permissions-Policy`
-  - `Content-Security-Policy` (**ENFORCE em produção**; Report-Only apenas em dev)
-
-- Auth hardening:
-  - `/api/auth` (admin): **rate limit** + **origin check** + comparação de senha em tempo constante.
-  - Paciente: **rate limit** em `/api/patient/pair`, `/api/patient/appointments`, `/api/patient/resolve-phone`.
-  - Padronização de erros (não vaza `e.message` em rotas sensíveis).
-  - Removida a possibilidade de override/impersonação por querystring na rota de appointments.
-
-- Logs/retencao:
-  - `history`: escrita centralizada com minimizacao de PII (telefone/e-mail mascarados; token bruto nunca).
-  - `history` e `audit_logs`: campo `expireAt` para TTL/rotacao.
-  - TTL habilitado no Firestore: policies `history.expireAt` e `audit_logs.expireAt` (exclusao pode levar ate ~24h apos `expireAt`).
-  - Nova rota opcional: `GET /api/cron/retention` (limpeza por cron), usando `CRON_SECRETS` (compat: `CRON_SECRET`).
-  - Firestore rules: match explicito para `audit_logs` admin-only.
-  - Docs: `docs/75_RETENCAO_LOGS_TTL_E_CRON.md` e atualizacao do padrao `docs/11_HISTORY_LOGGING_STANDARD.md`.
-
-## 2026-02-18 — Segurança (segredos)
-- Adicionado `.gitignore` com bloqueio de `.env*`.
-- Adicionado `.env.example` (template sem valores).
-- Adicionado `npm run security:check` para detectar `.env*` e padrões de segredos antes de compartilhar.
-
-
-## 2026-02-18 — Segurança (cron secret)
-- Cron routes (`/api/cron/*`) agora priorizam **header-only** em produção (Authorization Bearer / x-cron-secret).
-- Suporte a rotação via `CRON_SECRETS` (lista separada por vírgula).
-- Query `?key=` desativado em produção por padrão (só com `ALLOW_CRON_QUERY_KEY=true` como transição).
-- Novo helper: `src/lib/server/cronAuth.js` + logs seguros de tentativas inválidas.
-- Docs atualizadas: `docs/26_VERCEL_CRON_REMINDERS.md` e `docs/75_RETENCAO_LOGS_TTL_E_CRON.md`.
-
-
-## 2026-02-18 — Segurança (continuação)
-- Padronização de CSRF/origin: helper `src/lib/server/originGuard.js`.
-- Aplicado em rotas sensíveis: `/api/auth`, `/api/patient/pair`, `/api/patient-auth`, `/api/patient/push/register`, `/api/attendance/confirm` e `requireAdmin`.
-
-## 2026-02-18 — Segurança v1 finalizada
-- Concluídos todos os bloqueadores para produção: RBAC/rules, auth paciente (pair-code), headers+CSP, rate-limit, CSRF/origin, logs+TTL.
-- Cron routes já prontas para futura automação (header-only + rotação), sem necessidade de cron ativo hoje.
-
----
-
-## 2026-02-18 — Paciente: Biblioteca (psicoeducação)
-- Adicionado botão **“Biblioteca”** no cabeçalho do painel do paciente (desktop + menu mobile).
-- Modal “Biblioteca de Apoio” com:
-  - artigos curtos por temas + busca
-  - mantra fixo (leitura não substitui sessão)
-  - seção **“Para levar para a sessão”**
-  - sem CTA de cancelar/remarcar
+### B) Biblioteca (Paciente + Admin)
+- Paciente: menu **Biblioteca** com modal rolável e fechável (X/Fechar/ESC), busca, mantra fixo e “Para levar para a sessão”.
+- Admin: repositório de artigos (CRUD) com status (rascunho/publicado).
+- Categorias: CRUD + ativar/desativar/ordenar + criação inline no editor do artigo.
 

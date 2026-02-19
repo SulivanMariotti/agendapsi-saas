@@ -1,26 +1,11 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import crypto from "crypto";
+import { rateLimit } from "@/lib/server/rateLimit";
 import { writeHistory } from "@/lib/server/historyLog";
-import { enforceSameOrigin } from "@/lib/server/originGuard";
+import { requirePatient } from "@/lib/server/requirePatient";
+
 export const runtime = "nodejs";
-
-function getServiceAccount() {
-  const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
-  if (b64) {
-    const json = Buffer.from(b64, "base64").toString("utf-8");
-    return JSON.parse(json);
-  }
-  const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
-  if (!raw) throw new Error("Missing FIREBASE_ADMIN_SERVICE_ACCOUNT(_B64) env var");
-  return JSON.parse(raw);
-}
-
-function initAdmin() {
-  if (admin.apps.length) return;
-  const serviceAccount = getServiceAccount();
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-}
 
 function sha256(input) {
   return crypto.createHash("sha256").update(String(input || ""), "utf8").digest("hex");
@@ -46,27 +31,20 @@ function toPhoneCanonical(raw) {
 
 export async function POST(req) {
   try {
-    const originCheck = enforceSameOrigin(req, {
-      // Bearer token protege, mas bloqueamos cross-site quando houver contexto de navegador.
-      allowNoOrigin: false,
-      allowNoOriginWithAuth: true,
-      message: "Acesso bloqueado (origem inválida).",
+    const auth = await requirePatient(req);
+    if (!auth.ok) return auth.res;
+
+    const uid = auth.uid;
+
+    const rl = await rateLimit(req, {
+      bucket: "patient:push:register",
+      global: true,
+      uid,
+      limit: 20,
+      windowMs: 10 * 60_000,
+      errorMessage: "Muitas tentativas. Aguarde um pouco e tente novamente.",
     });
-    if (!originCheck.ok) return originCheck.res;
-
-    initAdmin();
-
-    const authHeader = req.headers.get("authorization") || "";
-    const match = authHeader.match(/^Bearer\s+(.+)$/i);
-    const idToken = match?.[1];
-
-    if (!idToken) {
-      return NextResponse.json({ ok: false, error: "Missing Authorization token." }, { status: 401 });
-    }
-
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    const uid = decoded?.uid;
-    if (!uid) return NextResponse.json({ ok: false, error: "Invalid token." }, { status: 401 });
+    if (!rl.ok) return rl.res;
 
     const body = await req.json().catch(() => ({}));
     const token = String(body?.token || "");

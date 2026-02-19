@@ -68,6 +68,18 @@ service cloud.firestore {
         || (signedIn() && resource.data.patientId == request.auth.uid);
     }
 
+
+    // ========= BIBLIOTECA (ARTIGOS) =========
+    match /library_articles/{id} {
+      // Admin gerencia (CRUD) via API/claim admin
+      allow read, write: if isAdmin();
+    }
+
+    // ========= BIBLIOTECA (CATEGORIAS) =========
+    match /library_categories/{id} {
+      allow read, write: if isAdmin();
+    }
+
     // ========= SUBSCRIBERS (whitelist/push) =========
     match /subscribers/{id} {
       // ✅ Segurança: paciente NÃO acessa subscribers no client.

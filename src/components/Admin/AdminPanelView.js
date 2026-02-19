@@ -11,6 +11,7 @@ import {
   History,
   ShieldCheck,
   BookOpen,
+  FileText,
   LogOut,
 } from 'lucide-react';
 
@@ -22,6 +23,7 @@ import AdminAttendanceTab from './AdminAttendanceTab';
 import AdminScheduleTab from './AdminScheduleTab';
 import AdminConfigTab from './AdminConfigTab';
 import AdminManualTab from './AdminManualTab';
+import AdminLibraryTab from './AdminLibraryTab';
 
 export default function AdminPanelView({
   onLogout,
@@ -510,7 +512,19 @@ export default function AdminPanelView({
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
               }`}
             >
-              <BookOpen size={18} /> Manual de Uso
+              <FileText size={18} /> Manual de Uso
+            </button>
+
+
+            <button
+              onClick={() => setAdminTab('library')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                adminTab === 'library'
+                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-200'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <BookOpen size={18} /> Biblioteca
             </button>
 
 
@@ -621,6 +635,8 @@ export default function AdminPanelView({
         {adminTab === 'audit' && <AdminAuditTab showToast={showToast} />}
 
         {adminTab === 'manual' && <AdminManualTab manualJump={manualJump} />}
+
+        {adminTab === 'library' && <AdminLibraryTab showToast={showToast} />}
 
         {adminTab === 'config' && (
           <AdminConfigTab

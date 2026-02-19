@@ -21,40 +21,37 @@
 - [x] Atalhos “Ver no Manual” dentro de Agenda e Presença/Faltas
 
 ## 3) UX (Paciente) — psicoeducação e compromisso
-- [x] **Menu Artigos/Biblioteca** (artigos mais completos)
-  - [x] mantra fixo: “Leitura não substitui sessão. A mudança acontece na continuidade.”
-  - [x] seção “Para levar para a sessão”
-  - [x] sem CTA cancelar/remarcar
+- [x] **Menu Artigos/Biblioteca** (paciente)
+  - mantra fixo: “Leitura não substitui sessão. A mudança acontece na continuidade.”
+  - seção “Para levar para a sessão”
+  - busca + categorias
+  - modal com rolagem + fechar (X/Fechar/ESC)
+  - sem CTA cancelar/remarcar
+- [x] **Repositório de artigos (Admin)**: criar/editar/publicar/despublicar/excluir
+- [x] **Categorias (Admin)**: CRUD + ativar/desativar/ordenar + criar inline no editor do artigo
 - [x] Mantra fixo + cards rotativos de reflexão
 - [x] Estado de notificações: “Ativas neste aparelho” + instruções quando inativas
 
 ## 4) Presença/Faltas (Admin)
 - [x] Importar planilha de presença/faltas
 - [x] Follow-ups com idempotência (anti-spam): `attendance_logs.followup.sentAt`
-- [ ] Melhorar painel de constância (métricas + insights) com ênfase clínica (sem moralismo)
+- [ ] **Melhorar painel de constância (30 dias)**:
+  - métricas (presenças/faltas/adiamentos) + tendência
+  - insights clínicos (sem moralismo) e reforço de constância
+  - filtros por período/profissional/paciente (se aplicável)
+- [ ] Processar **segunda planilha/relatório** (presença/faltas) para montar painel de constância e disparar notificações futuras (parabenizar presença e orientar em caso de falta).
 
-## 5) Segurança / Acesso
-- [x] Agenda do paciente server-side (`GET /api/patient/appointments`) + rules `appointments` admin-only
-
-### 5.1) Segurança para produção (bloqueadores)
-**Segurança v1: ✅ concluída (2026-02-18).**
-
-> Ordem: do **mais crítico/baixo score** → para o **menos crítico/alto score**.
-
-- [x] **Bloquear login do paciente por e-mail sem verificação** (inseguro) — usar vinculação por telefone+código
-- [x] **Impedir escalonamento para admin** via `users/{uid}.role` (rules + remoção de fallback em `requireAdmin`)
-- [x] **Travar identidade do paciente** no `users/{uid}` (paciente só atualiza `lastSeen` + aceite de contrato)
-- [x] **Travar `patient_notes.patientId`** no update (paciente não consegue trocar dono da nota)
-- [x] **Remover recurso DEV "Trocar paciente"** do painel do paciente
-- [x] **Hardening de headers** (CSP/HSTS/X-Frame-Options/etc.) no Next.js
-  - [x] CSP **ENFORCE em produção** (Report-Only apenas em dev)
-- [x] **Rate limit** em endpoints de autenticação (admin/paciente) + erros sem vazamento de detalhes
-- [x] **Política de logs/retenção** (PII em history/audit) + acesso somente admin (TTL/cron + mascaramento)
-  - [x] TTL habilitado no Firestore: policies `history.expireAt` e `audit_logs.expireAt`
-
-- [x] **Cron secret (header-only em produção)**: Authorization/x-cron-secret + rotação via `CRON_SECRETS`; `?key=` só com `ALLOW_CRON_QUERY_KEY=true` (transição)
-
-- [ ] **Futuro (antes de PWA/App):** OTP/magic link para paciente (sem fricção e com segurança)
+## 5) Segurança / Acesso (v1 concluída)
+- [x] Desativar login paciente por e-mail sem verificação (padrão)
+- [x] Admin apenas via **custom claims** (sem fallback em `users.role`)
+- [x] Firestore rules endurecidas (`users`/`audit_logs`/`subscribers`/`patient_notes`)
+- [x] Remover “Trocar paciente” (DEV) do painel do paciente
+- [x] Headers de segurança + CSP enforce em produção
+- [x] Rate limit + erros seguros nas rotas sensíveis
+- [x] Origin/CSRF guard padronizado
+- [x] Retenção: `expireAt` + **TTL ativo** em `history` e `audit_logs`
+- [x] Cron endpoints endurecidos (header-only + rotação) **(cron ainda não implantado)**
+- [ ] **Futuro:** autenticação do paciente com menos fricção e segura (OTP/magic link) antes de PWA/App
 
 ## 6) Dados / Consistência (Firestore)
 - [ ] Documentar modelo NoSQL Firestore (sem joins), estratégia de denormalização e chave única (ex.: patientId + phone canônico)
@@ -65,11 +62,3 @@
 - [ ] Custom claims/roles por tenant
 - [ ] Onboarding (criar tenant + admin) + billing (planos/limites)
 - [ ] Conteúdos (Artigos/Biblioteca) e templates/configs **por tenant** (por clínica)
-
-### Segurança — Operacional
-- [x] Adicionar `.gitignore` + `.env.example`.
-- [x] Adicionar `npm run security:check` para bloquear compartilhamento acidental de `.env*`/chaves.
-
-
-### Segurança (status)
-- [x] Origin/CSRF padronizado em rotas sensíveis (helper `originGuard`).

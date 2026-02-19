@@ -1,23 +1,9 @@
 import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
-export const runtime = "nodejs";
-function getServiceAccount() {
-  const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
-  if (b64) {
-    const json = Buffer.from(b64, "base64").toString("utf-8");
-    return JSON.parse(json);
-  }
-  const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
-  if (!raw) throw new Error("Missing FIREBASE_ADMIN_SERVICE_ACCOUNT(_B64) env var");
-  return JSON.parse(raw);
-}
+import { requirePatient } from "@/lib/server/requirePatient";
 
-function initAdmin() {
-  if (admin.apps.length) return;
-  const serviceAccount = getServiceAccount();
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-}
+export const runtime = "nodejs";
 
 function onlyDigits(v) {
   return String(v || "").replace(/\D/g, "");
@@ -67,19 +53,11 @@ export async function GET(req) {
     });
     if (!rl.ok) return rl.res;
 
-    initAdmin();
+    const auth = await requirePatient(req);
+    if (!auth.ok) return auth.res;
 
-    const authHeader = req.headers.get("authorization") || "";
-    const match = authHeader.match(/^Bearer\s+(.+)$/i);
-    const idToken = match?.[1];
-
-    if (!idToken) {
-      return NextResponse.json({ ok: false, error: "Missing Authorization token." }, { status: 401 });
-    }
-
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    const uid = decoded?.uid;
-    if (!uid) return NextResponse.json({ ok: false, error: "Invalid token." }, { status: 401 });
+    const decoded = auth.decoded;
+    const uid = auth.uid;
 
     const userRef = admin.firestore().collection("users").doc(uid);
     const userSnap = await userRef.get();
@@ -89,14 +67,6 @@ export async function GET(req) {
       String(decoded?.email || "").trim().toLowerCase() ||
       String(userData?.email || "").trim().toLowerCase() ||
       "";
-
-    const role = String(decoded?.role || userData?.role || "").toLowerCase().trim();
-    if (role && role !== "patient") {
-      return NextResponse.json(
-        { ok: false, error: "Sessão não é de paciente. Faça logout e entre como paciente." },
-        { status: 403 }
-      );
-    }
 
     // Aceita múltiplos campos possíveis (inclui custom claims dos custom tokens)
     const claimPhoneRaw =
@@ -124,49 +94,56 @@ export async function GET(req) {
         .collection("users")
         .where("role", "==", "patient")
         .where("email", "==", email)
+        .limit(10)
         .get();
 
-      // Preferir o mais atualizado e que tenha telefone válido
+      const candidates = q.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const actives = candidates.filter((c) => !isInactiveUser(c));
+
+      // Escolhe o "melhor" doc (com telefone preenchido)
       let best = null;
-      q.forEach((doc) => {
-        const d = doc.data() || {};
-        if (isInactiveUser(d)) return;
+      for (const c of actives) {
+        const pc = toPhoneCanonical(c?.phoneCanonical || c?.phone || c?.phoneNumber || c?.phoneE164 || "");
+        if (pc) {
+          best = { ...c, phoneCanonical: pc };
+          break;
+        }
+      }
 
-        const raw = d?.phoneCanonical || d?.phone || d?.phoneNumber || d?.phoneE164 || "";
-        const cand = toPhoneCanonical(raw);
-        if (!cand) return;
+      if (best?.phoneCanonical) {
+        phoneCanonical = best.phoneCanonical;
 
-        const score = toMillis(d?.updatedAt) || toMillis(d?.createdAt);
-        if (!best || score >= best.score) best = { phoneCanonical: cand, score, uid: doc.id };
-      });
-
-      if (best?.phoneCanonical) phoneCanonical = best.phoneCanonical;
+        // Best-effort: corrige o doc atual (uid) para evitar repetir esse fallback no futuro
+        try {
+          await userRef.set(
+            {
+              phoneCanonical,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        } catch (_) {
+          // ignore
+        }
+      }
     }
 
     if (!phoneCanonical) {
-      return NextResponse.json(
-        { ok: false, error: "Telefone não encontrado. Peça atualização ao admin." },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "Telefone não encontrado no cadastro." }, { status: 404 });
     }
 
-    // Garante consistência no users/{uid}
-    await userRef.set(
-      {
-        phoneCanonical,
-        phone: phoneCanonical,
-        phoneNumber: phoneCanonical,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+    // Também devolve infos úteis (não sensíveis) para UX do painel
+    const lastSeenAt = toMillis(userData?.lastSeenAt || userData?.lastSeen || userData?.updatedAt || null);
 
-    return NextResponse.json({ ok: true, phoneCanonical });
-  } catch (err) {
-    console.error("[PATIENT_RESOLVE_PHONE] Error", err);
-    return NextResponse.json(
-      { ok: false, error: "Erro interno. Tente novamente." },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      ok: true,
+      uid,
+      phoneCanonical,
+      email: email || null,
+      lastSeenAt: lastSeenAt || null,
+    });
+  } catch (e) {
+    console.error("[PATIENT_RESOLVE_PHONE] Error", e);
+    return NextResponse.json({ ok: false, error: "Erro interno. Tente novamente." }, { status: 500 });
   }
 }

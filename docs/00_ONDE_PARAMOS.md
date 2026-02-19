@@ -3,79 +3,71 @@
 ## Estado atual (validado)
 
 ### Operação (modo manual — recomendado)
-Você opera diariamente pelo Admin, no fluxo:
+Rotina diária (Admin → Agenda):
 
-**Admin → Agenda → Carregar Planilha → Verificar → Sincronizar → Gerar Preview do Disparo → Enviar lembrete**
+**Carregar Planilha → Verificar → Sincronizar → Gerar Preview do Disparo → Enviar lembrete**
 
 - Janela de upload: **hoje → +30 dias** (rodar também em fim de semana/feriado).
 - **Não há Cron Jobs configurados** na Vercel (decisão atual: **modo manual**).
+- Se cron for ligado no futuro, as rotas `/api/cron/*` já estão **endurecidas** (header-only + rotação de secret).
 
 ### Diretriz clínica/UX (painel do paciente)
-- O painel do paciente existe para **sustentar vínculo e constância**.
-- **Sem botão/CTA de cancelar/remarcar**.
-- WhatsApp, quando existir: **apenas para confirmação de presença** (nunca como atalho para cancelar/remarcar).
-- Psicoeducação passiva: mantra fixo + cards rotativos.
+- O painel do paciente existe para **lembrar + psicoeducar + responsabilizar**.
+- **Sem botão/CTA** de **cancelar/remarcar**.
+- Quando existir WhatsApp/contato: **apenas confirmação de presença** (reforço de compromisso), nunca como atalho de cancelamento.
 
 ---
 
-## Entregas concluídas nesta rodada (2026-02-18)
+## Entregas desta rodada (2026-02-18)
 
-### 1) Operação “à prova de dia corrido” (Admin → Agenda)
-Documentação e UX de operação manual para reduzir risco humano:
-- **Runbook + checklist 1 página + template de registro**: `docs/27_*`
-- Card **Operação do Dia** (Admin → Agenda):
-  - progresso do pipeline (import → verificar → sincronizar → preview → envio)
-  - contadores e bloqueios: `SEM_PUSH`, `INATIVO`, `SEM_TELEFONE`, `ALREADY_SENT`
-  - **CHECK** (push não confirmado) com alerta
-  - **bloqueio de envio** enquanto houver CHECK (fail-safe)
-  - export **CSV de diagnóstico** da seleção atual
-  - botão **Copiar resumo do dia** (para registro)
-  - **Registro do dia**: salvar + marcar como concluído
-  - **Auditoria**: histórico dos últimos 14 dias (salvo/concluído + contadores)
-  - **Falha-segura**: detecta inconsistências e mostra instrução objetiva do que fazer
+### 1) Segurança v1 (pronto para produção)
+**Bloqueadores críticos resolvidos** (sem mudar o modo de operação manual):
 
-> Norte clínico: falha operacional vira falha de cuidado ativo — e aumenta chance de falta.
+- Login do paciente por **e-mail sem verificação**: **desativado por padrão**.
+- Paciente: acesso por **vínculo de aparelho (telefone + código)** (single-use por dispositivo).
+- Admin: acesso apenas com **custom claims** (sem fallback perigoso via `users.role`).
+- Firestore rules:
+  - `users/{uid}`: paciente só atualiza **lastSeen/contractAccepted*** (sem editar identidade/role).
+  - `audit_logs` e `subscribers`: **admin-only**.
+  - `patient_notes`: trava de `patientId` no update.
+- **Trocar paciente (DEV)** removido do painel do paciente.
+- Hardening de produção:
+  - Headers (HSTS, nosniff, referrer-policy, permissions-policy, etc.).
+  - **CSP ENFORCE em produção** (Report-Only em dev).
+  - Rate limit + erros seguros em rotas sensíveis.
+  - Origin/CSRF guard padronizado nas rotas POST.
+- Logs e retenção:
+  - PII mascarada em `history/audit_logs`.
+  - Campo `expireAt` gravado para expiração automática.
+  - **TTL Firestore configurado** para `history.expireAt` e `audit_logs.expireAt` (pode levar até ~24h para excluir após expirar).
 
-### 2) Manual de Uso no Admin (Agenda + Presença/Faltas)
-- Novo menu **Manual de Uso** no Admin com:
-  - finalidade de cada módulo (Agenda / Presença-Faltas)
-  - passo a passo (uso correto)
-  - diagnóstico e erros comuns
-  - boas práticas (operações que protegem constância)
-- Atalhos “**Ver no Manual**” dentro de **Agenda** e **Presença/Faltas** para abrir direto na seção certa.
-- Documento canônico: `docs/73_ADMIN_MANUAL_DE_USO.md`
+### 2) Paciente — Biblioteca (psicoeducação + vínculo)
+- Novo menu **Biblioteca** no painel do paciente (desktop + mobile).
+- Modal com:
+  - **mantra fixo**: “Leitura não substitui sessão. A mudança acontece na continuidade.”
+  - **rolagem interna** + fechar por **X**, botão **Fechar** e tecla **ESC**.
+  - busca por título/conteúdo e seções por categoria.
+  - seção **“Para levar para a sessão”** (prompts de reflexão/anotação).
 
-### 3) Decisões técnicas importantes (mantidas)
-- **Agenda do paciente é server-side**:
-  - painel do paciente consome `GET /api/patient/appointments` (Admin SDK).
-  - Firestore Rules: `appointments/*` é **admin-only** (paciente não lê via client).
-- **Follow-ups de constância (presença/falta) têm idempotência**:
-  - `POST /api/admin/attendance/send-followups` não reenviará se `attendance_logs/{id}.followup.sentAt` já existir.
-- **Confirmação de presença**:
-  - `GET /api/attendance/confirmed` retorna `appointmentIds[]` para marcar “confirmado”.
-  - `confirmd` é alias.
-- Existe endpoint opcional `GET /api/cron/reminders` (protegido por `CRON_SECRETS` (compat: `CRON_SECRET`)), mas **não está em uso** (decisão atual: manual).
+### 3) Admin — Repositório de artigos (CRUD) + Categorias
+- Admin pode **criar/editar/publicar/despublicar/excluir** artigos.
+- Categorias:
+  - Tela dedicada de **Categorias** (CRUD + ativar/desativar/ordenar).
+  - No editor do artigo, dá para **selecionar categoria** e **criar nova inline**.
+- Paciente vê **apenas artigos publicados** (carregados via API server-side).
 
 ---
 
-## Próximos itens (backlog imediato)
-- **Segurança v1** — ✅ finalizada nesta rodada (produção-ready):
-  - [x] Login paciente por e-mail sem verificação desativado (fluxo principal: telefone+código)
-  - [x] RBAC: removido fallback por `users.role` no `requireAdmin` + rules blindadas
-  - [x] Identidade do paciente travada no `users/{uid}` (sem editar `phoneCanonical/email/role`)
-  - [x] Removido recurso DEV “Trocar paciente”
-  - [x] Headers de segurança (HSTS/XFO/nosniff/Referrer/Permissions + **CSP ENFORCE em produção**)
-  - [x] Rate limit em endpoints sensíveis + erros sem vazamento
-  - [x] Logs/retencao: PII minimizado + `expireAt` + **TTL habilitado** (`history.expireAt`, `audit_logs.expireAt`)
+### 4) Hardening pós-v1 (Segurança — Passos 1–5)
+Refinamentos de segurança aplicados para evitar brechas de autorização e abuso em ambiente serverless:
 
-- **Paciente: menu Artigos/Biblioteca** (psicoeducação mais completa + “Para levar para a sessão” + mantra fixo “leitura não substitui sessão”; sem CTA cancelar/remarcar).
-- **Dados/Consistência**: documentar modelo NoSQL Firestore (denormalização + chave única paciente).
-- **Autenticação do paciente** (mais segura) antes de PWA/App.
+- **RBAC do paciente estrito**: novo helper `requirePatient()` (nega se `role` ausente/incorreta) + fallback seguro via `users/{uid}.role`.
+- **Presença (integridade)**: `POST /api/attendance/confirm` **ignora `phone` do client** e deriva do perfil (`users/{uid}.phoneCanonical`/`phone`).
+- **Metadados operacionais**: `GET /api/appointments/last-sync` agora é **admin-only**.
+- **Redução de superfície**: endpoints legados `_push_old/*` desativados (**410** em dev / **404** em produção).
+- **Rate limit global (serverless-safe)**: rotas críticas usam limiter com backing no Firestore (coleção `_rate_limits`) + recomendação de **TTL** em `_rate_limits.expireAt`.
 
-- ✅ **Paciente: Biblioteca de apoio** implementada:
-  - botão “Biblioteca” no cabeçalho (desktop + mobile)
-  - modal com artigos por temas + busca
-  - seção “Para levar para a sessão” + mantra fixo (leitura não substitui sessão)
-  - sem CTA cancelar/remarcar
-
-> Futuro (quando o sistema estiver 100% OK): **SaaS multi-tenant** para revenda.
+## Próximo foco (sequência recomendada)
+1) **Presença/Faltas** — melhorar painel de constância (30 dias) com insights clínicos (sem moralismo).
+2) Processar **segunda planilha/relatório** (presença/faltas) para painel de constância e follow-ups futuros.
+3) Documentar modelo NoSQL (denormalização + chave única do paciente) para evitar inconsistências.

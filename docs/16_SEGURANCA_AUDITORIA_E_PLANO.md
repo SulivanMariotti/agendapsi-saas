@@ -13,6 +13,16 @@ Este documento organiza os **riscos de segurança** encontrados no estado atual 
 
 ---
 
+## 0.1) Addendum — hardening pós-v1 (2026-02-18)
+
+Mesmo com a Segurança v1 marcada como concluída, foi aplicado um **reforço adicional** para eliminar brechas “de borda” comuns em App Router + serverless:
+
+- **RBAC paciente estrito**: criação de `requirePatient()` e aplicação em rotas do paciente (nega se `role` ausente/incorreta; fallback seguro via `users/{uid}.role`).
+- **Integridade (presença)**: `POST /api/attendance/confirm` não aceita mais `phone` do client; deriva do `users/{uid}`.
+- **Metadados operacionais**: `GET /api/appointments/last-sync` passou a ser **admin-only**.
+- **Redução de superfície**: `_push_old/*` desativado (410 dev / 404 prod).
+- **Rate limit global (serverless-safe)**: rotas críticas usam backing no Firestore (`_rate_limits`) + TTL recomendado em `_rate_limits.expireAt`.
+
 ## 1) Notas (0–10) por área
 
 | Área | Nota | Situação | Observação objetiva |
@@ -96,3 +106,15 @@ Pontos finais (antes de escalar usuarios):
 - `.env*` é **local** e nunca entra em repositório/zip.
 - Template: `.env.example`.
 - Check manual antes de release/compartilhamento: `npm run security:check`.
+
+
+---
+
+## Próximos passos (pós-v1)
+- LGPD operacional: retenção/backup/exportação (processo e evidências).
+- Autenticação do paciente com OTP/magic link antes de PWA/App.
+- Hardening contínuo:
+  - validação de payload (schema)
+  - anti-abuso por IP/fingerprint
+  - revisão de endpoints que usam Admin SDK
+  - higiene de logs/erros (PII)

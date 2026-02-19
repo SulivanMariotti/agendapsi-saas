@@ -22,6 +22,11 @@ Principio clinico-etico:
 - Todo log novo recebe `expireAt` (Timestamp futuro)
 - Retencao padrao mais longa por responsabilidade administrativa
 
+### 1.3 `_rate_limits` (colecao)
+- Colecao usada pelo **rate limit global** (serverless-safe) em rotas críticas.
+- Cada doc recebe `expireAt` para expiração automática via TTL.
+- Objetivo: evitar crescimento infinito e manter o custo controlado.
+
 ---
 
 ## 2) Parametros de retencao (ENV)
@@ -52,6 +57,9 @@ Passo a passo no Firebase Console:
    - Field: `expireAt`
 5) Repita para:
    - Collection group: `audit_logs`
+   - Field: `expireAt`
+6) Repita também para (rate limit global):
+   - Collection group: `_rate_limits`
    - Field: `expireAt`
 
 Observacoes:
