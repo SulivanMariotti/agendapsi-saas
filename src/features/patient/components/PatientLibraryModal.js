@@ -66,11 +66,11 @@ function computeReadingTimeFromParagraphs(paragraphs) {
 
 function ArticleRow({ article, expanded, onToggle }) {
   return (
-    <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white">
+    <div className="border border-slate-100 rounded-xl sm:rounded-2xl overflow-hidden bg-white">
       <button
         type="button"
         onClick={onToggle}
-        className="w-full text-left px-[var(--pad)] py-4 flex items-start justify-between gap-3 hover:bg-slate-50"
+        className="w-full text-left px-4 py-3 sm:py-4 flex items-start justify-between gap-3 hover:bg-slate-50"
         aria-expanded={expanded}
       >
         <div className="min-w-0">
@@ -82,9 +82,9 @@ function ArticleRow({ article, expanded, onToggle }) {
               {article.readingTime || computeReadingTimeFromParagraphs(article.paragraphs) || ""}
             </span>
           </div>
-          <div className="mt-2 text-sm font-extrabold text-slate-900">{article.title}</div>
+          <div className="mt-2 text-[15px] font-extrabold text-slate-900 leading-snug">{article.title}</div>
           {article.summary ? (
-            <div className="mt-1 text-xs text-slate-600 leading-relaxed">{article.summary}</div>
+            <div className="mt-1 text-[13px] text-slate-600 leading-relaxed">{article.summary}</div>
           ) : null}
         </div>
         <div className="shrink-0 pt-1 text-slate-500">
@@ -93,8 +93,8 @@ function ArticleRow({ article, expanded, onToggle }) {
       </button>
 
       {expanded ? (
-        <div className="px-[var(--pad)] pb-4">
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm text-slate-700 leading-relaxed space-y-3">
+        <div className="px-4 pb-4">
+          <div className="p-4 rounded-xl sm:rounded-2xl bg-slate-50 border border-slate-100 text-[13px] text-slate-700 leading-relaxed space-y-3">
             {Array.isArray(article.paragraphs)
               ? article.paragraphs.map((p, idx) => (
                   <p key={idx} className="whitespace-pre-wrap">
@@ -233,7 +233,7 @@ export default function PatientLibraryModal({ open, onClose }) {
           onKeyDown={(e) => {
             if (e.key === "Escape") onClose?.();
           }}
-          className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden max-h-[calc(100vh-2rem)] flex flex-col"
+          className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden max-h-[calc(100dvh-2rem)] flex flex-col"
         >
           {/* Header */}
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
@@ -253,110 +253,118 @@ export default function PatientLibraryModal({ open, onClose }) {
           </div>
 
           {/* Body */}
-          <div className="p-5 space-y-5 overflow-y-auto flex-1">
-            {/* Mantra fixo */}
-            <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white border border-violet-100 flex items-center justify-center text-violet-700 shrink-0">
-                  <Sparkles size={18} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-extrabold text-violet-900">{LIBRARY_TOP_MANTRA.title}</div>
-                  <div className="mt-1 text-xs text-violet-800 leading-relaxed">{LIBRARY_TOP_MANTRA.text}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Aviso (fallback / erro de carga) */}
-            {warning ? (
-              <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-white border border-amber-100 flex items-center justify-center text-amber-700 shrink-0">
-                    <AlertTriangle size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-extrabold text-amber-900">Aviso</div>
-                    <div className="mt-1 text-xs text-amber-800 leading-relaxed">{warning}</div>
-                    <div className="mt-2 text-[11px] text-amber-800/80">
-                      Se ainda não há artigos publicados, exibimos um conteúdo base para apoiar sua constância.
+          <div className="flex-1 overflow-y-auto">
+            {/* Barra fixa (mobile-friendly): mantra + busca + categorias */}
+            <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-100">
+              <div className="px-4 sm:px-5 pt-4 pb-3 space-y-3">
+                {/* Mantra fixo */}
+                <div className="rounded-2xl border border-violet-100 bg-violet-50 p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-2xl bg-white border border-violet-100 flex items-center justify-center text-violet-700 shrink-0">
+                      <Sparkles size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-extrabold text-violet-900">{LIBRARY_TOP_MANTRA.title}</div>
+                      <div className="mt-1 text-[12px] text-violet-800 leading-relaxed line-clamp-2 sm:line-clamp-none">
+                        {LIBRARY_TOP_MANTRA.text}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ) : null}
 
-            {/* Busca */}
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-              <div className="flex-1 relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Buscar por tema, palavra ou ideia..."
-                  className="w-full pl-9 pr-3 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
-                />
-              </div>
-
-              <div className="flex gap-2 overflow-auto pb-1">
-                {categories.map((c) => (
-                  <Chip
-                    key={c}
-                    active={activeCategory === c}
-                    onClick={() => {
-                      setActiveCategory(c);
-                    }}
-                  >
-                    {c}
-                  </Chip>
-                ))}
-              </div>
-            </div>
-
-            {/* Artigos */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs text-slate-400 uppercase tracking-wider">Artigos</div>
-                {loading ? <div className="text-[11px] text-slate-400">Carregando…</div> : null}
-              </div>
-
-              {filtered.length === 0 ? (
-                <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50 text-sm text-slate-700">
-                  Não encontrei nada com esse filtro. Tente outra palavra.
-                </div>
-              ) : (
-                filtered.map((a) => (
-                  <ArticleRow
-                    key={a.id}
-                    article={a}
-                    expanded={expandedId === a.id}
-                    onToggle={() => setExpandedId((prev) => (prev === a.id ? null : a.id))}
+                {/* Busca */}
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Buscar por tema, palavra ou ideia..."
+                    className="w-full pl-9 pr-3 py-2.5 rounded-2xl border border-slate-200 bg-white text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
                   />
-                ))
-              )}
+                </div>
+
+                {/* Categorias */}
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                  {categories.map((c) => (
+                    <Chip
+                      key={c}
+                      active={activeCategory === c}
+                      onClick={() => {
+                        setActiveCategory(c);
+                      }}
+                    >
+                      {c}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            {/* Para levar para a sessão */}
-            <div className="rounded-2xl border border-slate-100 bg-white p-4">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
-                  <CheckCircle2 size={18} />
+            <div className="px-4 sm:px-5 py-4 space-y-5 pb-[calc(16px+env(safe-area-inset-bottom))]">
+              {/* Aviso (fallback / erro de carga) */}
+              {warning ? (
+                <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-white border border-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                      <AlertTriangle size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-extrabold text-amber-900">Aviso</div>
+                      <div className="mt-1 text-xs text-amber-800 leading-relaxed">{warning}</div>
+                      <div className="mt-2 text-[11px] text-amber-800/80">
+                        Se ainda não há artigos publicados, exibimos um conteúdo base para apoiar sua constância.
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-extrabold text-slate-900">{SESSION_TAKEAWAYS.title}</div>
-                  <div className="mt-1 text-xs text-slate-600 leading-relaxed">{SESSION_TAKEAWAYS.subtitle}</div>
+              ) : null}
 
-                  <ul className="mt-3 space-y-2 text-sm text-slate-700">
-                    {SESSION_TAKEAWAYS.prompts.map((p) => (
-                      <li key={p} className="flex gap-2">
-                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-violet-300 shrink-0" />
-                        <span>{p}</span>
-                      </li>
-                    ))}
-                  </ul>
+              {/* Artigos */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs text-slate-400 uppercase tracking-wider">Artigos</div>
+                  {loading ? <div className="text-[11px] text-slate-400">Carregando…</div> : null}
+                </div>
 
-                  <div className="mt-3 text-xs text-slate-500">
-                    Se surgir vontade de faltar, observe isso como um sinal. Em vez de se afastar, traga para a sessão.
-                    A constância é parte do cuidado.
+                {filtered.length === 0 ? (
+                  <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50 text-sm text-slate-700">
+                    Não encontrei nada com esse filtro. Tente outra palavra.
+                  </div>
+                ) : (
+                  filtered.map((a) => (
+                    <ArticleRow
+                      key={a.id}
+                      article={a}
+                      expanded={expandedId === a.id}
+                      onToggle={() => setExpandedId((prev) => (prev === a.id ? null : a.id))}
+                    />
+                  ))
+                )}
+              </div>
+
+              {/* Para levar para a sessão */}
+              <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                    <CheckCircle2 size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-extrabold text-slate-900">{SESSION_TAKEAWAYS.title}</div>
+                    <div className="mt-1 text-xs text-slate-600 leading-relaxed">{SESSION_TAKEAWAYS.subtitle}</div>
+
+                    <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                      {SESSION_TAKEAWAYS.prompts.map((p) => (
+                        <li key={p} className="flex gap-2">
+                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-violet-300 shrink-0" />
+                          <span>{p}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className="mt-3 text-xs text-slate-500">
+                      Se surgir vontade de faltar, observe isso como um sinal. Em vez de se afastar, traga para a sessão.
+                      A constância é parte do cuidado.
+                    </div>
                   </div>
                 </div>
               </div>
@@ -364,7 +372,7 @@ export default function PatientLibraryModal({ open, onClose }) {
           </div>
 
           {/* Footer */}
-          <div className="px-5 py-4 border-t border-slate-100 flex justify-end">
+          <div className="px-4 sm:px-5 py-3 sm:py-4 border-t border-slate-100 flex justify-end pb-[calc(12px+env(safe-area-inset-bottom))]">
             <Button variant="secondary" onClick={onClose}>
               Fechar
             </Button>
