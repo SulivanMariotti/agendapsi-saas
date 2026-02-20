@@ -66,3 +66,17 @@
 - [ ] Custom claims/roles por tenant
 - [ ] Onboarding (criar tenant + admin) + billing (planos/limites)
 - [ ] Conteúdos (Artigos/Biblioteca) e templates/configs **por tenant** (por clínica)
+## 9) Mobile (somente Painel do Paciente)
+- [x] Viewport + base mobile-first (spacing/typography) apenas no paciente.
+- [x] Drawer menu (off-canvas) no paciente.
+- [x] Bottom nav (Agenda/Diário/Biblioteca).
+- [x] Remover FAB “+” das notas (redundante).
+- [x] Agenda em cards colapsáveis (mobile).
+- [x] Diário: busca visível + foco automático.
+- [x] Próxima sessão compacta + confirmação em destaque (sem CTA de cancelar/remarcar).
+- [x] Notificações compactas (status pill + explicação opcional).
+- [x] Biblioteca: busca/categorias sticky no modal (mobile).
+- [ ] **(Próximo)** Reduzir altura/“peso” do topo do painel (mantra/header) para leitura 1-olhar.
+
+## 10) Segurança — elevar para ≥ 9/10
+- [ ] Migrar login Admin legado (`ADMIN_PASSWORD`) para **Firebase Auth + MFA/TOTP obrigatório** (preferido) ou magic link (alternativa), com migração progressiva e desativação do legado em produção.

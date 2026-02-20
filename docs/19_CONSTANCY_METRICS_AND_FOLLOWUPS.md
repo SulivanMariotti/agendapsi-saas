@@ -13,124 +13,59 @@ Coleção para registrar presença/falta por sessão (importada por planilha ou 
 
 **Campos principais**
 - `patientId` (string) ✅ id externo/sistema
-- `phoneCanonical` (string|null) ✅ chave operacional quando houver
-- `phoneSource` (`profile|csv|null`) *(opcional; auditoria do fallback)*
-- `isLinked` (boolean) *(opcional; indica vínculo por ID/telefone)*
-- `linkedUserId` (string|null) *(opcional; quando conseguiu resolver o `users/{uid}`)*
-- `name` (string|null) *(opcional; denormalizado para UI)*
-- `isoDate` (string `YYYY-MM-DD`) ✅ data real da sessão
-- `time` (string `HH:mm`) *(opcional)*
-- `profissional` / `professional` (string|null) *(opcional)*
-- `service` (string|null) *(opcional)*
-- `location` (string|null) *(opcional)*
-- `status` (`present|absent`)
-- `source` (`import|manual`)
-- `createdAt` / `updatedAt` (timestamp)
-- `payload` (map) *(opcional; dados originais sem sensíveis)*
+- `isoDate` (string `YYYY-MM-DD`) ✅ **data real da sessão**
+- `status` (string: `present|absent|unknown|...`)
+- `phoneCanonical` (string|null) *(opcional; vínculo operacional)*
+- `professional`, `service`, `location` *(opcionais; filtros/segmentos)*
+- `createdAt` / `updatedAt`
 
-### 1.2 Follow-up (anti-spam / rastreabilidade)
-Quando o Admin envia follow-ups, o sistema grava em:
-- `attendance_logs/{id}.followup`:
-  - `sentAt` (timestamp) ✅ marca envio bem-sucedido
-  - `status` (`present|absent`) ✅ tipo enviado
-  - `lastAttemptAt` (timestamp)
-  - `lastResult` (`sending|sent|error`)
-  - `lastError` (string curta; só em falha)
-
-**Regra de idempotência:**
-- se `followup.sentAt` existir, o endpoint **não reenviará** (evita spam).
+> Constância é calculada por `isoDate` (não por `createdAt`), para refletir o comparecimento real.
 
 ---
 
-## 2) Métricas de constância (painel)
+## 2) Métricas (janela móvel 30/60/90)
 
-Para janela de tempo (ex.: 30/60/90 dias):
-- `sessionsAttended` (int)
-- `sessionsMissed` (int)
-- `attendanceRate` = `attended / (attended + missed)`
-- `streakPresent` (int)
-- `streakAbsent` (int)
-- `lastStatus` + `lastIsoDate`
+### 2.1 Visão geral
+- `sessionsAttended`, `sessionsMissed`, `attendanceRate`
 
-### 2.1 Indicadores clínicos (heurísticos)
-> São sinais para **cuidado ativo**, não para punição.
+### 2.2 Tendência (trend)
+Comparar “metade mais recente” vs “metade anterior” dentro da janela:
+- `prevRate` → taxa na metade anterior
+- `recentRate` → taxa na metade recente
+- `delta` → diferença
+- `label` → `improving|stable|worsening|insufficient`
 
-- **Risco leve:** 1 falta no último mês
-- **Risco moderado:** 2 faltas em 60 dias
-- **Risco alto:** 2 faltas seguidas ou ≥3 faltas em 90 dias
+> Tendência não é rótulo; é sinal para **cuidado ativo**.
 
-### 2.2 Endpoint de resumo (Admin)
+### 2.3 Segmentos (heurística sem moralismo)
+- `stable`: constância boa
+- `watch`: sinais leves
+- `risk`: sinais moderados/altos
+- `insufficient`: pouco histórico
 
-**GET** `/api/admin/attendance/summary?days=7|30|90&professional=&service=&location=&patientId=&phone=`
-
-**Princípio:** calcular sempre por `isoDate` (data real da sessão). Filtros são aplicados **em memória** (comparação por *contains*) para evitar dependência de índices compostos.
-
-**Query params (opcionais)**
-- `professional` (ou `pro`) *(contains)*
-- `service` *(contains)*
-- `location` *(contains)*
-- `patientId` *(match exato)*
-- `phone` *(normaliza para `phoneCanonical`)*
-
-**Resposta (campos principais)**
-- `present`, `absent`, `total`, `attendanceRate`
-- `byDay[]` → `{ isoDate, present, absent, unknown, total }`
-- `daysWithData`, `daysWithoutData`
-- `attention[]` (heurística por paciente/telefone) → `{ phoneCanonical, lastIsoDate, lastStatus, absentStreak, rate, present, absent, total }`
-- `segments` → contagem por faixa: `{ stable, watch, risk, insufficient }`
-- `trend` → tendência simples (quando houver volume): `{ prevRate, recentRate, delta, label }`
-- `filtersApplied` + `range` + `computedAt`
+> Segmento **não** determina bloqueio de acesso. Serve para orientar follow-up.
 
 ---
 
-## 3) Follow-ups por constância
-
-### 3.1 Endpoint
-- `POST /api/admin/attendance/send-followups`
-- Suporta `dryRun: true`.
-
-### 3.2 Bloqueios server-side (obrigatório)
-Antes de enviar:
-- paciente inativo → `inactive_patient`
-- subscriber inativo → `inactive_subscriber`
-- sem pushToken → `no_token`
-- sem telefone → `no_phone`
-- já enviado → `already_sent`
-
-**Bloqueios de segurança (evitar envio errado):**
-- paciente não vinculado → `unlinked_patient`
-- telefone resolve para +1 perfil → `ambiguous_phone`
-- conflito entre telefone do log e do perfil → `phone_mismatch`
-
-### 3.3 Templates (config/global)
-- `attendanceFollowupPresentTitle`
-- `attendanceFollowupPresentBody`
-- `attendanceFollowupAbsentTitle`
-- `attendanceFollowupAbsentBody`
-
-Placeholders suportados (compatível com legado `{{nome}}`):
-- `{nome}`, `{data}`, `{dataIso}`, `{hora}`, `{profissional}`, `{servico}`, `{local}`, `{id}`
-
-### 3.4 Tom e objetivo
-- Presença: reforço positivo (“sua presença sustenta o processo”).
-- Falta: psicoeducação firme e acolhedora (“a continuidade faz diferença; retomar é parte do cuidado”).
-- **Sem CTA de cancelar/remarcar.**
+## 3) “Atenção clínica” (priorização)
+Priorizar:
+1) `absentStreak` alto
+2) última sessão `absent`
+3) taxa baixa
+4) mais faltas
+5) recência (`lastIsoDate`)
 
 ---
 
-## 4) Import (deduplicação)
-
-Ao importar, deduplicar no mínimo por:
-- `patientId + isoDate + time + profissional`
-
-E manter o registro mais recente (por `updatedAt`).
+## 4) Segurança dos follow-ups
+Bloquear envio automático quando:
+- `unlinked_patient`
+- `ambiguous_phone`
+- `phone_mismatch`
 
 ---
 
-## 5) Observabilidade
-
-- Em `dryRun`, retornar:
-  - total de candidatos
-  - total de enviados
-  - contadores por motivo de bloqueio
-- Sem armazenar PII em `history`.
+## 5) Copy clínico (tom)
+- Evitar moralismo.
+- Linguagem de vínculo: “seu horário é um espaço de cuidado”; “a mudança acontece na continuidade”.
+- Mensagens curtas; detalhes em “Por que isso importa?” (colapsável no mobile).

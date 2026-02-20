@@ -2,79 +2,53 @@
 
 > Norte clínico: segurança e privacidade sustentam vínculo. Qualquer brecha vira quebra de confiança e aumenta chance de falta.
 
-## Status atual (2026-02-19) — ✅ Segurança v1 finalizada
+## Status atual (2026-02-20)
+✅ Segurança v1 concluída + hardening pós-v1 em andamento.
 
-Esta rodada fechou os **bloqueadores de produção** e padronizou hardening (CSP/CSRF/rate-limit/logs).
-
-### Bloqueadores já resolvidos
-- [x] **Paciente: login por e-mail sem verificação** desativado por padrão (era sequestro de sessão)
-- [x] **Admin: remoção de fallback perigoso** via `users/{uid}.role` no `requireAdmin`
-- [x] **Firestore rules**: paciente não consegue alterar identidade no `users/{uid}`
-  - paciente só atualiza `lastSeen`, `contractAcceptedVersion`, `contractAcceptedAt`
-- [x] **Firestore rules**: `patient_notes.patientId` travado no update
-- [x] **Paciente: removido recurso DEV "Trocar paciente"** (impersonação) do painel
-
-- [x] **Headers de segurança (Next.js)**
-  - HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
-  - CSP **ENFORCE em produção** (Report-Only apenas em dev, para evitar quebra por hot-reload/eval)
-
-- [x] **Cron/segredo (header-only em produção)**
-  - `/api/cron/*` aceita `Authorization: Bearer` (preferido) ou `x-cron-secret`
-  - `?key=` desativado em produção (só com `ALLOW_CRON_QUERY_KEY=true` como transição)
-
-- [x] **Origin/CSRF padronizado**
-  - Helper `src/lib/server/originGuard.js`
-  - Aplicado em: `/api/auth`, `/api/patient/pair`, `/api/patient/push/register`, `/api/attendance/confirm` e `requireAdmin` (todas rotas admin)
-
-- [x] **Rate limit + hardening de auth**
-  - `/api/auth` (admin) com rate limit + origin check
-  - Fluxo do paciente (pair/appointments/resolve-phone) com rate limit
-  - Erros padronizados (sem vazar detalhes internos)
-  - Paciente: bloqueio de acesso **apenas** por flag explícita (ex.: `users/{uid}.accessDisabled` ou `securityHold`) — **não** por status clínico/faltas
-
-- [x] **Privacidade & retenção de logs (history/audit)**
-  - `history`: mascara telefone/e-mail e nunca grava token bruto
-  - `history` e `audit_logs`: adiciona `expireAt` (TTL/rotacao)
-  - **TTL habilitado no Firestore**: policies `history.expireAt` e `audit_logs.expireAt` (configurado no console)
-  - Rota opcional: `/api/cron/retention` para limpeza por cron
-  - Doc: `docs/75_RETENCAO_LOGS_TTL_E_CRON.md`
-
-### Próximos (ordem sugerida)
-1) **Revisão final LGPD operacional**
-   - Exportação/backup: remover PII quando for para análise.
-   - Garantir acesso mínimo (papéis/admin-only).
-
-2) **Paciente: OTP/magic link (pré-app/PWA)**
-   - Login seguro com menor fricção (especialmente para idosos)
-   - Manter diretriz clínica: sem CTA de cancelamento/remarcação
-
-## Observações técnicas
-- `users/{uid}` é **whitelist**: criado/atualizado pelo Admin via Admin SDK.
-- O painel do paciente lê agenda via **API server-side** (`/api/patient/appointments`).
-  - Por isso, **identidade (phoneCanonical/email)** não pode ser editada pelo paciente no Firestore.
+### Já resolvido (baseline)
+- Paciente: login por telefone + código (single-use por dispositivo).
+- Login inseguro do paciente por e-mail: desativado por padrão.
+- Admin: custom claims + guards server-side.
+- Firestore rules endurecidas (paciente não altera identidade; notas/agenda via API server-side).
+- Origin guard + rate limit em rotas críticas.
+- CSP/headers em produção.
+- Logs com `expireAt` + TTL ativo (`history`, `audit_logs`, `_rate_limits`).
 
 ---
 
-## Checklist de segredos (obrigatório antes de produção)
-- ✅ **Nunca** versionar nem compartilhar `.env*` (somente local).
-- ✅ Manter `.env.example` como template (sem valores).
-- ✅ Rodar: `npm run security:check` antes de gerar zip/mandar para terceiros.
-- ✅ Se algum `.env`/service account tiver sido compartilhado por engano: **rotacionar** imediatamente.
+## Regras atuais de acesso (importante)
+### Paciente: manter acesso contínuo (constância)
+O paciente deve permanecer logado para reduzir fricção e sustentar presença.
 
+**Bloqueio de acesso do paciente é SOMENTE por segurança/privacidade**, nunca por “status clínico” ou faltas.
 
-### Hardening pós-v1 (2026-02-18) — ✅ aplicado
-- [x] **RBAC paciente estrito** (`requirePatient`) em rotas do paciente (nega se `role` ausente/incorreta; fallback seguro via `users/{uid}.role`).
-- [x] **Integridade**: `attendance/confirm` deriva telefone do perfil (ignora `phone` do client).
-- [x] **Metadados**: `/api/appointments/last-sync` **admin-only**.
-- [x] **Superfície**: `_push_old/*` desativado (410 dev / 404 prod).
-- [x] **Rate limit global** (Firestore) em rotas críticas + TTL em `_rate_limits.expireAt`.
+Campos aceitos para bloquear:
+- `accessDisabled: true`
+- `securityHold: true`
+- `access.disabled: true`
+- `accessStatus` em `disabled|blocked|suspended|hold`
 
+### Revogação de token (incidente)
+`verifyIdToken(..., checkRevoked)` deve estar **ligado em produção** (toggle por env) para cortar acesso em caso de:
+- dispositivo perdido/roubado
+- pareamento indevido
+- suspeita de abuso
 
-### Hardening adicional (2026-02-19) — ✅ aplicado
-- [x] **Schema-lite** (`src/lib/server/payloadSchema.js`) em rotas críticas:
-  - `readJsonBody` com limite de tamanho
-  - `allowedKeys`/sanitização para reduzir payload inesperado
-  - erros 400 previsíveis
-- [x] Import/constância: follow-ups com bloqueios de segurança (`unlinked_patient`, `ambiguous_phone`, `phone_mismatch`) para evitar envio errado.
+---
 
-> Nota: próximos passos de hardening continuam válidos (schema forte/Zod + revisão de ownership em endpoints Admin SDK).
+## Pendências para nota ≥ 9/10 (prioridade)
+1) **Admin login forte**
+- Migrar `ADMIN_PASSWORD` → Firebase Auth com **MFA/TOTP obrigatório** (preferido) ou magic link (alternativa).
+- Migração progressiva e desligamento do legado em produção.
+
+2) CSP
+- Planejar redução/remoção de `unsafe-inline` (nonce/hashes).
+
+3) Validação de payload
+- Expandir validações (schema mais forte) nas rotas restantes, padronizando erros.
+
+---
+
+## Auditoria
+- Ações sensíveis devem registrar `audit_logs` (com TTL) e, quando útil, `history`.
+- Endpoint para suspender/liberar acesso do paciente deve sempre auditar (`POST /api/admin/patient/access`).

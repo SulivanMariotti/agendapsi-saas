@@ -91,4 +91,26 @@
 ## 2026-02-19 — Validação de payload (schema-lite)
 - `src/lib/server/payloadSchema.js`: parse seguro + limite de tamanho + allowedKeys.
 - Aplicado/expandido em rotas críticas (import presença/faltas, pair, attendance confirm, rotas admin sensíveis).
+## 2026-02-20 — Presença/Faltas, Acesso do paciente e Mobile (Paciente)
 
+### Presença/Faltas (Admin)
+- `GET /api/admin/attendance/summary` expandido: `byDay`, cobertura (`daysWithData/daysWithoutData`), `attention`, `computedAt`, `range`.
+- Filtros no summary (`pro/service/location/patientId/phone`) + `segments` + `trend`.
+- UI Admin de constância: filtros com chips/limpar, trend/segments, ordenação por prioridade e filtro rápido por telefone.
+- Fix: `POST /api/admin/patients/list` passou a aceitar `search`/`q` no payload (evita 400).
+
+### Import Presença/Faltas
+- Fix modo mapeado: servidor aceita `columnMap.datetime` **ou** `columnMap.dateTime`.
+- UI: select de **TELEFONE (opcional)** no mapeamento + auto-detecção quando possível.
+
+### Segurança
+- `requireAuth`: suporte a `checkRevoked` (toggle por env; recomendado em produção).
+- `requirePatient`: **não bloqueia por “status clínico”**; bloqueio somente por flags explícitas (`accessDisabled/securityHold/...`).
+- Endpoint Admin: `POST /api/admin/patient/access` para suspender/liberar acesso com `audit_logs` + `history`.
+
+### Mobile (somente Painel do Paciente)
+- Base mobile-first (viewport, spacing/typography) aplicada apenas no paciente.
+- Drawer menu (overlay/ESC/trava scroll) + bottom nav (Agenda/Diário/Biblioteca).
+- Remoção do FAB “+” (notas).
+- Agenda colapsável (semanas/meses), diário com busca/foco, próxima sessão compacta com confirmação destacada.
+- Notificações compactas e Biblioteca com busca/categorias sticky.

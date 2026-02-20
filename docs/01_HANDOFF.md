@@ -1,63 +1,61 @@
-# Lembrete Psi — Handoff para novo chat (2026-02-19)
+# Lembrete Psi — Handoff para novo chat (2026-02-20)
 
 Este pack serve para iniciar um novo chat e continuar o desenvolvimento **de onde paramos**, sem perder decisões clínicas/técnicas.
 
----
-
-## Contexto do projeto
-- App: **Lembrete Psi**
-- Stack: **Next.js (App Router) + Firebase (Firestore/FCM + Admin SDK + Web Push)**
-- Diretriz clínica/UX (painel do paciente):
-  - foco em **lembrar + psicoeducar + responsabilizar**
-  - **sem botão/CTA de cancelar/remarcar**
-  - quando existir WhatsApp/contato: **apenas confirmação de presença** (reforço de compromisso)
+## Regras de trabalho (obrigatórias)
+- Sempre **passo a passo**, 1 por 1; só avançar quando eu disser **OK**.
+- Quando houver alteração de código/documentação, entregar **.zip** com **somente arquivos alterados** (não colar código no chat).
+- Diretriz clínica: foco em **constância/vínculo**; faltar é ruim para o processo; **sem CTA de cancelar/remarcar** no painel do paciente.
+- Admin será tratado como **desktop-first**; otimizações mobile **somente no painel do paciente**.
 
 ---
 
-## Estado atual (validado)
-
+## Estado atual (resumo)
 ### Operação (manual)
-Rotina diária (Admin → Agenda):
-1) Carregar Planilha (janela **hoje → +30 dias**)
-2) Verificar
-3) Sincronizar
-4) Gerar Preview do Disparo (dryRun)
-5) Enviar lembrete
-
-> Cron **não** está habilitado (decisão atual). Rotas `/api/cron/*` estão prontas e seguras para futuro (header-only + rotação de secret).
+Admin → Agenda → **Carregar Planilha → Verificar → Sincronizar → Preview → Enviar**  
+- Janela: **hoje → +30 dias**
+- Cron não habilitado (rotas `/api/cron/*` seguras para futuro)
 
 ### Segurança
-- **v1 concluída**: paciente por **telefone+código**, admin via **custom claims**, rules endurecidas, headers/CSP, origin guard, rate limit.
-- Retenção: `expireAt` + **TTL ativo** em `history` e `audit_logs`.
-- Pós-v1 (aplicado): `requirePatient`, `attendance/confirm` deriva telefone do perfil, `/api/appointments/last-sync` admin-only, `_push_old` desativado.
-- Schema-lite disponível: `src/lib/server/payloadSchema.js` (usado em rotas críticas).
+- Paciente: telefone + código (single-use por dispositivo)
+- Admin: custom claims + guards
+- Rules + CSP/headers + origin guard + rate limit + logs TTL
+- Acesso do paciente: **bloqueio só por flag explícita** (`accessDisabled/securityHold/...`)
+- Endpoint Admin: `POST /api/admin/patient/access` (com `audit_logs` + `history`)
 
-### Biblioteca (Paciente + Admin)
-- Paciente: menu **Biblioteca** com modal rolável, busca, “Para levar para a sessão” e mantra fixo (leitura não substitui sessão).
-- Admin: repositório de artigos (CRUD) com status (rascunho/publicado).
-- Categorias: CRUD + ativar/desativar + criação inline no editor.
+**Pendência para nota ≥ 9**
+- Migrar `ADMIN_PASSWORD` → login Admin forte:
+  - preferido: Firebase Auth + **MFA/TOTP obrigatório**
+  - alternativa: magic link (email link)
+  - migração progressiva e desativação do legado em produção
 
-### Paciente (server-side para reduzir fricção)
-- Agenda: `GET /api/patient/appointments` (Admin SDK; evita `permission-denied`).
-- Contrato: `POST /api/patient/contract/accept`.
-- Ping/lastSeen: `POST /api/patient/ping`.
-- Notas (para levar para a sessão):
-  - `GET/POST /api/patient/notes`
-  - `DELETE /api/patient/notes/[id]`
+### Presença/Faltas (constância)
+- Import robusto + painel de constância 30 dias por `isoDate`
+- `GET /api/admin/attendance/summary` expandido (byDay/cobertura/attention) + filtros + trend/segments
+- UI Admin: filtros e prioridades (sem moralismo)
 
-### Presença/Faltas (Admin)
-- Import CSV robusto:
-  - separador autodetect no cabeçalho (`;`/`,`/TAB) + suporte a BOM
-  - obrigatório: **ID** + (**DATA/HORA** ou **DATA+HORA**)
-  - opcional: NOME/PROFISSIONAL/SERVIÇOS/LOCAL/STATUS/**TELEFONE** (gera warnings, não bloqueia)
-- Métricas (30 dias): período calculado por **`isoDate`** (data real da sessão).
-- Follow-ups: idempotência + bloqueios de segurança (`unlinked_patient`, `ambiguous_phone`, `phone_mismatch`).
-- UI de Follow-ups no Admin exibe contadores e rótulos legíveis.
+### Painel do paciente (mobile)
+- Base mobile-first (viewport, spacing)
+- Drawer menu + bottom nav
+- Agenda colapsável, diário otimizado, próxima sessão compacta e confirmação destacada
+- Notificações compactas, biblioteca com busca/categorias sticky
 
 ---
 
-## Próximos passos recomendados (sequência)
-1) **Painel de constância (30 dias)** no Admin (Presença/Faltas): insights clínicos (sem moralismo) + filtros úteis (profissional/paciente/período).
-2) Validar ingestão com **relatório real** (2ª planilha) no modo mapeado e ajustar sinônimos de cabeçalho se necessário.
-3) **Segurança (pós-v1)**: expandir validação de payload (schema mais forte por endpoint) e revisar endpoints Admin SDK (ownership + logs).
-4) Documentar modelo NoSQL (denormalização + chave única do paciente) para reduzir inconsistências.
+## Próximo passo (a atacar primeiro)
+1) **Paciente/Mobile:** reduzir altura do topo (mantra/header) + melhorar leitura do painel.
+2) Validar ingestão da **2ª planilha real** de presença/faltas (modo mapeado) com cabeçalhos reais.
+3) Segurança: plano de migração do login Admin (MFA/magic link) para chegar em ≥ 9/10.
+
+---
+
+## Arquivos-chave para retomar
+- `docs/00_ONDE_PARAMOS.md`
+- `docs/00_PROMPT_NOVO_CHAT.md`
+- `docs/02_BACKLOG.md`
+- `docs/02_CHANGELOG.md`
+- `docs/04_PROXIMOS_PASSOS.md`
+- `docs/16_API_ENDPOINTS_CATALOG.md`
+- `docs/19_CONSTANCY_METRICS_AND_FOLLOWUPS.md`
+- `docs/26_ATTENDANCE_IMPORT_SPEC.md`
+- `docs/74_SEGURANCA_PLANO_PRODUCAO.md`
