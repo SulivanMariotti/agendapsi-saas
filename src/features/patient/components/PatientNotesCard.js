@@ -34,6 +34,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [pinnedNoteId, setPinnedNoteId] = useState(null);
   const textareaRef = useRef(null);
+  const historySearchRef = useRef(null);
 
   const busy = Boolean(busyAction);
   const saving = busyAction === "save";
@@ -53,6 +54,13 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteModalOpen]);
+
+  useEffect(() => {
+    if (!historyModalOpen) return;
+    requestAnimationFrame(() => {
+      historySearchRef.current?.focus?.();
+    });
+  }, [historyModalOpen]);
 
   const notesArr = useMemo(() => (Array.isArray(notes) ? notes : []), [notes]);
 
@@ -194,7 +202,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <div className="flex items-center gap-2">
               <Button onClick={() => setNoteModalOpen(true)} icon={Plus} className="shrink-0">
-                Nova
+                Nova nota
               </Button>
               <Button
                 variant="secondary"
@@ -213,6 +221,22 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
               {notesCount === 0 ? "" : `${notesCount} nota${notesCount === 1 ? "" : "s"}`}
             </div>
           </div>
+
+          {/* Atalho de busca (mobile): deixa “buscar” mais óbvio sem ocupar a tela */}
+          <button
+            type="button"
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:bg-slate-50 active:scale-[0.99]"
+            onClick={() => {
+              setHistoryModalOpen(true);
+              setHistorySearch("");
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <Search size={16} className="text-slate-400" />
+              <span className="text-sm text-slate-500">Buscar no diário…</span>
+              <span className="ml-auto text-[11px] text-slate-400">{notesCount ? `${notesCount} nota${notesCount === 1 ? "" : "s"}` : ""}</span>
+            </div>
+          </button>
 
           <div className="flex items-center justify-between text-[11px] text-slate-400">
             <span>Um rascunho rápido para a sua próxima sessão.</span>
@@ -256,10 +280,10 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
                         <span>Em destaque para sua próxima sessão</span>
                       </div>
                     ) : null}
+                    {when ? <div className="text-[11px] text-slate-400 mb-2">{when}</div> : null}
                     <div className="text-sm text-slate-700 whitespace-pre-wrap break-words max-h-[4.75rem] overflow-hidden">
                       {n.content}
                     </div>
-                    {when ? <div className="text-[11px] text-slate-400 mt-2">{when}</div> : null}
                   </div>
                 );
               })}
@@ -359,6 +383,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-3 text-slate-400" />
                 <input
+                  ref={historySearchRef}
                   className="w-full pl-9 p-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200 text-slate-700 text-sm"
                   placeholder="Buscar nas suas notas..."
                   value={historySearch}
