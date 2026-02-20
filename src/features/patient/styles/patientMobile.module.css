@@ -1,0 +1,37 @@
+/* Patient-only mobile polish (no impact on Admin) */
+/* Applied via src/app/page.js wrapper: className={styles.patientRoot} */
+
+.patientRoot{
+  /* Mobile-first spacing + type scale */
+  --pad: clamp(12px, 3vw, 20px);
+  --fs-base: clamp(14px, 1.2vw + 12px, 16px);
+  --fs-title: clamp(18px, 2vw + 14px, 24px);
+
+  font-size: var(--fs-base);
+  line-height: 1.5;
+
+  /* Better than 100vh on mobile (iOS address bar) */
+  min-height: 100dvh;
+
+  /* Avoid accidental horizontal scroll from long chips/tables */
+  overflow-x: hidden;
+
+  /* Respect iOS safe area */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Consistent horizontal breathing room */
+.patientPadX{
+  padding-left: var(--pad);
+  padding-right: var(--pad);
+}
+
+/* Mobile touch targets + avoid iOS zoom on input focus */
+@media (max-width: 700px){
+  .patientRoot :is(input, select, textarea){
+    font-size: 16px;
+  }
+  .patientRoot :is(input, select, textarea, button){
+    min-height: 44px;
+  }
+}

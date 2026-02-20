@@ -11,6 +11,7 @@ import PatientFlow from "../components/Patient/PatientFlow";
 import PatientLogin from "../components/Patient/PatientLogin";
 
 import { logoutUser } from "../services/authService";
+import styles from "../features/patient/styles/patientMobile.module.css";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -45,7 +46,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-slate-400">
+      <div className="min-h-[100dvh] flex items-center justify-center text-slate-400">
         Carregando...
       </div>
     );
@@ -63,7 +64,7 @@ export default function App() {
           />
         )}
 
-        <div className="skin-patient">
+        <div className={`skin-patient ${styles.patientRoot}`}>
           <PatientFlow
             user={user}
             onLogout={handleLogoutAll}
@@ -86,7 +87,7 @@ export default function App() {
         />
       )}
 
-      <div className="skin-patient">
+      <div className={`skin-patient ${styles.patientRoot}`}>
         <PatientLogin />
       </div>
     </>

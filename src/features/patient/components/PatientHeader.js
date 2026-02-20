@@ -74,7 +74,7 @@ export default function PatientHeader({
             <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden z-30">
 
               <button
-                className="w-full text-left px-4 py-3 text-sm text-slate-800 font-medium hover:bg-slate-50 flex items-center gap-2"
+                className="w-full text-left px-[var(--pad)] py-3 text-sm text-slate-800 font-medium hover:bg-slate-50 flex items-center gap-2"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   setLibraryOpen(true);
@@ -84,7 +84,7 @@ export default function PatientHeader({
               </button>
 
               <button
-                className="w-full text-left px-4 py-3 text-sm text-slate-800 font-medium hover:bg-slate-50 flex items-center gap-2"
+                className="w-full text-left px-[var(--pad)] py-3 text-sm text-slate-800 font-medium hover:bg-slate-50 flex items-center gap-2"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   setContractOpen(true);
@@ -94,7 +94,7 @@ export default function PatientHeader({
               </button>
 
               <button
-                className="w-full text-left px-4 py-3 text-sm text-slate-900 font-semibold hover:bg-slate-50 flex items-center gap-2"
+                className="w-full text-left px-[var(--pad)] py-3 text-sm text-slate-900 font-semibold hover:bg-slate-50 flex items-center gap-2"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   onLogout();

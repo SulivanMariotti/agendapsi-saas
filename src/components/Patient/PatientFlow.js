@@ -378,8 +378,8 @@ useEffect(() => {
     <>
       {toast?.msg && <Toast message={toast.msg} type={toast.type} onClose={() => setToast({ msg: "" })} />}
 
-      <div className={`min-h-screen bg-slate-50 ${needsContractAcceptance ? "pb-24" : "pb-10"}`}>
-        <div className="max-w-5xl mx-auto px-4 pt-4 sm:pt-6 space-y-4 sm:space-y-6">
+      <div className={`min-h-[100dvh] bg-slate-50 ${needsContractAcceptance ? "pb-24" : "pb-10"}`}>
+        <div className="max-w-5xl mx-auto px-[var(--pad)] pt-4 sm:pt-6 space-y-4 sm:space-y-6">
           {/* Header */}
           <PatientHeader
             patientName={patientName}

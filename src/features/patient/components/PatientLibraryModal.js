@@ -70,7 +70,7 @@ function ArticleRow({ article, expanded, onToggle }) {
       <button
         type="button"
         onClick={onToggle}
-        className="w-full text-left px-4 py-4 flex items-start justify-between gap-3 hover:bg-slate-50"
+        className="w-full text-left px-[var(--pad)] py-4 flex items-start justify-between gap-3 hover:bg-slate-50"
         aria-expanded={expanded}
       >
         <div className="min-w-0">
@@ -93,7 +93,7 @@ function ArticleRow({ article, expanded, onToggle }) {
       </button>
 
       {expanded ? (
-        <div className="px-4 pb-4">
+        <div className="px-[var(--pad)] pb-4">
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm text-slate-700 leading-relaxed space-y-3">
             {Array.isArray(article.paragraphs)
               ? article.paragraphs.map((p, idx) => (

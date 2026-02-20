@@ -9,7 +9,7 @@ import { Sparkles } from "lucide-react";
  */
 export default function PatientTopMantraBar() {
   return (
-    <div className="rounded-2xl border border-violet-100 bg-white shadow-sm px-4 py-3 sm:px-5 sm:py-4">
+    <div className="rounded-2xl border border-violet-100 bg-white shadow-sm px-[var(--pad)] py-3 sm:px-5 sm:py-4">
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-lg shadow-violet-200 shrink-0">
           <Sparkles size={18} />
