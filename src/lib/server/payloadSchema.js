@@ -219,3 +219,73 @@ export function enforceAllowedKeys(obj, allowedKeys = [], opts = {}) {
   }
   return { ok: true };
 }
+
+
+export function getStringArray(obj, key, opts = {}) {
+  const {
+    required = false,
+    defaultValue = [],
+    minItems = 0,
+    maxItems = 2000,
+    itemMin = 0,
+    itemMax = 5000,
+    itemMaxBytes = null,
+    trim = true,
+    toLower = false,
+    label = null,
+  } = opts;
+
+  const raw = obj ? obj[key] : undefined;
+  const name = label || key;
+
+  if (raw === undefined || raw === null || raw === "") {
+    if (required) return { ok: false, error: `${name} é obrigatório.` };
+    return { ok: true, value: Array.isArray(defaultValue) ? defaultValue : [] };
+  }
+
+  if (!Array.isArray(raw)) return { ok: false, error: `${name} inválido.` };
+  if (raw.length < minItems) return { ok: false, error: `${name} tem poucos itens.` };
+  if (raw.length > maxItems) return { ok: false, error: `${name} tem muitos itens.` };
+
+  const out = [];
+  for (const it of raw) {
+    let v = String(it ?? "");
+    if (trim) v = v.trim();
+    if (toLower) v = v.toLowerCase();
+
+    if (v.length < itemMin) continue;
+    if (v.length > itemMax) return { ok: false, error: `${name} contém item muito longo.` };
+
+    if (itemMaxBytes != null) {
+      const bytes = Buffer.byteLength(v, "utf8");
+      if (bytes > itemMaxBytes) return { ok: false, error: `${name} contém item grande demais.` };
+    }
+
+    out.push(v);
+  }
+
+  return { ok: true, value: out };
+}
+
+export async function readJsonObjectBody(req, opts = {}) {
+  const {
+    maxBytes = 80_000,
+    defaultValue = {},
+    allowedKeys = null,
+    label = null,
+    showKeys = true,
+  } = opts;
+
+  const bodyRes = await readJsonBody(req, { maxBytes, defaultValue });
+  if (!bodyRes.ok) return bodyRes;
+
+  const plain = asPlainObject(bodyRes.value);
+  if (!plain.ok) return plain;
+
+  if (Array.isArray(allowedKeys)) {
+    const keysOk = enforceAllowedKeys(plain.value, allowedKeys, { label, showKeys });
+    if (!keysOk.ok) return keysOk;
+  }
+
+  return { ok: true, value: plain.value };
+}

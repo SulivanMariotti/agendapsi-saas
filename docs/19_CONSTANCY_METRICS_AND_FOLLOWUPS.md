@@ -2,7 +2,7 @@
 
 Como medir **constância terapêutica** (presença/faltas) e usar isso para sustentar vínculo — sem julgamento, com firmeza.
 
-> Princípio clínico: **comparecer é parte do tratamento**.
+> Princípio clínico: **comparecer é parte do tratamento**. A consistência cria condições para mudança.
 
 ---
 
@@ -11,38 +11,40 @@ Como medir **constância terapêutica** (presença/faltas) e usar isso para sust
 ### 1.1 `attendance_logs/*`
 Coleção para registrar presença/falta por sessão (importada por planilha ou lançada no Admin).
 
-**Campos (alinhado com o endpoint atual)**
-- `attendance_logs/{id}`:
-  - `patientId` (string) ✅ chave externa (se existir)
-  - `phoneCanonical` (string) ✅ chave operacional (preferido)
-  - `name` (string) *(opcional; denormalizado para UI)*
-  - `isoDate` (string `YYYY-MM-DD`) ✅ data da sessão
-  - `time` (string `HH:mm`) *(opcional)*
-  - `profissional` / `professional` (string) *(opcional)*
-  - `status` (string: `"present" | "absent"`)
-  - `source` (string: `"import" | "manual"`)
-  - `createdAt` (timestamp)
-  - `updatedAt` (timestamp) *(recomendado para dedup/merge do import)*
-  - `payload` (map) *(opcional; dados originais sem sensíveis)*
+**Campos principais**
+- `patientId` (string) ✅ id externo/sistema
+- `phoneCanonical` (string|null) ✅ chave operacional quando houver
+- `phoneSource` (`profile|csv|null`) *(opcional; auditoria do fallback)*
+- `isLinked` (boolean) *(opcional; indica vínculo por ID/telefone)*
+- `linkedUserId` (string|null) *(opcional; quando conseguiu resolver o `users/{uid}`)*
+- `name` (string|null) *(opcional; denormalizado para UI)*
+- `isoDate` (string `YYYY-MM-DD`) ✅ data real da sessão
+- `time` (string `HH:mm`) *(opcional)*
+- `profissional` / `professional` (string|null) *(opcional)*
+- `service` (string|null) *(opcional)*
+- `location` (string|null) *(opcional)*
+- `status` (`present|absent`)
+- `source` (`import|manual`)
+- `createdAt` / `updatedAt` (timestamp)
+- `payload` (map) *(opcional; dados originais sem sensíveis)*
 
-### 1.2 Campos de follow-up (anti-spam / rastreabilidade)
+### 1.2 Follow-up (anti-spam / rastreabilidade)
 Quando o Admin envia follow-ups, o sistema grava em:
-
 - `attendance_logs/{id}.followup`:
   - `sentAt` (timestamp) ✅ marca envio bem-sucedido
-  - `status` (`present|absent`) ✅ qual tipo foi enviado
+  - `status` (`present|absent`) ✅ tipo enviado
   - `lastAttemptAt` (timestamp)
   - `lastResult` (`sending|sent|error`)
   - `lastError` (string curta; só em falha)
 
 **Regra de idempotência:**
-- Se `followup.sentAt` existir, o endpoint **não reenviará** (evita spam).
+- se `followup.sentAt` existir, o endpoint **não reenviará** (evita spam).
 
 ---
 
 ## 2) Métricas de constância (painel)
 
-Para cada paciente (por janela de tempo: últimos 30/60/90 dias):
+Para janela de tempo (ex.: 30/60/90 dias):
 - `sessionsAttended` (int)
 - `sessionsMissed` (int)
 - `attendanceRate` = `attended / (attended + missed)`
@@ -57,6 +59,28 @@ Para cada paciente (por janela de tempo: últimos 30/60/90 dias):
 - **Risco moderado:** 2 faltas em 60 dias
 - **Risco alto:** 2 faltas seguidas ou ≥3 faltas em 90 dias
 
+### 2.2 Endpoint de resumo (Admin)
+
+**GET** `/api/admin/attendance/summary?days=7|30|90&professional=&service=&location=&patientId=&phone=`
+
+**Princípio:** calcular sempre por `isoDate` (data real da sessão). Filtros são aplicados **em memória** (comparação por *contains*) para evitar dependência de índices compostos.
+
+**Query params (opcionais)**
+- `professional` (ou `pro`) *(contains)*
+- `service` *(contains)*
+- `location` *(contains)*
+- `patientId` *(match exato)*
+- `phone` *(normaliza para `phoneCanonical`)*
+
+**Resposta (campos principais)**
+- `present`, `absent`, `total`, `attendanceRate`
+- `byDay[]` → `{ isoDate, present, absent, unknown, total }`
+- `daysWithData`, `daysWithoutData`
+- `attention[]` (heurística por paciente/telefone) → `{ phoneCanonical, lastIsoDate, lastStatus, absentStreak, rate, present, absent, total }`
+- `segments` → contagem por faixa: `{ stable, watch, risk, insufficient }`
+- `trend` → tendência simples (quando houver volume): `{ prevRate, recentRate, delta, label }`
+- `filtersApplied` + `range` + `computedAt`
+
 ---
 
 ## 3) Follow-ups por constância
@@ -67,11 +91,16 @@ Para cada paciente (por janela de tempo: últimos 30/60/90 dias):
 
 ### 3.2 Bloqueios server-side (obrigatório)
 Antes de enviar:
-- paciente inativo → bloqueia (`inactive_patient`)
-- subscriber inativo → bloqueia (`inactive_subscriber`)
-- sem pushToken → bloqueia (`no_token`)
-- sem telefone → bloqueia (`no_phone`)
-- já enviado (`followup.sentAt`) → bloqueia (`already_sent`)
+- paciente inativo → `inactive_patient`
+- subscriber inativo → `inactive_subscriber`
+- sem pushToken → `no_token`
+- sem telefone → `no_phone`
+- já enviado → `already_sent`
+
+**Bloqueios de segurança (evitar envio errado):**
+- paciente não vinculado → `unlinked_patient`
+- telefone resolve para +1 perfil → `ambiguous_phone`
+- conflito entre telefone do log e do perfil → `phone_mismatch`
 
 ### 3.3 Templates (config/global)
 - `attendanceFollowupPresentTitle`
@@ -79,9 +108,8 @@ Antes de enviar:
 - `attendanceFollowupAbsentTitle`
 - `attendanceFollowupAbsentBody`
 
-Placeholders suportados:
+Placeholders suportados (compatível com legado `{{nome}}`):
 - `{nome}`, `{data}`, `{dataIso}`, `{hora}`, `{profissional}`, `{servico}`, `{local}`, `{id}`
-- Compatível com legado `{{nome}}`.
 
 ### 3.4 Tom e objetivo
 - Presença: reforço positivo (“sua presença sustenta o processo”).
@@ -92,19 +120,17 @@ Placeholders suportados:
 
 ## 4) Import (deduplicação)
 
-Quando importar de planilha, deduplicar (no mínimo) por:
+Ao importar, deduplicar no mínimo por:
 - `patientId + isoDate + time + profissional`
 
-E manter apenas o registro mais recente (por `updatedAt`).
+E manter o registro mais recente (por `updatedAt`).
 
 ---
 
 ## 5) Observabilidade
 
-- Preferir logs/auditoria no Admin para:
-  - `dryRun`
+- Em `dryRun`, retornar:
   - total de candidatos
+  - total de enviados
   - contadores por motivo de bloqueio
-
-Sem armazenar dados sensíveis no `history`.
-
+- Sem armazenar PII em `history`.

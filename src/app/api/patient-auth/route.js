@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { enforceSameOrigin } from "@/lib/server/originGuard";
-import { asPlainObject, getString, unknownKeys } from "@/lib/server/payloadSchema";
+import { asPlainObject, getString, unknownKeys, readJsonObjectBody } from "@/lib/server/payloadSchema";
 export const runtime = "nodejs";
 /**
  * Patient Login (email) - server-side (Firebase Admin)
@@ -133,7 +133,16 @@ export async function POST(req) {
       return legacyDisabled();
     }
 
-    const rawBody = await req.json().catch(() => ({}));
+    const bodyRes = await readJsonObjectBody(req, {
+      maxBytes: 20_000,
+      defaultValue: {},
+      allowedKeys: ["email"],
+      label: "patient-auth-legacy-email",
+      showKeys: true,
+    });
+    if (!bodyRes.ok) return NextResponse.json({ ok: false, error: bodyRes.error }, { status: 400 });
+    const rawBody = bodyRes.value;
+
     const po = asPlainObject(rawBody);
     if (!po.ok) {
       return NextResponse.json({ ok: false, error: po.error }, { status: 400 });

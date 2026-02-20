@@ -10,11 +10,11 @@ Este pack serve para iniciar um novo chat e continuar o desenvolvimento **de ond
 - Diretriz clínica/UX (painel do paciente):
   - foco em **lembrar + psicoeducar + responsabilizar**
   - **sem botão/CTA de cancelar/remarcar**
-  - WhatsApp (quando existir): **apenas confirmação de presença**
+  - quando existir WhatsApp/contato: **apenas confirmação de presença** (reforço de compromisso)
 
 ---
 
-## Estado atual
+## Estado atual (validado)
 
 ### Operação (manual)
 Rotina diária (Admin → Agenda):
@@ -24,29 +24,40 @@ Rotina diária (Admin → Agenda):
 4) Gerar Preview do Disparo (dryRun)
 5) Enviar lembrete
 
-> Cron **não** está habilitado (decisão: operação manual). Rotas `/api/cron/*` estão prontas e seguras para futuro (header-only + rotação de secret).
+> Cron **não** está habilitado (decisão atual). Rotas `/api/cron/*` estão prontas e seguras para futuro (header-only + rotação de secret).
 
-### Segurança (v1 concluída)
-- Login paciente por e-mail **desativado por padrão**; vínculo por **telefone+código**.
-- Admin apenas via **custom claims**; sem fallback em `users.role`.
-- Regras Firestore endurecidas (usuário não edita identidade/role; audit/subscribers admin-only; notes travadas).
-- Headers/HSTS/CSP em produção + rate limit + origin guard.
-- Retenção: `expireAt` + TTL ativo em `history` e `audit_logs`.
+### Segurança
+- **v1 concluída**: paciente por **telefone+código**, admin via **custom claims**, rules endurecidas, headers/CSP, origin guard, rate limit.
+- Retenção: `expireAt` + **TTL ativo** em `history` e `audit_logs`.
+- Pós-v1 (aplicado): `requirePatient`, `attendance/confirm` deriva telefone do perfil, `/api/appointments/last-sync` admin-only, `_push_old` desativado.
+- Schema-lite disponível: `src/lib/server/payloadSchema.js` (usado em rotas críticas).
 
 ### Biblioteca (Paciente + Admin)
-- Paciente: menu **Biblioteca** com modal rolável, busca, “Para levar para a sessão” e mantra fixo.
-- Admin: repositório de artigos (CRUD) com publicação; categorias (CRUD) + criação inline no editor.
+- Paciente: menu **Biblioteca** com modal rolável, busca, “Para levar para a sessão” e mantra fixo (leitura não substitui sessão).
+- Admin: repositório de artigos (CRUD) com status (rascunho/publicado).
+- Categorias: CRUD + ativar/desativar + criação inline no editor.
 
+### Paciente (server-side para reduzir fricção)
+- Agenda: `GET /api/patient/appointments` (Admin SDK; evita `permission-denied`).
+- Contrato: `POST /api/patient/contract/accept`.
+- Ping/lastSeen: `POST /api/patient/ping`.
+- Notas (para levar para a sessão):
+  - `GET/POST /api/patient/notes`
+  - `DELETE /api/patient/notes/[id]`
 
 ### Presença/Faltas (Admin)
-- Import CSV aceita `;`/`,`/TAB (autodetect) e remove BOM.
-- Colunas obrigatórias: **ID** + (**DATA/HORA** ou **DATA**+**HORA**).
-- Colunas opcionais: NOME/PROFISSIONAL/SERVIÇOS/LOCAL/STATUS/**TELEFONE** (gera warnings, não bloqueia).
-- Follow-ups: envio fica **bloqueado** quando paciente não está vinculado (segurança contra envio para pessoa errada).
+- Import CSV robusto:
+  - separador autodetect no cabeçalho (`;`/`,`/TAB) + suporte a BOM
+  - obrigatório: **ID** + (**DATA/HORA** ou **DATA+HORA**)
+  - opcional: NOME/PROFISSIONAL/SERVIÇOS/LOCAL/STATUS/**TELEFONE** (gera warnings, não bloqueia)
+- Métricas (30 dias): período calculado por **`isoDate`** (data real da sessão).
+- Follow-ups: idempotência + bloqueios de segurança (`unlinked_patient`, `ambiguous_phone`, `phone_mismatch`).
+- UI de Follow-ups no Admin exibe contadores e rótulos legíveis.
 
 ---
 
-## Próximos passos recomendados
-1) Painel de **constância (30 dias)** no Admin (Presença/Faltas): métricas + insights clínicos (sem moralismo).
-2) Suporte a **segunda planilha/relatório** de presença/faltas (import e painel).
-3) Documentação do modelo NoSQL + chave única do paciente.
+## Próximos passos recomendados (sequência)
+1) **Painel de constância (30 dias)** no Admin (Presença/Faltas): insights clínicos (sem moralismo) + filtros úteis (profissional/paciente/período).
+2) Validar ingestão com **relatório real** (2ª planilha) no modo mapeado e ajustar sinônimos de cabeçalho se necessário.
+3) **Segurança (pós-v1)**: expandir validação de payload (schema mais forte por endpoint) e revisar endpoints Admin SDK (ownership + logs).
+4) Documentar modelo NoSQL (denormalização + chave única do paciente) para reduzir inconsistências.

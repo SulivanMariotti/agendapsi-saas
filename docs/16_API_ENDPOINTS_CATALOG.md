@@ -3,12 +3,12 @@
 > Norte clínico: rotas críticas (envio/decisões) devem ser **server-side** para proteger a constância.
 
 ## Convenções
-- Rate limit: rotas críticas usam limiter (algumas com backing global no Firestore via `_rate_limits`).
 - Next.js App Router: endpoints existem como `.../route.js`.
-- Auth Admin: `Authorization: Bearer <Firebase ID Token>` + `role=admin` (ver `requireAdmin`).
-- Segredo (cron): `CRON_SECRETS` (ou compat `CRON_SECRET`) via header `Authorization: Bearer ...` (preferido) ou `x-cron-secret`.
-- Legado: query `?key=` só se `ALLOW_CRON_QUERY_KEY=true` (não recomendado).
-- Logs/auditoria: ações críticas registram auditoria (quando aplicável).
+- Auth Admin: `Authorization: Bearer <Firebase ID Token>` + `role=admin` (custom claims; ver `requireAdmin`).
+- Auth Paciente: `Authorization: Bearer <Firebase ID Token>` + `role=patient` (ver `requirePatient`).
+- Cron/segredo: `CRON_SECRETS` (ou compat `CRON_SECRET`) via header `Authorization: Bearer ...` (preferido) ou `x-cron-secret`.
+- Rate limit: rotas críticas usam limiter (algumas com backing global no Firestore via `_rate_limits`).
+- Validação: rotas críticas usam **schema-lite** (`src/lib/server/payloadSchema.js`) com `readJsonBody` + `allowedKeys`.
 
 ---
 
@@ -16,68 +16,81 @@
 
 ### 1) Resolver telefone/canonicalização
 - **GET** `/api/patient/resolve-phone`
-- **Auth:** obrigatório (**role patient** — estrito)
+- **Auth:** obrigatório (patient)
 - **Uso:** garante `phoneCanonical` (fonte: `users/{uid}`; fallbacks quando necessário).
 
 ### 2) Agenda do paciente (server-side)
 - **GET** `/api/patient/appointments`
-- **Auth:** obrigatório (**role patient** — estrito)
+- **Auth:** obrigatório (patient)
 - **Uso:** retorna sessões futuras do paciente via Admin SDK.
 - **Motivo:** evitar `permission-denied` e reduzir superfície (paciente não lê `appointments/*` direto no Firestore).
 
-### 2B) Biblioteca (artigos publicados)
+### 3) Biblioteca (artigos publicados)
 - **GET** `/api/patient/library/list`
-- **Auth:** obrigatório (**role patient** — estrito)
-- **Uso:** retorna apenas artigos **publicados** para psicoeducação (apoio à constância).
+- **Auth:** obrigatório (patient)
+- **Uso:** retorna apenas artigos **publicados**.
 
-
-### 3) Push token (registrar)
+### 4) Push token (registrar)
 - **POST** `/api/patient/push/register`
-- **Auth:** obrigatório (**role patient** — estrito)
-- **Uso:** salva `pushToken` em `subscribers/{phoneCanonical}` (ou estrutura equivalente do projeto).
+- **Auth:** obrigatório (patient)
+- **Uso:** salva `pushToken` em `subscribers/{phoneCanonical}` (ou estrutura equivalente).
 
-### 4) Push status (diagnóstico)
+### 5) Push status (diagnóstico)
 - **GET** `/api/patient/push/status`
-- **Auth:** obrigatório (**role patient** — estrito)
-- **Uso:** retorna status/permissão/token (para orientar o paciente a manter notificações ativas).
+- **Auth:** obrigatório (patient)
+- **Uso:** retorna status/permissão/token.
 
-### 5) Pareamento (quando habilitado)
+### 6) Pareamento (vínculo)
 - **POST** `/api/patient/pair`
-- **Auth:** obrigatório (**role patient** — estrito)
-- **Uso:** fluxo de vinculação/pareamento com a clínica (quando usado).
+- **Auth:** obrigatório (patient)
+- **Uso:** fluxo de vinculação por telefone+código.
+
+### 7) Ping (lastSeen)
+- **POST** `/api/patient/ping`
+- **Auth:** obrigatório (patient)
+- **Uso:** atualiza `users/{uid}.lastSeen` server-side.
+
+### 8) Contrato (aceite)
+- **POST** `/api/patient/contract/accept`
+- **Auth:** obrigatório (patient)
+- **Uso:** registra aceite idempotente (versão + data).
+
+### 9) Notas (para levar para a sessão)
+- **GET** `/api/patient/notes`
+- **POST** `/api/patient/notes`
+- **DELETE** `/api/patient/notes/[id]`
+- **Auth:** obrigatório (patient)
+- **Uso:** CRUD mínimo de notas do paciente (server-side) para evitar regras permissivas no Firestore.
+
+---
+
+## Presença / Compromisso (Paciente)
+
+### 10) Confirmar presença
+- **POST** `/api/attendance/confirm`
+- **Auth:** obrigatório (patient)
+- **Uso:** registra evento (ex.: `patient_confirmed`) para reforço de compromisso.
+- **Integridade:** servidor **deriva o telefone do perfil** (`users/{uid}`) e **ignora `phone` do client**.
+
+### 11) Consultar confirmados
+- **GET** `/api/attendance/confirmed`
+- **Auth:** obrigatório (patient)
+- **Compat:** `GET /api/attendance/confirmd` é alias.
 
 ---
 
 ## Metadados operacionais (Admin)
 
-### X) Última sincronização de agenda
+### 12) Última sincronização de agenda
 - **GET** `/api/appointments/last-sync`
-- **Auth:** obrigatório (**role admin**)
+- **Auth:** obrigatório (admin)
 - **Uso:** metadados internos para diagnóstico de import/sync (não expor ao paciente).
-
----
-
-## Presença / Confirmação (Paciente)
-
-### 6) Confirmar presença
-- **POST** `/api/attendance/confirm`
-- **Auth:** obrigatório (**role patient** — estrito)
-- **Uso:** registra evento do paciente (ex.: `eventType = patient_confirmed`) para reforço de compromisso.
-- **Integridade:** o servidor **deriva o telefone do perfil** (`users/{uid}`) e **ignora `phone` do client**.
-
-### 7) Consultar confirmados
-- **GET** `/api/attendance/confirmed`
-- **Auth:** obrigatório (**role patient** — estrito)
-- **Retorno:**
-  - `{ ok: true, appointmentIds: string[] }`
-  - se enviar `?appointmentId=...`, inclui `{ confirmed: boolean }`
-- **Compat:** `GET /api/attendance/confirmd` é alias.
 
 ---
 
 ## Admin — Agenda e lembretes
 
-### 8) Enviar lembretes (manual)
+### 13) Enviar lembretes (manual)
 - **POST** `/api/admin/reminders/send`
 - **Auth:** obrigatório (admin)
 - **Uso:** envio manual por slot (48h/24h/12h) com preview/dryRun e idempotência por sessão+slot.
@@ -86,105 +99,81 @@
 
 ## Admin — Constância (presença/faltas)
 
-### 9) Importar presença/faltas
+### 14) Importar presença/faltas
 - **POST** `/api/admin/attendance/import`
 - **Auth:** obrigatório (admin)
 - **Uso:** importar logs (planilha 2) para `attendance_logs/*`.
 
-### 10) Resumo/métricas
+### 15) Resumo/métricas
 - **GET** `/api/admin/attendance/summary?days=7|30|90`
 - **Auth:** obrigatório (admin)
-- **Uso:** métricas agregadas de constância (por período) para painel. Período calculado por `isoDate` (data real da sessão).
+- **Uso:** métricas agregadas. Período calculado por **`isoDate`** (data real da sessão).
 
-### 11) Enviar follow-ups (presença/falta)
+### 16) Enviar follow-ups (presença/falta)
 - **POST** `/api/admin/attendance/send-followups`
 - **Auth:** obrigatório (admin)
 - **Idempotência:** se `attendance_logs/{id}.followup.sentAt` existe → não reenviar.
+- **Bloqueios de segurança:** `unlinked_patient`, `ambiguous_phone`, `phone_mismatch` (evita envio para pessoa errada).
 - **DryRun:** retorna amostra interpolada + motivos de bloqueio.
-
----
-
 
 ---
 
 ## Admin — Biblioteca (Artigos)
 
-### 11B) Listar e criar artigos
+### 17) Artigos
 - **GET** `/api/admin/library/articles`
 - **POST** `/api/admin/library/articles`
-- **Auth:** obrigatório (admin)
-- **Uso:** CRUD de artigos da biblioteca (rascunho/publicado).
-
-### 11C) Atualizar e excluir artigo
 - **PATCH** `/api/admin/library/articles/[id]`
 - **DELETE** `/api/admin/library/articles/[id]`
-- **Auth:** obrigatório (admin)
 
-### 11D) Criar artigos modelo (seed)
+### 18) Seed (modelo)
 - **POST** `/api/admin/library/seed`
-- **Auth:** obrigatório (admin)
-- **Uso:** cria artigos base (não sobrescreve os existentes).
 
-
-## Admin — Biblioteca (Categorias)
-
-### 11E) Listar e criar categorias
+### 19) Categorias
 - **GET** `/api/admin/library/categories`
 - **POST** `/api/admin/library/categories`
-- **Auth:** obrigatório (admin)
-- **Uso:** CRUD de categorias para organizar a biblioteca.
-
-### 11F) Atualizar e excluir categoria
 - **PATCH** `/api/admin/library/categories/[id]`
 - **DELETE** `/api/admin/library/categories/[id]`
-- **Auth:** obrigatório (admin)
-
-### 11G) Gerar categorias a partir dos artigos
 - **POST** `/api/admin/library/categories/bootstrap`
-- **Auth:** obrigatório (admin)
-- **Uso:** cria categorias com base nos rótulos já usados nos artigos (idempotente).
 
+---
 
 ## Cron (opcional)
 
-### 12) Enviar lembretes automaticamente
+### 20) Enviar lembretes automaticamente
 - **GET** `/api/cron/reminders`
-- **Auth:** por segredo (`CRON_SECRETS`) via header (Authorization Bearer / x-cron-secret)
-- **Uso:** scheduler chama a URL e o endpoint envia lembretes 48h/24h/12h com idempotência por slot.
-- **Observação:** não roda sozinho; só funciona se você configurar Cron Jobs.
+- **Auth:** segredo via header.
 
-
-
-### 12B) Limpeza de logs (retencao)
+### 21) Limpeza de logs (retenção)
 - **GET** `/api/cron/retention`
-- **Auth:** por segredo (`CRON_SECRETS`) via header (Authorization Bearer / x-cron-secret)
-- **Uso:** apaga docs expirados de `history` e `audit_logs` (TTL/rotacao).
-- **Observação:** opcional se TTL do Firestore estiver habilitado; recomendado 1x/dia como fallback.
-
+- **Auth:** segredo via header.
 
 ---
 
 ## Admin — Operação (Ops)
 
-### 13) Health check (falha-segura / diagnóstico)
+### 22) Health check
 - **GET** `/api/admin/ops/health`
-- **Auth:** obrigatório (admin)
-- **Uso:** checar rapidamente se o ambiente está apto (ex.: credenciais Admin SDK presentes) e orientar o operador.
 
-### 14) Registro do dia (auditoria operacional)
+### 23) Registro do dia (auditoria operacional)
 - **GET** `/api/admin/ops/daily-log?date=YYYY-MM-DD`
 - **POST** `/api/admin/ops/daily-log`
-- **Auth:** obrigatório (admin)
-- **Uso:** salvar resumo do dia e marcar como concluído.
-- **Observação:** pensado para reduzir risco humano e facilitar diagnóstico no dia seguinte.
 
-### 15) Listagem de registros (últimos dias)
+### 24) Listagem de registros
 - **GET** `/api/admin/ops/daily-logs?days=14`
-- **Auth:** obrigatório (admin)
-- **Uso:** trazer o histórico (salvo/concluído + contadores) e abrir detalhes por data.
-
 
 ---
 
 ## Endpoints legados
-- `_push_old/*`: **desativados** (410 em dev / 404 em produção) para reduzir superfície.
+- `_push_old/*`: **desativados** (410 em dev / 404 em produção).
+- `/api/patient-auth` (login paciente por e-mail): **desativado por padrão**; só habilitar com env explícita (não recomendado).
+
+
+### 25) Suspender/reativar acesso do paciente (segurança)
+- **POST** `/api/admin/patient/access`
+- **Auth:** obrigatório (admin)
+- **Uso:** suspender acesso ao painel do paciente **apenas** por segurança/privacidade (ex.: aparelho perdido, pareamento indevido).  
+  **Não** é mecanismo para lidar com faltas; faltas são tratadas com psicoeducação + follow-ups.
+- **Payload (mínimo):** `{ uid, accessDisabled: true|false, reason? }`
+- **Side-effects:** escreve em `users/{uid}` (`accessDisabled`, `accessDisabledAt`) + `audit_logs` + `history`.
+

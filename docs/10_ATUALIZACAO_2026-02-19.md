@@ -22,3 +22,13 @@
   - conflito entre telefone do log e telefone do perfil (`phone_mismatch`)
 
 > Diretriz clínica preservada: reforçar vínculo e constância, sem atalhos de cancelamento/remarcação.
+
+### 4) UI — Follow-ups (Admin)
+- Card de follow-ups agora mostra **contadores** para bloqueios:
+  - `unlinked_patient`, `ambiguous_phone`, `phone_mismatch`
+- Rótulos legíveis + texto de orientação clínica/segurança (bloqueio = proteção contra envio indevido).
+
+### 5) Paciente — rotas server-side para reduzir fricção
+- `POST /api/patient/ping` (lastSeen)
+- `POST /api/patient/contract/accept` (aceite idempotente)
+- Notas via API (server-side): `GET/POST /api/patient/notes` e `DELETE /api/patient/notes/[id]`

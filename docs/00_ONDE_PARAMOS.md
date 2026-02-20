@@ -90,3 +90,26 @@ Refinamentos de segurança aplicados para evitar brechas de autorização e abus
   - há conflito entre telefone do log e do perfil (`phone_mismatch`)
 
 > Diretriz clínica preservada: sem CTA de cancelar/remarcar; reforço de vínculo e constância.
+
+---
+
+## Atualização adicional — 2026-02-19 (Paciente + Hardening)
+
+### 6) Painel do paciente — reduzir fricção (server-side)
+Para evitar `permission-denied` e reduzir fricção que vira abandono/falta, foram adicionadas rotas server-side:
+- `POST /api/patient/ping` → atualiza `lastSeen` (server-side)
+- `POST /api/patient/contract/accept` → aceita contrato (idempotente)
+- `GET/POST /api/patient/notes` e `DELETE /api/patient/notes/[id]` → notas/diário para levar para a sessão
+
+> Diretriz clínica preservada: nada disso cria caminho para cancelar/remarcar; serve para **sustentar presença** e preparar a sessão.
+
+### 7) Hardening — validação de payload (schema-lite) e rate limit
+- Helper `src/lib/server/payloadSchema.js` (schema-lite) para:
+  - parse seguro (`readJsonBody` com limite de tamanho)
+  - bloqueio de chaves inesperadas (allowedKeys)
+  - erros 400 previsíveis (evita bugs silenciosos)
+- Rate limit (`src/lib/server/rateLimit.js`) com normalização básica de IP (CF / XFF / X-Real-IP, remove porta e `::ffff:`).
+
+### 8) Admin — Follow-ups (UX)
+- Card de follow-ups exibe contadores dos novos bloqueios (`unlinked/ambiguous/mismatch`) com rótulos legíveis.
+- Card inclui orientação clínica/segurança: bloqueio = **barreira de proteção** contra envio errado.

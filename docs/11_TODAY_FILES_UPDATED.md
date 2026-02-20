@@ -1,30 +1,30 @@
-# Arquivos mexidos hoje (referência rápida)
+# Arquivos mexidos na última rodada (referência rápida — 2026-02-19)
 
-> Use como checklist para auditoria/merge.
+> Use como checklist para auditoria/merge quando trocar de máquina/chat.
 
-## Contrato
-- `src/hooks/useData.js`
+## Presença/Faltas (Admin)
+- `src/app/api/admin/attendance/import/route.js`
+- `src/app/api/admin/attendance/summary/route.js`
+- `src/app/api/admin/attendance/send-followups/route.js`
+- `src/components/Admin/AdminAttendanceFollowupsCard.js`
 
-## Push paciente (sem permission-denied)
-- `src/components/Patient/PatientFlow.js`
-- (rotas) `src/app/api/patient/push/status/route.js`
-- (rotas) `src/app/api/patient/push/register/route.js`
+## Paciente (server-side)
+- `src/app/api/patient/ping/route.js`
+- `src/app/api/patient/contract/accept/route.js`
+- `src/app/api/patient/notes/route.js`
+- `src/app/api/patient/notes/[id]/route.js`
 
-## Resolver telefone
-- `src/app/api/patient/resolve-phone/route.js`
-- `src/components/Patient/PatientFlow.js`
+## Segurança (schema-lite)
+- `src/lib/server/payloadSchema.js`
 
-## Histórico Admin
-- `src/hooks/useData.js`
-- `src/components/Admin/AdminHistoryTab.js`
-
-## Admin → Pacientes (flags + contrato + código)
-- `src/components/Admin/AdminPatientsTab.js`
-- `src/components/Admin/AdminPanelView.js`
-- `src/app/api/admin/patients/list/route.js`
-
-## Login por Código de Vinculação
-- `src/app/api/admin/patient/pair-code/route.js`
-- `src/app/api/patient/pair/route.js`
-- `src/services/authService.js`
-- `src/components/Patient/PatientLogin.js`
+## Docs (continuidade)
+- `docs/00_ONDE_PARAMOS.md`
+- `docs/00_PROMPT_NOVO_CHAT.md`
+- `docs/01_HANDOFF.md`
+- `docs/02_BACKLOG.md`
+- `docs/02_CHANGELOG.md`
+- `docs/04_PROXIMOS_PASSOS.md`
+- `docs/16_API_ENDPOINTS_CATALOG.md`
+- `docs/19_CONSTANCY_METRICS_AND_FOLLOWUPS.md`
+- `docs/26_ATTENDANCE_IMPORT_SPEC.md`
+- `docs/74_SEGURANCA_PLANO_PRODUCAO.md`

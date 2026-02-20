@@ -1,4 +1,4 @@
-# Changelog — Lembrete Psi (até 2026-02-18)
+# Changelog — Lembrete Psi (até 2026-02-19)
 
 ## Até 2026-02-16 (resumo)
 - Follow-ups de constância (presença/falta) com idempotência.
@@ -77,3 +77,18 @@
   - telefone é ambíguo sem vínculo (`ambiguous_phone`)
   - conflito entre telefone do log e do perfil (`phone_mismatch`)
 - **UI (Admin → Follow-ups)**: resumo exibe contadores dos novos bloqueios + rótulos legíveis + card de orientação clínica/segurança.
+
+---
+
+## 2026-02-19 — Paciente (server-side) + Notas
+
+- **Menos fricção / menos `permission-denied`** no painel do paciente:
+  - `POST /api/patient/ping` (lastSeen server-side)
+  - `POST /api/patient/contract/accept` (aceite idempotente)
+  - Notas via API (server-side): `GET/POST /api/patient/notes` e `DELETE /api/patient/notes/[id]`
+- Hotfix: exclusão de nota tolera variação de `params` no Next (fallback pelo pathname quando necessário).
+
+## 2026-02-19 — Validação de payload (schema-lite)
+- `src/lib/server/payloadSchema.js`: parse seguro + limite de tamanho + allowedKeys.
+- Aplicado/expandido em rotas críticas (import presença/faltas, pair, attendance confirm, rotas admin sensíveis).
+

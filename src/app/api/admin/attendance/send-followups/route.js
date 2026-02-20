@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readJsonObjectBody } from "@/lib/server/payloadSchema";
 import admin from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
@@ -173,7 +174,16 @@ export async function POST(req) {
     initAdmin();
     const db = admin.firestore();
 
-    const body = await req.json().catch(() => ({}));
+    const bodyRes = await readJsonObjectBody(req, {
+      maxBytes: 15000,
+      defaultValue: {},
+      allowedKeys: ["days", "limit", "fromIsoDate", "toIsoDate"],
+      label: "attendance-followups",
+      showKeys: true,
+    });
+    if (!bodyRes.ok) return NextResponse.json({ ok: false, error: bodyRes.error }, { status: 400 });
+    const body = bodyRes.value;
+
     const dryRun = !!body.dryRun;
 
     const { fromIsoDate, toIsoDate, days } = parseBodyRange(body);

@@ -88,6 +88,7 @@ export default function AdminAttendanceImportCard({
       service: autoDetectColumn(columns, ['servico', 'serviço', 'servicos', 'serviços', 'service', 'tipo', 'procedimento', 'atendimento']),
       location: autoDetectColumn(columns, ['local', 'location', 'sala', 'unidade']),
       status: autoDetectColumn(columns, ['status', 'presenca', 'presença', 'presenca/falta', 'falta', 'situacao', 'situação', 'compareceu']),
+      phone: autoDetectColumn(columns, ['telefone', 'tel', 'celular', 'whatsapp', 'fone', 'phone']),
     };
   };
 
@@ -568,6 +569,24 @@ export default function AdminAttendanceImportCard({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-slate-600">TELEFONE (opcional)</label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200"
+                  value={attendanceImportColumnMap?.phone || ''}
+                  onChange={(e) => setMapField('phone', e.target.value)}
+                >
+                  {colOptions.map((c) => (
+                    <option key={`phone_${c}`} value={c}>
+                      {c || '—'}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Usado como fallback para follow-ups quando o vínculo é incerto.
+                </p>
               </div>
             </div>
           )}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
-import { Search, Download, UserPlus, UserMinus, X, Flag, Bell, BellOff, CheckCircle, XCircle, FileText, KeyRound, Copy, Loader2, Pencil } from 'lucide-react';
+import { Search, Download, UserPlus, UserMinus, X, Flag, Bell, BellOff, CheckCircle, XCircle, FileText, KeyRound, Copy, Loader2, Pencil, Lock, Unlock } from 'lucide-react';
 import { Button, Card } from '../DesignSystem';
 import { adminFetch } from '../../services/adminApi';
 
@@ -123,6 +123,13 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
           : 'bg-amber-50 text-amber-700 border-amber-100';
       }
 
+
+      if (kind === 'access') {
+        return ok
+          ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+          : 'bg-amber-50 text-amber-800 border-amber-100';
+      }
+
       // kind === 'push'
       return ok
         ? 'bg-violet-50 text-violet-700 border-violet-100'
@@ -132,6 +139,7 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
     const Icon = (() => {
       if (kind === 'status') return ok ? CheckCircle : XCircle;
       if (kind === 'contract') return FileText;
+      if (kind === 'access') return ok ? Unlock : Lock;
       return ok ? Bell : BellOff; // push
     })();
 
@@ -188,7 +196,7 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
   const [isLoadingPatients, setIsLoadingPatients] = useState(false);
 
   // Estado para cadastro/edição
-  const [newPatient, setNewPatient] = useState({ name: '', email: '', phone: '', patientExternalId: '' });
+  const [newPatient, setNewPatient] = useState({ name: '', email: '', phone: '', patientExternalId: '', accessDisabled: false });
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingPatient, setEditingPatient] = useState(null);
 
@@ -201,7 +209,7 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
   const closePatientModal = () => {
     setShowUserModal(false);
     setEditingPatient(null);
-    setNewPatient({ name: '', email: '', phone: '', patientExternalId: '' });
+    setNewPatient({ name: '', email: '', phone: '', patientExternalId: '', accessDisabled: false });
   };
 
   const closePairCodeModal = () => {
@@ -383,13 +391,21 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
 
   const openNewPatientModal = () => {
     setEditingPatient(null);
-    setNewPatient({ name: '', email: '', phone: '', patientExternalId: '' });
+    setNewPatient({ name: '', email: '', phone: '', patientExternalId: '', accessDisabled: false });
     setShowUserModal(true);
   };
 
   const openEditPatientModal = async (u) => {
     const prevEmail = String(u?.email || '').trim();
     const prevPhone = String(u?.phoneCanonical || u?.phone || '').trim();
+
+    const accessSuspended = Boolean(
+      u?._accessSuspended ||
+      u?.accessDisabled === true ||
+      u?.securityHold === true ||
+      (u?.access && u?.access?.disabled === true) ||
+      ["disabled", "blocked", "suspended", "hold"].includes(String(u?.accessStatus || '').toLowerCase().trim())
+    );
 
     setEditingPatient({
       ...u,
@@ -402,11 +418,11 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
       email: prevEmail,
       phone: prevPhone,
       patientExternalId: String(u?.patientExternalId || '').trim(),
+      accessDisabled: accessSuspended,
     });
 
     setShowUserModal(true);
   };
-
   const handleRegisterPatient = async () => {
     if (!newPatient.email || !newPatient.name || !newPatient.phone) {
       return showToast?.('Preencha todos os campos.', 'error');
@@ -436,6 +452,46 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
       }
 
       showToast?.(editingPatient ? 'Paciente atualizado com sucesso!' : 'Paciente cadastrado com sucesso!');
+
+      // Acesso do painel do paciente (segurança/privacidade) — NÃO tem relação com faltas.
+      // Só aplicamos em modo edição.
+      try {
+        if (editingPatient) {
+          const prevAccessSuspended = Boolean(
+            editingPatient?._accessSuspended ||
+            editingPatient?.accessDisabled === true ||
+            editingPatient?.securityHold === true ||
+            (editingPatient?.access && editingPatient?.access?.disabled === true) ||
+            ["disabled", "blocked", "suspended", "hold"].includes(String(editingPatient?.accessStatus || '').toLowerCase().trim())
+          );
+          const nextAccessSuspended = Boolean(newPatient?.accessDisabled);
+
+          if (prevAccessSuspended !== nextAccessSuspended) {
+            const targetUid = String(data?.uid || editingPatient?.uid || editingPatient?.id || '').trim();
+            if (targetUid) {
+              const r2 = await adminFetch('/api/admin/patient/access', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  uid: targetUid,
+                  accessDisabled: nextAccessSuspended,
+                  reason: 'admin_ui_access_toggle',
+                }),
+              });
+              const d2 = await r2.json().catch(() => ({}));
+              if (!r2.ok || !d2?.ok) {
+                showToast?.(d2?.error || 'Não foi possível atualizar o acesso do paciente.', 'error');
+              } else {
+                showToast?.(nextAccessSuspended ? 'Acesso do paciente suspenso (segurança).' : 'Acesso do paciente reativado.', 'success');
+              }
+            }
+          }
+        }
+      } catch (e2) {
+        console.error(e2);
+        showToast?.('Não foi possível atualizar o acesso do paciente.', 'error');
+      }
+
       await reloadPatients(patientsTarget);
       closePatientModal();
     } catch (e) {
@@ -769,7 +825,7 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
                         }
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 space-y-1">
                       <IndicatorPill
                         kind="status"
                         ok={String(u?.status || '').toLowerCase() === 'active'}
@@ -778,6 +834,21 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
                           String(u?.status || '').toLowerCase() === 'active'
                             ? 'Cadastro ativo (pode receber agenda/disparos).'
                             : 'Cadastro inativo/desativado (não deve receber atendimentos/disparos).'
+                        }
+                      />
+
+                      <IndicatorPill
+                        kind="access"
+                        ok={!Boolean(u?._accessSuspended || u?.accessDisabled === true || u?.securityHold === true)}
+                        label={
+                          Boolean(u?._accessSuspended || u?.accessDisabled === true || u?.securityHold === true)
+                            ? 'Acesso suspenso'
+                            : 'Acesso liberado'
+                        }
+                        title={
+                          Boolean(u?._accessSuspended || u?.accessDisabled === true || u?.securityHold === true)
+                            ? 'Acesso ao painel do paciente está suspenso (segurança/privacidade). Não é usado como punição por falta.'
+                            : 'Acesso ao painel do paciente está liberado. O paciente permanece logado para sustentar constância.'
                         }
                       />
                     </td>
@@ -954,6 +1025,40 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
                 />
                 <div className="text-xs opacity-70 mt-1">Modo: {isEditMode ? 'EDITAR (travado)' : 'NOVO'}</div>
               </div>
+
+              {isEditMode ? (
+                <div className="bg-slate-50 border rounded-lg p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-slate-900">Acesso do paciente</div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        Este controle é <b>apenas</b> para <b>segurança/privacidade</b> (ex.: aparelho perdido, pareamento indevido).
+                        <br />
+                        <b>Não</b> é usado para faltas. O objetivo do sistema é sustentar vínculo e constância.
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-500 text-right">
+                      Segurança
+                    </div>
+                  </div>
+
+                  <label className="mt-3 flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={Boolean(newPatient.accessDisabled)}
+                      onChange={(e) => setNewPatient({ ...newPatient, accessDisabled: e.target.checked })}
+                    />
+                    <span className="font-medium">
+                      Suspender acesso ao painel do paciente
+                    </span>
+                  </label>
+
+                  <div className="text-xs text-slate-500 mt-1">
+                    Se marcado, o paciente verá “acesso indisponível” até você reativar.
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="p-5 border-t flex items-center justify-end gap-2">

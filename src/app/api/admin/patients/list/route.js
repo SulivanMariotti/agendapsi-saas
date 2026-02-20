@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import { readJsonObjectBody } from "@/lib/server/payloadSchema";
 import admin from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
@@ -171,6 +172,25 @@ function isInactivePatient(d) {
   return false;
 }
 
+
+function isAccessSuspended(d) {
+  if (!d || typeof d !== "object") return false;
+
+  if (d.accessDisabled === true) return true;
+  if (d.securityHold === true) return true;
+
+  if (d.access && typeof d.access === "object") {
+    if (d.access.disabled === true) return true;
+    const st = String(d.access.status || "").toLowerCase().trim();
+    if (["disabled", "blocked", "suspended", "hold"].includes(st)) return true;
+  }
+
+  const accessStatus = String(d.accessStatus || "").toLowerCase().trim();
+  if (["disabled", "blocked", "suspended", "hold"].includes(accessStatus)) return true;
+
+  return false;
+}
+
 async function addHasPushToken(db, patients) {
   // Perf: batch reads using getAll() instead of N individual doc.get() calls.
   const phones = Array.from(
@@ -248,6 +268,11 @@ function normalizePatient(doc) {
     disabled: d?.disabled ?? null,
     disabledAt: toIso(d?.disabledAt),
     deletedAt: toIso(d?.deletedAt),
+    accessDisabled: d?.accessDisabled ?? null,
+    accessDisabledAt: toIso(d?.accessDisabledAt),
+    securityHold: d?.securityHold ?? null,
+    accessStatus: d?.accessStatus ?? null,
+    _accessSuspended: isAccessSuspended(d),
     mergedTo: d?.mergedTo ?? null,
     createdAt: toIso(d?.createdAt),
     updatedAt: toIso(d?.updatedAt),
@@ -646,13 +671,16 @@ async function listPatientsPage({ pageSize, includePush, cursor, filters, search
 }
 
 async function readBody(req) {
-  try {
-    return await req.json();
-  } catch {
-    return {};
-  }
+  const res = await readJsonObjectBody(req, {
+    maxBytes: 60_000,
+    defaultValue: {},
+    allowedKeys: ["pageSize", "limit", "cursor", "includePush", "filters", "search", "q"],
+    label: "patients-list",
+    showKeys: true,
+  });
+  if (!res.ok) return { __error: res.error };
+  return res.value;
 }
-
 export async function POST(req) {
   let auth = null;
   try {
@@ -668,6 +696,9 @@ export async function POST(req) {
     if (!rl.ok) return rl.res;
 
     const body = await readBody(req);
+    if (body && body.__error) {
+      return NextResponse.json({ ok: false, error: body.__error }, { status: 400 });
+    }
 
     // Backward compat: 'limit' vira pageSize
     const pageSize = clampPageSize(body?.pageSize ?? body?.limit ?? 200);

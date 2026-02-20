@@ -50,6 +50,13 @@ export default function AdminPanelView({
   // STEP43: Painel de Constância (attendance_logs)
   const [attendancePeriodDays, setAttendancePeriodDays] = useState(30);
   const [attendanceRefreshKey, setAttendanceRefreshKey] = useState(0);
+  const [attendanceFilters, setAttendanceFilters] = useState({
+    professional: '',
+    service: '',
+    location: '',
+    patientId: '',
+    phone: '',
+  });
   const [attendanceStats, setAttendanceStats] = useState({
     present: 0,
     absent: 0,
@@ -60,6 +67,10 @@ export default function AdminPanelView({
     daysWithData: 0,
     daysWithoutData: 0,
     attention: [],
+    segments: { stable: 0, watch: 0, risk: 0, insufficient: 0 },
+    cohort: null,
+    trend: null,
+    filtersApplied: null,
     range: null,
     computedAt: null,
   });
@@ -181,7 +192,34 @@ export default function AdminPanelView({
       try {
         setAttendanceLoading(true);
         setAttendanceError(null);
-        const res = await adminFetch(`/api/admin/attendance/summary?days=${attendancePeriodDays}`, {
+
+        // Filtros: aplicados apenas na aba Presença/Faltas (não no dashboard)
+        const qs = new URLSearchParams();
+        qs.set('days', String(attendancePeriodDays));
+        if (adminTab === 'attendance') {
+          const f = attendanceFilters || {};
+          const canonicalPhone = (raw) => {
+            const digits = String(raw || '').replace(/\D+/g, '');
+            if (!digits) return '';
+            // aceita com/sem +55
+            if (digits.length >= 12 && digits.startsWith('55')) return digits.slice(2);
+            return digits;
+          };
+          const add = (k, v) => {
+            const s = String(v || '').trim();
+            if (!s) return;
+            qs.set(k, s);
+          };
+          add('professional', f.professional);
+          add('service', f.service);
+          add('location', f.location);
+          add('patientId', f.patientId);
+          // Normaliza telefone para reduzir ambiguidade e bater com `phoneCanonical`
+          const p = canonicalPhone(f.phone);
+          if (p) qs.set('phone', p);
+        }
+
+        const res = await adminFetch(`/api/admin/attendance/summary?${qs.toString()}`, {
           method: 'GET',
         });
         const data = await res.json();
@@ -198,6 +236,10 @@ export default function AdminPanelView({
           daysWithData: Number(data.daysWithData || 0),
           daysWithoutData: Number(data.daysWithoutData || 0),
           attention: Array.isArray(data.attention) ? data.attention : [],
+          segments: data.segments || { stable: 0, watch: 0, risk: 0, insufficient: 0 },
+          cohort: data.cohort || null,
+          trend: data.trend || null,
+          filtersApplied: data.filtersApplied || null,
           range: data.range || null,
           computedAt: data.computedAt || null,
         });
@@ -212,6 +254,10 @@ export default function AdminPanelView({
           daysWithData: 0,
           daysWithoutData: 0,
           attention: [],
+          segments: { stable: 0, watch: 0, risk: 0, insufficient: 0 },
+          cohort: null,
+          trend: null,
+          filtersApplied: null,
           range: null,
           computedAt: null,
         });
@@ -221,7 +267,7 @@ export default function AdminPanelView({
       }
     };
     run();
-  }, [adminTab, attendancePeriodDays, attendanceRefreshKey]);
+  }, [adminTab, attendancePeriodDays, attendanceRefreshKey, attendanceFilters]);
 
   const computeCsvHash = (text) => {
     const s = String(text || '').trim();
@@ -660,6 +706,8 @@ export default function AdminPanelView({
           <AdminAttendanceTab
             attendancePeriodDays={attendancePeriodDays}
             setAttendancePeriodDays={setAttendancePeriodDays}
+            attendanceFilters={attendanceFilters}
+            setAttendanceFilters={setAttendanceFilters}
             attendanceError={attendanceError}
             attendanceLoading={attendanceLoading}
             attendanceStats={attendanceStats}

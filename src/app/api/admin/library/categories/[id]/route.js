@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readJsonObjectBody } from "@/lib/server/payloadSchema";
 import admin from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/server/requireAdmin";
 import { adminError } from "@/lib/server/adminError";
@@ -35,7 +36,16 @@ export async function PATCH(req, ctx) {
       return NextResponse.json({ ok: false, error: "ID inválido." }, { status: 400 });
     }
 
-    const body = await req.json().catch(() => ({}));
+    const bodyRes = await readJsonObjectBody(req, {
+      maxBytes: 30000,
+      defaultValue: {},
+      allowedKeys: ["name", "order", "isActive"],
+      label: "library-category",
+      showKeys: true,
+    });
+    if (!bodyRes.ok) return NextResponse.json({ ok: false, error: bodyRes.error }, { status: 400 });
+    const body = bodyRes.value;
+
     const patch = {};
 
     if (body?.name != null) patch.name = String(body.name || "").trim();

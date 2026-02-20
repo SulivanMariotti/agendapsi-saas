@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { readJsonObjectBody } from "@/lib/server/payloadSchema";
 import admin from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
@@ -27,7 +28,16 @@ export async function POST(req) {
     if (!rl.ok) return rl.res;
 
 
-    const body = await req.json().catch(() => ({}));
+    const bodyRes = await readJsonObjectBody(req, {
+      maxBytes: 20000,
+      defaultValue: {},
+      allowedKeys: ["limit", "dryRun"],
+      label: "repair-roles",
+      showKeys: true,
+    });
+    if (!bodyRes.ok) return NextResponse.json({ ok: false, error: bodyRes.error }, { status: 400 });
+    const body = bodyRes.value;
+
     const limit = Math.min(Math.max(Number(body?.limit || 500), 1), 2000);
     const dryRun = Boolean(body?.dryRun);
 

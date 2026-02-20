@@ -69,7 +69,12 @@ export async function GET(req) {
     return NextResponse.json({ ok: true, appointmentIds: Array.from(uniq) }, { status: 200 });
   } catch (e) {
     console.error("GET /api/attendance/confirmed error:", e);
+
     // Retornar 200 com ok:false evita loops no client e mantém UX estável.
-    return NextResponse.json({ ok: false, confirmed: false, appointmentIds: [], error: e?.message || "Erro" }, { status: 200 });
+    // Hardening: em produção, não vazar mensagens internas.
+    const isProd = process.env.NODE_ENV === "production";
+    const errorMsg = isProd ? "Falha ao carregar confirmações." : e?.message || "Erro";
+
+    return NextResponse.json({ ok: false, confirmed: false, appointmentIds: [], error: errorMsg }, { status: 200 });
   }
 }

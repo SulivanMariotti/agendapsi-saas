@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readJsonObjectBody } from "@/lib/server/payloadSchema";
 import admin from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
@@ -116,8 +117,15 @@ export async function POST(req) {
     if (!rl.ok) return rl.res;
 
 
-    const body = await req.json().catch(() => ({}));
-
+    const bodyRes = await readJsonObjectBody(req, {
+      maxBytes: 3600000,
+      defaultValue: {},
+      allowedKeys: ["csvText", "source", "defaultStatus"],
+      label: "attendance-import-legacy",
+      showKeys: true,
+    });
+    if (!bodyRes.ok) return NextResponse.json({ ok: false, error: bodyRes.error }, { status: 400 });
+    const body = bodyRes.value;
 
     const csvText = String(body.csvText || "").trim();
     if (!csvText) return NextResponse.json({ ok: false, error: "csvText vazio" }, { status: 400 });

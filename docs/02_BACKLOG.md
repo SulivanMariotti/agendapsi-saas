@@ -41,7 +41,7 @@
   - métricas (presenças/faltas/adiamentos) + tendência
   - insights clínicos (sem moralismo) e reforço de constância
   - filtros por período/profissional/paciente (se aplicável)
-- [ ] Processar **segunda planilha/relatório** (presença/faltas) para montar painel de constância e disparar notificações futuras (parabenizar presença e orientar em caso de falta).
+- [ ] Processar **segunda planilha/relatório** (presença/faltas) para montar painel de constância e disparar notificações futuras (parabenizar presença e orientar em caso de falta). (Modo mapeado pronto; falta validar com relatório real)
 
 ## 5) Segurança / Acesso (v1 concluída)
 - [x] Desativar login paciente por e-mail sem verificação (padrão)
@@ -53,6 +53,8 @@
 - [x] Origin/CSRF guard padronizado
 - [x] Retenção: `expireAt` + **TTL ativo** em `history` e `audit_logs`
 - [x] Cron endpoints endurecidos (header-only + rotação) **(cron ainda não implantado)**
+- [x] Schema-lite (payload) em rotas críticas: src/lib/server/payloadSchema.js (allowedKeys + maxBytes)
+- [ ] Expandir schema-lite para todas as rotas com escrita + (futuro) schema forte (Zod)
 - [ ] **Futuro:** autenticação do paciente com menos fricção e segura (OTP/magic link) antes de PWA/App
 
 ## 6) Dados / Consistência (Firestore)

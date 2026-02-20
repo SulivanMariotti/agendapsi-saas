@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import { readJsonObjectBody } from "@/lib/server/payloadSchema";
 import admin from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
@@ -80,7 +81,15 @@ export async function POST(req) {
     const rl = await rateLimit(req, { bucket: "admin:ops:daily-log:post", uid: auth.uid, limit: 60, windowMs: 60_000 });
     if (!rl.ok) return rl.res;
 
-    const body = await req.json().catch(() => ({}));
+    const bodyRes = await readJsonObjectBody(req, {
+      maxBytes: 120000,
+      defaultValue: {},
+      allowedKeys: ["dateISO", "action", "summaryText", "notes", "metrics", "context"],
+      label: "ops-daily-log",
+      showKeys: true,
+    });
+    if (!bodyRes.ok) return NextResponse.json({ ok: false, error: bodyRes.error }, { status: 400 });
+    const body = bodyRes.value;
 
     const dateISO = String(body.dateISO || "");
     const action = String(body.action || "save").toLowerCase();

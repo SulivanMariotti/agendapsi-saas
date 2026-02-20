@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readJsonObjectBody } from "@/lib/server/payloadSchema";
 import admin from "@/lib/firebaseAdmin";
 import crypto from "crypto";
 import { rateLimit } from "@/lib/server/rateLimit";
@@ -46,7 +47,16 @@ export async function POST(req) {
     });
     if (!rl.ok) return rl.res;
 
-    const body = await req.json().catch(() => ({}));
+    const bodyRes = await readJsonObjectBody(req, {
+      maxBytes: 20000,
+      defaultValue: {},
+      allowedKeys: ["token"],
+      label: "patient-push-register",
+      showKeys: true,
+    });
+    if (!bodyRes.ok) return NextResponse.json({ ok: false, error: bodyRes.error }, { status: 400 });
+    const body = bodyRes.value;
+
     const token = String(body?.token || "");
     if (!token) return NextResponse.json({ ok: false, error: "Missing token." }, { status: 400 });
 

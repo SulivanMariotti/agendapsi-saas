@@ -25,30 +25,123 @@ function getMemoryStore() {
   return globalThis.__LP_RATE_LIMIT_STORE__;
 }
 
+function parseForwardedHeader(forwarded) {
+  // RFC 7239: Forwarded: for=1.2.3.4;proto=https;by=...
+  // Examples:
+  // - for=203.0.113.43
+  // - for="[2001:db8:cafe::17]:4711"
+  // - for=unknown
+  const s = String(forwarded || "");
+  const m = s.match(/for=([^;]+)/i);
+  if (!m) return "";
+  let v = String(m[1] || "").trim();
+  // Strip quotes
+  v = v.replace(/^\s*\"|\"\s*$/g, "");
+  return v;
+}
+
+function normalizeIpCandidate(raw) {
+  let ip = String(raw || "").trim();
+  if (!ip) return "";
+
+  // In x-forwarded-for, it can be a list
+  ip = ip.split(",")[0].trim();
+  if (!ip) return "";
+
+  if (ip.toLowerCase() === "unknown") return "";
+
+  // Strip quotes
+  ip = ip.replace(/^\s*\"|\"\s*$/g, "");
+
+  // Forwarded header can include brackets for IPv6
+  // [2001:db8::1]:1234
+  if (ip.startsWith("[") && ip.includes("]")) {
+    const inside = ip.slice(1, ip.indexOf("]"));
+    ip = inside;
+  } else {
+    // Remove port for IPv4 like 1.2.3.4:1234
+    // Avoid breaking pure IPv6 (which contains :)
+    const colonCount = (ip.match(/:/g) || []).length;
+    if (colonCount <= 1) ip = ip.replace(/:\d+$/, "");
+  }
+
+  // IPv6 mapped IPv4: ::ffff:1.2.3.4
+  if (ip.startsWith("::ffff:")) ip = ip.slice("::ffff:".length);
+
+  // Lowercase IPv6
+  if (ip.includes(":")) ip = ip.toLowerCase();
+
+  // Basic hygiene: keep only safe chars
+  ip = ip.replace(/[^0-9a-fA-F:\.]/g, "");
+
+  // Keep bounded
+  if (ip.length > 64) ip = ip.slice(0, 64);
+
+  return ip;
+}
+
+function isPrivateIp(ip) {
+  const s = String(ip || "").trim().toLowerCase();
+  if (!s) return true;
+  if (s === "unknown") return true;
+
+  // IPv4 private / loopback
+  const m4 = s.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m4) {
+    const a = Number(m4[1]);
+    const b = Number(m4[2]);
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    return false;
+  }
+
+  // IPv6 loopback / unique-local
+  if (s === "::1") return true;
+  if (s.startsWith("fc") || s.startsWith("fd")) return true; // fc00::/7
+  return false;
+}
+
+function fallbackPseudoIp(req) {
+  // When infra headers aren't present (local/dev) we still want a stable limiter key.
+  const ua = String(req.headers.get("user-agent") || "");
+  const al = String(req.headers.get("accept-language") || "");
+  const seed = (ua + "|" + al).slice(0, 256);
+  if (!seed.trim()) return "unknown";
+  return "ua_" + sha256Hex(seed).slice(0, 16);
+}
+
 function getClientIp(req) {
   // Prefer infra headers (CDN/proxy). Keep a stable, normalized key.
+  const forwarded = parseForwardedHeader(req.headers.get("forwarded"));
   const candidates = [
     req.headers.get("cf-connecting-ip"),
     req.headers.get("x-forwarded-for"),
     req.headers.get("x-real-ip"),
+    forwarded,
   ].filter(Boolean);
 
   let ip = "";
   for (const c of candidates) {
-    const first = String(c).split(",")[0].trim();
-    if (!first) continue;
-    if (first.toLowerCase() === "unknown") continue;
-    ip = first;
+    const n = normalizeIpCandidate(c);
+    if (!n) continue;
+    ip = n;
     break;
   }
 
-  if (!ip) return "unknown";
+  // If first candidate is private/loopback, try next (common behind proxies)
+  if (ip && isPrivateIp(ip)) {
+    for (const c of candidates) {
+      const n = normalizeIpCandidate(c);
+      if (!n) continue;
+      if (isPrivateIp(n)) continue;
+      ip = n;
+      break;
+    }
+  }
 
-  // Remove port if present (e.g., 1.2.3.4:1234)
-  ip = ip.replace(/:\d+$/, "");
-
-  // IPv6 mapped IPv4: ::ffff:1.2.3.4
-  if (ip.startsWith("::ffff:")) ip = ip.slice("::ffff:".length);
+  if (!ip) ip = fallbackPseudoIp(req);
 
   // Keep bounded
   if (ip.length > 64) ip = ip.slice(0, 64);

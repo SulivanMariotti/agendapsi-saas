@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readJsonObjectBody } from "@/lib/server/payloadSchema";
 import admin from "@/lib/firebaseAdmin";
 import { requireAdmin } from "@/lib/server/requireAdmin";
 import { adminError } from "@/lib/server/adminError";
@@ -109,7 +110,15 @@ export async function POST(req) {
   if (!rl.ok) return rl.res;
 
   try {
-    const body = await req.json().catch(() => ({}));
+    const bodyRes = await readJsonObjectBody(req, {
+      maxBytes: 30000,
+      defaultValue: {},
+      allowedKeys: ["name", "slug", "order", "isActive"],
+      label: "library-categories",
+      showKeys: true,
+    });
+    if (!bodyRes.ok) return NextResponse.json({ ok: false, error: bodyRes.error }, { status: 400 });
+    const body = bodyRes.value;
 
     const name = String(body?.name || "").trim();
     const order = safeInt(body?.order, 100);

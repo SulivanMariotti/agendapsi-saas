@@ -2,7 +2,7 @@
 
 > Norte clínico: segurança e privacidade sustentam vínculo. Qualquer brecha vira quebra de confiança e aumenta chance de falta.
 
-## Status atual (2026-02-18) — ✅ Segurança v1 finalizada
+## Status atual (2026-02-19) — ✅ Segurança v1 finalizada
 
 Esta rodada fechou os **bloqueadores de produção** e padronizou hardening (CSP/CSRF/rate-limit/logs).
 
@@ -30,6 +30,7 @@ Esta rodada fechou os **bloqueadores de produção** e padronizou hardening (CSP
   - `/api/auth` (admin) com rate limit + origin check
   - Fluxo do paciente (pair/appointments/resolve-phone) com rate limit
   - Erros padronizados (sem vazar detalhes internos)
+  - Paciente: bloqueio de acesso **apenas** por flag explícita (ex.: `users/{uid}.accessDisabled` ou `securityHold`) — **não** por status clínico/faltas
 
 - [x] **Privacidade & retenção de logs (history/audit)**
   - `history`: mascara telefone/e-mail e nunca grava token bruto
@@ -68,3 +69,12 @@ Esta rodada fechou os **bloqueadores de produção** e padronizou hardening (CSP
 - [x] **Superfície**: `_push_old/*` desativado (410 dev / 404 prod).
 - [x] **Rate limit global** (Firestore) em rotas críticas + TTL em `_rate_limits.expireAt`.
 
+
+### Hardening adicional (2026-02-19) — ✅ aplicado
+- [x] **Schema-lite** (`src/lib/server/payloadSchema.js`) em rotas críticas:
+  - `readJsonBody` com limite de tamanho
+  - `allowedKeys`/sanitização para reduzir payload inesperado
+  - erros 400 previsíveis
+- [x] Import/constância: follow-ups com bloqueios de segurança (`unlinked_patient`, `ambiguous_phone`, `phone_mismatch`) para evitar envio errado.
+
+> Nota: próximos passos de hardening continuam válidos (schema forte/Zod + revisão de ownership em endpoints Admin SDK).
