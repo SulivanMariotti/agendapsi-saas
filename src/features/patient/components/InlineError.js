@@ -25,9 +25,9 @@ export default function InlineError({
   const hasAction = Boolean(actionLabel) && typeof onAction === "function";
 
   return (
-    <div className={`rounded-2xl border border-amber-100 bg-amber-50/60 p-4 ${className}`}>
+    <div className={`rounded-2xl bg-amber-50/70 p-4 shadow-sm ${className}`}>
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-white border border-amber-100">
+        <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-white shadow-sm">
           <AlertTriangle size={18} className="text-amber-700" />
         </div>
 

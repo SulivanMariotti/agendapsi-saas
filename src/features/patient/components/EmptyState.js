@@ -15,9 +15,9 @@ export default function EmptyState({
   className = "",
 }) {
   return (
-    <div className={`rounded-2xl border border-slate-100 bg-slate-50/60 p-4 ${className}`}>
+    <div className={`rounded-2xl bg-slate-50/60 p-4 shadow-sm ${className}`}>
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-white border border-slate-100">
+        <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-white shadow-sm">
           <Icon size={18} className="text-slate-600" />
         </div>
 

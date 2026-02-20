@@ -52,9 +52,9 @@ export default function AppointmentMiniRow({ a, isConfirmed }) {
       </div>
 
       <div className="shrink-0 flex flex-col items-end gap-1">
-        <span className={`text-[11px] px-2 py-1 rounded-full border font-semibold ${st.cls}`}>{st.text}</span>
+        <span className={`text-[11px] px-2 py-1 rounded-full font-semibold ${st.cls}`}>{st.text}</span>
         {a?.reminderType ? (
-          <span className="text-[11px] px-2 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-600 font-semibold">
+          <span className="text-[11px] px-2 py-1 rounded-full bg-slate-50 text-slate-600 font-semibold">
             {String(a.reminderType).toUpperCase()}
           </span>
         ) : null}

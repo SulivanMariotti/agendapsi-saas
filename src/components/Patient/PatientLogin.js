@@ -213,7 +213,7 @@ export default function PatientLogin() {
             )}
 
             {/* O que tem no painel (compacto) */}
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+            <div className="rounded-2xl bg-slate-50 p-3 shadow-sm">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                 <Info size={14} className="text-slate-400" />
                 Você vai ver
