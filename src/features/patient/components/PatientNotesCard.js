@@ -181,7 +181,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
     <>
       <Card title="Diário rápido" className="border-0 shadow-sm">
         <div className="space-y-4">
-          <div className="rounded-2xl bg-violet-50/70 p-4 shadow-sm">
+          <div className="rounded-2xl bg-violet-50 p-4 shadow-sm">
             <div className="flex items-center gap-2 text-slate-800">
               <Sparkles size={16} className="text-violet-600" />
               <div className="font-semibold text-sm">Anote agora para chegar mais presente na sessão</div>
@@ -275,7 +275,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
                 return (
                   <div key={n.id} className="p-4 rounded-2xl bg-white shadow-sm">
                     {pinnedNote && idx === 0 ? (
-                      <div className="inline-flex items-center gap-2 mb-2 text-[11px] font-semibold text-violet-700">
+                      <div className="inline-flex items-center gap-2 mb-2 text-[11px] font-semibold text-violet-800">
                         <Star size={14} className="text-violet-600" />
                         <span>Em destaque para sua próxima sessão</span>
                       </div>
@@ -337,7 +337,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
 
               <textarea
                 ref={textareaRef}
-                className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200 text-slate-700 text-sm min-h-[160px] max-h-[45vh] overflow-y-auto resize-none leading-relaxed"
+                className={`w-full p-3 border ${PT.borderSubtle} rounded-xl outline-none ${PT.focusRing} text-slate-700 text-sm min-h-[160px] max-h-[45vh] overflow-y-auto resize-none leading-relaxed`}
                 placeholder="O que você quer levar para a sessão?\nUm fato, uma emoção, um incômodo, uma pequena vitória…"
                 value={noteContent}
                 onChange={(e) => setNoteContent(e.target.value)}
@@ -384,7 +384,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
                 <Search size={16} className="absolute left-3 top-3 text-slate-400" />
                 <input
                   ref={historySearchRef}
-                  className="w-full pl-9 p-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200 text-slate-700 text-sm"
+                  className={`w-full pl-9 p-2.5 border ${PT.borderSubtle} rounded-xl outline-none ${PT.focusRing} text-slate-700 text-sm`}
                   placeholder="Buscar nas suas notas..."
                   value={historySearch}
                   onChange={(e) => setHistorySearch(e.target.value)}

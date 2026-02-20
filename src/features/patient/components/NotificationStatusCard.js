@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "../../../components/DesignSystem";
 import { AlertTriangle, Bell, CheckCircle, Info, Loader2, Settings2 } from "lucide-react";
+import { PT } from "../lib/uiTokens";
 
 /**
  * NotificationStatusCard (Paciente)
@@ -223,7 +224,7 @@ export default function NotificationStatusCard({
             <AlertTriangle size={16} className="mt-0.5" />
             <div>
               <b>Notificações bloqueadas</b>
-              <div className="text-xs text-amber-800/70 mt-1">Libere as permissões do navegador para ativar.</div>
+              <div className="text-xs text-slate-600 mt-1">Libere as permissões do navegador para ativar.</div>
             </div>
           </div>
 
@@ -247,12 +248,12 @@ export default function NotificationStatusCard({
     // default: desativado e suportado
     return (
       <div>
-        <div className="rounded-xl bg-violet-50 p-3 text-sm text-violet-900 flex items-start justify-between gap-3 shadow-sm">
+        <div className={`rounded-xl ${PT.accentSoft} p-3 text-sm ${PT.accentText} flex items-start justify-between gap-3 shadow-sm`}>
           <div className="flex gap-2">
-            <Bell size={16} className="mt-0.5 text-violet-700" />
+            <Bell size={16} className={`mt-0.5 ${PT.accentIcon}`} />
             <div>
               <b>Ative os lembretes</b>
-              <div className="text-xs text-violet-800/70 mt-1">Para receber notificações neste aparelho.</div>
+              <div className="text-xs text-slate-600 mt-1">Para receber notificações neste aparelho.</div>
             </div>
           </div>
           <div className="shrink-0">
@@ -271,12 +272,12 @@ export default function NotificationStatusCard({
         <div className="mt-2 flex items-center justify-between">
           <button
             type="button"
-            className="text-xs font-semibold text-violet-900 underline underline-offset-4"
+            className={`text-xs font-semibold ${PT.accentText} underline underline-offset-4`}
             onClick={() => setShowHelp((v) => !v)}
           >
             {showHelp ? "Ocultar" : "Por que isso importa?"}
           </button>
-          <span className="text-xs text-violet-900/60">leva 10 segundos</span>
+          <span className="text-xs text-slate-500">leva 10 segundos</span>
         </div>
 
         {showHelp && <Help />}
@@ -308,19 +309,19 @@ export default function NotificationStatusCard({
                 : "off";
               if (key === "active")
                 return (
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-900 shadow-sm">
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm ${PT.ok}`}>
                     Ativo
                   </span>
                 );
               if (key === "blocked")
                 return (
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 shadow-sm">
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm ${PT.warn}`}>
                     Bloqueado
                   </span>
                 );
               if (key === "off")
                 return (
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 text-violet-900 shadow-sm">
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm ${PT.accentSoft} ${PT.accentText}`}>
                     Desativado
                   </span>
                 );

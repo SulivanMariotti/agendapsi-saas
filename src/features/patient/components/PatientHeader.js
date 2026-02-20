@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../../components/DesignSystem";
 import { LogOut, FileText, X, Phone, BookOpen, Menu } from "lucide-react";
 import { formatPhoneBR } from "../lib/phone";
+import { PT } from "../lib/uiTokens";
 import PatientLibraryModal from "./PatientLibraryModal";
 
 export default function PatientHeader({
@@ -29,9 +30,7 @@ export default function PatientHeader({
   );
 
   const contractStatusLabel = needsContractAcceptance ? "Pendente" : "OK";
-  const contractStatusClass = needsContractAcceptance
-    ? "bg-amber-50 text-amber-900 border-amber-100"
-    : "bg-emerald-50 text-emerald-800 border-emerald-100";
+  const contractStatusClass = needsContractAcceptance ? PT.warn : PT.ok;
 
   function closeMobileMenu() {
     setMobileMenuOpen(false);
@@ -99,9 +98,9 @@ export default function PatientHeader({
           <div className="text-base sm:text-lg font-extrabold text-slate-900 truncate">{patientName}</div>
 
           {patientPhone ? (
-            <div className="mt-1.5 sm:mt-2 inline-flex items-center gap-2 sm:gap-2.5 text-xs px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full border border-slate-200 bg-white text-slate-800 shadow-sm">
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100">
-                <Phone size={14} className="text-violet-600" />
+            <div className={`mt-1.5 sm:mt-2 inline-flex items-center gap-2 sm:gap-2.5 text-xs px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full ${PT.surfaceSoft} text-slate-800 shadow-sm`}>
+              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full ${PT.accentSoft} ${PT.accentText}`}>
+                <Phone size={14} className={PT.accentIcon} />
                 Telefone
               </span>
               <span className="font-semibold text-slate-900">{formatPhoneBR(patientPhone)}</span>
@@ -138,7 +137,7 @@ export default function PatientHeader({
             onClick={() => setMobileMenuOpen(true)}
             aria-controls="patient-mobile-drawer"
             aria-expanded={mobileMenuOpen ? "true" : "false"}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 active:scale-95 cursor-pointer text-sm bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-800 shadow-sm"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 active:scale-95 cursor-pointer text-sm bg-white text-slate-700 hover:bg-slate-50 shadow-sm"
           >
             <Menu size={16} className="text-slate-700" />
             Menu
@@ -165,13 +164,13 @@ export default function PatientHeader({
           <div
             role="dialog"
             aria-modal="true"
-            className="absolute right-0 top-0 h-full w-[min(86vw,340px)] bg-white border-l border-slate-100 shadow-2xl flex flex-col"
+            className={`absolute right-0 top-0 h-full w-[min(86vw,340px)] bg-white border-l ${PT.borderSubtle} shadow-2xl flex flex-col`}
             style={{
               paddingTop: "calc(16px + env(safe-area-inset-top))",
               paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
             }}
           >
-            <div className="px-4 pb-4 border-b border-slate-100 flex items-center justify-between gap-3">
+            <div className={`px-4 pb-4 border-b ${PT.borderSubtle} flex items-center justify-between gap-3`}>
               <div className="min-w-0">
                 <div className="text-sm font-extrabold text-slate-900">Menu</div>
                 <div className="text-xs text-slate-500">
@@ -210,13 +209,13 @@ export default function PatientHeader({
                 <FileText size={16} className="text-slate-600" /> Contrato
               </button>
 
-              <div className="mt-4 px-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 text-xs text-slate-600 leading-relaxed">
+              <div className={`mt-4 px-4 py-3 rounded-2xl ${PT.surfaceSoft} text-xs ${PT.textSecondary} leading-relaxed`}>
                 Quando você vem, você não “cumpre uma agenda” — você sustenta um processo.
                 Se estiver difícil comparecer, isso é um dado importante para ser levado para a sessão.
               </div>
             </div>
 
-            <div className="px-4 pt-3 border-t border-slate-100">
+            <div className={`px-4 pt-3 border-t ${PT.borderSubtle}`}>
               <Button
                 onClick={() => {
                   closeMobileMenu();
@@ -241,8 +240,8 @@ export default function PatientHeader({
             onClick={() => setContractOpen(false)}
           />
           <div className="absolute inset-0 flex items-end sm:items-center justify-center p-4">
-            <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden max-h-[calc(100dvh-2rem)] sm:max-h-[85vh] flex flex-col">
-              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+            <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[calc(100dvh-2rem)] sm:max-h-[85vh] flex flex-col">
+              <div className={`px-5 py-4 border-b ${PT.borderSubtle} flex items-center justify-between gap-3`}>
                 <div className="min-w-0">
                   <div className="text-sm font-extrabold text-slate-900">Contrato Terapêutico</div>
                   <div className="text-xs text-slate-500">
@@ -262,14 +261,14 @@ export default function PatientHeader({
               <div className="p-5 space-y-3 overflow-auto flex-1 min-h-0">
                 <div className="flex items-center justify-between gap-2">
                   <span
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold ${contractStatusClass}`}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm ${contractStatusClass}`}
                   >
                     {contractStatusLabel}
                   </span>
                   <div className="text-[11px] text-slate-400">v{Number(currentContractVersion || 1)}</div>
                 </div>
 
-                <div className="p-3 border border-slate-100 rounded-xl bg-slate-50 whitespace-pre-wrap text-sm text-slate-700 leading-relaxed">
+                <div className={`p-3 rounded-xl ${PT.surfaceSoft} whitespace-pre-wrap text-sm text-slate-700 leading-relaxed`}>
                   {safeContractText}
                 </div>
 
@@ -279,7 +278,7 @@ export default function PatientHeader({
                 </div>
               </div>
 
-              <div className="px-5 py-4 border-t border-slate-100 flex justify-end">
+              <div className={`px-5 py-4 border-t ${PT.borderSubtle} flex justify-end`}>
                 <Button variant="secondary" onClick={() => setContractOpen(false)}>
                   Fechar
                 </Button>

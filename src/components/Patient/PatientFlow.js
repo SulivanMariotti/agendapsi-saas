@@ -495,10 +495,10 @@ useEffect(() => {
                 scrollToSection("lp-section-agenda");
               }}
               className={`min-h-[44px] w-full flex flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-2 text-[11px] font-semibold leading-none active:scale-95 transition ${
-                mobileNavActive === "session" ? "bg-slate-100 text-slate-900" : "text-slate-600"
+                mobileNavActive === "session" ? "bg-violet-600 text-white shadow-sm" : "text-slate-600"
               }`}
             >
-              <Calendar size={22} className={mobileNavActive === "session" ? "text-slate-900" : "text-slate-700"} />
+              <Calendar size={22} className={mobileNavActive === "session" ? "text-white" : "text-slate-700"} />
               Sessão
             </button>
 
@@ -509,10 +509,10 @@ useEffect(() => {
                 scrollToSection("lp-section-notes");
               }}
               className={`min-h-[44px] w-full flex flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-2 text-[11px] font-semibold leading-none active:scale-95 transition ${
-                mobileNavActive === "diary" ? "bg-slate-100 text-slate-900" : "text-slate-600"
+                mobileNavActive === "diary" ? "bg-violet-600 text-white shadow-sm" : "text-slate-600"
               }`}
             >
-              <NotebookPen size={22} className={mobileNavActive === "diary" ? "text-slate-900" : "text-slate-700"} />
+              <NotebookPen size={22} className={mobileNavActive === "diary" ? "text-white" : "text-slate-700"} />
               Diário
             </button>
 
@@ -523,10 +523,10 @@ useEffect(() => {
                 openPatientLibrary();
               }}
               className={`min-h-[44px] w-full flex flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-2 text-[11px] font-semibold leading-none active:scale-95 transition ${
-                mobileNavActive === "readings" ? "bg-slate-100 text-slate-900" : "text-slate-600"
+                mobileNavActive === "readings" ? "bg-violet-600 text-white shadow-sm" : "text-slate-600"
               }`}
             >
-              <BookOpen size={22} className={mobileNavActive === "readings" ? "text-slate-900" : "text-slate-700"} />
+              <BookOpen size={22} className={mobileNavActive === "readings" ? "text-white" : "text-slate-700"} />
               Leituras
             </button>
 
@@ -537,10 +537,10 @@ useEffect(() => {
                 openPatientContract();
               }}
               className={`min-h-[44px] w-full flex flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-2 text-[11px] font-semibold leading-none active:scale-95 transition ${
-                mobileNavActive === "contract" ? "bg-slate-100 text-slate-900" : "text-slate-600"
+                mobileNavActive === "contract" ? "bg-violet-600 text-white shadow-sm" : "text-slate-600"
               }`}
             >
-              <FileText size={22} className={mobileNavActive === "contract" ? "text-slate-900" : "text-slate-700"} />
+              <FileText size={22} className={mobileNavActive === "contract" ? "text-white" : "text-slate-700"} />
               Contrato
             </button>
             </div>

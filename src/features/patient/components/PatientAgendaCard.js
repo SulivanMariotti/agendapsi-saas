@@ -140,7 +140,7 @@ export default function PatientAgendaCard({
             }}
             className={`flex-1 sm:flex-none px-3 py-1.5 rounded-full text-xs font-semibold transition ${
               agendaView === "compact"
-                ? "bg-white text-violet-900 shadow-sm"
+                ? "bg-white text-violet-800 shadow-sm"
                 : "bg-transparent text-slate-700"
             }`}
           >
@@ -155,7 +155,7 @@ export default function PatientAgendaCard({
             }}
             className={`flex-1 sm:flex-none px-3 py-1.5 rounded-full text-xs font-semibold transition ${
               agendaView === "all"
-                ? "bg-white text-violet-900 shadow-sm"
+                ? "bg-white text-violet-800 shadow-sm"
                 : "bg-transparent text-slate-700"
             }`}
           >

@@ -1,8 +1,12 @@
+import { PT } from "./uiTokens";
+
+const ACCENT_CHIP = `${PT.accentSoft} ${PT.accentText}`;
+
 export function chipClass(style) {
-  if (style === "today") return "bg-emerald-50 border-emerald-100 text-emerald-900";
-  if (style === "tomorrow") return "bg-violet-50 border-violet-100 text-violet-900";
-  if (style === "future") return "bg-slate-50 border-slate-200 text-slate-700";
-  return "bg-amber-50 border-amber-100 text-amber-900";
+  if (style === "today") return PT.ok;
+  if (style === "tomorrow") return ACCENT_CHIP;
+  if (style === "future") return PT.neutralChip;
+  return PT.warn;
 }
 
 export function prettyServiceLabel(serviceType) {
@@ -28,16 +32,16 @@ export function statusChipFor(appointmentStatus, isConfirmed) {
   const s = String(appointmentStatus || "scheduled").toLowerCase();
 
   if (s === "done") {
-    return { text: "Realizada", cls: "bg-emerald-50 border-emerald-100 text-emerald-900" };
+    return { text: "Realizada", cls: PT.ok };
   }
   if (s === "no_show") {
-    return { text: "Faltou", cls: "bg-amber-50 border-amber-100 text-amber-900" };
+    return { text: "Faltou", cls: PT.warn };
   }
   if (s === "cancelled") {
-    return { text: "Cancelada", cls: "bg-slate-50 border-slate-200 text-slate-700" };
+    return { text: "Cancelada", cls: PT.neutralChip };
   }
   if (isConfirmed) {
-    return { text: "Confirmada", cls: "bg-violet-50 border-violet-100 text-violet-900" };
+    return { text: "Confirmada", cls: ACCENT_CHIP };
   }
-  return { text: "Agendada", cls: "bg-slate-50 border-slate-200 text-slate-700" };
+  return { text: "Agendada", cls: PT.neutralChip };
 }

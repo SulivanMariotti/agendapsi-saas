@@ -5,6 +5,7 @@ import { Button } from "../../../components/DesignSystem";
 import { X, Search, ChevronDown, ChevronUp, Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
 import { getAuth } from "firebase/auth";
 import { LIBRARY_TOP_MANTRA, SESSION_TAKEAWAYS } from "../content/library";
+import { PT } from "../lib/uiTokens";
 import { LIBRARY_SEED_ARTICLES } from "../../../lib/shared/librarySeed";
 
 function Chip({ active, onClick, children }) {
@@ -14,7 +15,7 @@ function Chip({ active, onClick, children }) {
       onClick={onClick}
       className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
         active
-          ? "bg-violet-100 text-violet-800"
+          ? `${PT.accentSoft} ${PT.accentText}`
           : "bg-slate-50 text-slate-600 hover:bg-slate-100"
       }`}
     >
@@ -260,11 +261,11 @@ export default function PatientLibraryModal({ open, onClose }) {
                 {/* Mantra fixo */}
                 <div className="rounded-2xl bg-violet-50 p-3 shadow-sm">
                   <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-2xl bg-white/80 shadow-sm flex items-center justify-center text-violet-700 shrink-0">
+                    <div className="w-9 h-9 rounded-2xl bg-white/80 shadow-sm flex items-center justify-center text-violet-800 shrink-0">
                       <Sparkles size={18} />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-sm font-extrabold text-violet-900">{LIBRARY_TOP_MANTRA.title}</div>
+                      <div className="text-sm font-extrabold text-violet-800">{LIBRARY_TOP_MANTRA.title}</div>
                       <div className="mt-1 text-[12px] text-violet-800 leading-relaxed line-clamp-2 sm:line-clamp-none">
                         {LIBRARY_TOP_MANTRA.text}
                       </div>
@@ -355,7 +356,7 @@ export default function PatientLibraryModal({ open, onClose }) {
                     <ul className="mt-3 space-y-2 text-sm text-slate-700">
                       {SESSION_TAKEAWAYS.prompts.map((p) => (
                         <li key={p} className="flex gap-2">
-                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-violet-300 shrink-0" />
+                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-violet-200 shrink-0" />
                           <span>{p}</span>
                         </li>
                       ))}
