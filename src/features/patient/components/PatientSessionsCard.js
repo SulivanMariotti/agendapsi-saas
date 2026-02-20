@@ -45,9 +45,13 @@ export default function PatientSessionsCard({
       />
 
       {showConsistencyHint && (
-        <div className="px-1 text-[12px] leading-relaxed text-slate-600">
-          Seu horário é um espaço sagrado de cuidado. A constância sustenta o processo.
-        </div>
+        <>
+          {/* Mobile: evita “empurrar” a Próxima Sessão para baixo.
+              Desktop: mantém o lembrete clínico sutil. */}
+          <div className="hidden sm:block px-1 text-[12px] leading-relaxed text-slate-600">
+            Seu horário é um espaço sagrado de cuidado. A constância sustenta o processo.
+          </div>
+        </>
       )}
 
       <PatientAgendaCard
