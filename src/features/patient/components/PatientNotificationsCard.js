@@ -23,7 +23,7 @@ export default function PatientNotificationsCard({
         className,
       ].join(" ")}
     >
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         <NotificationStatusCard
           app={app}
           user={user}
