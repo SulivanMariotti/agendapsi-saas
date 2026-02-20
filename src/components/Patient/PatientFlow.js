@@ -69,6 +69,9 @@ const [profile, setProfile] = useState(null);
       // silencioso
     }
   };
+
+  // Mobile bottom-nav: indica o último destino tocado (ajuda o "1 olhar")
+  const [mobileNavActive, setMobileNavActive] = useState("session");
 const [confirmBusy, setConfirmBusy] = useState(false);
 
   const [acceptContractBusy, setAcceptContractBusy] = useState(false);
@@ -481,45 +484,66 @@ useEffect(() => {
 
         {/* Bottom nav (mobile): navegação rápida sem fricção */}
         <div
-          className="sm:hidden fixed left-0 right-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur"
-          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+          className="sm:hidden fixed left-0 right-0 bottom-0 z-30 border-t border-slate-200/80 bg-white/90 backdrop-blur-md shadow-sm"
         >
-          <div className="max-w-5xl mx-auto px-[var(--pad)] h-14 grid grid-cols-4 items-center">
+          <div className="max-w-5xl mx-auto px-[var(--pad)] pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)]">
+            <div className="grid grid-cols-4 gap-2">
             <button
               type="button"
-              onClick={() => scrollToSection("lp-section-agenda")}
-              className="flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-slate-600 active:scale-95"
+              onClick={() => {
+                setMobileNavActive("session");
+                scrollToSection("lp-section-agenda");
+              }}
+              className={`min-h-[44px] w-full flex flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-2 text-[11px] font-semibold leading-none active:scale-95 transition ${
+                mobileNavActive === "session" ? "bg-slate-100 text-slate-900" : "text-slate-600"
+              }`}
             >
-              <Calendar size={18} className="text-slate-700" />
-              Agenda
+              <Calendar size={22} className={mobileNavActive === "session" ? "text-slate-900" : "text-slate-700"} />
+              Sessão
             </button>
 
             <button
               type="button"
-              onClick={() => scrollToSection("lp-section-notes")}
-              className="flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-slate-600 active:scale-95"
+              onClick={() => {
+                setMobileNavActive("diary");
+                scrollToSection("lp-section-notes");
+              }}
+              className={`min-h-[44px] w-full flex flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-2 text-[11px] font-semibold leading-none active:scale-95 transition ${
+                mobileNavActive === "diary" ? "bg-slate-100 text-slate-900" : "text-slate-600"
+              }`}
             >
-              <NotebookPen size={18} className="text-slate-700" />
+              <NotebookPen size={22} className={mobileNavActive === "diary" ? "text-slate-900" : "text-slate-700"} />
               Diário
             </button>
 
             <button
               type="button"
-              onClick={openPatientLibrary}
-              className="flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-slate-600 active:scale-95"
+              onClick={() => {
+                setMobileNavActive("readings");
+                openPatientLibrary();
+              }}
+              className={`min-h-[44px] w-full flex flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-2 text-[11px] font-semibold leading-none active:scale-95 transition ${
+                mobileNavActive === "readings" ? "bg-slate-100 text-slate-900" : "text-slate-600"
+              }`}
             >
-              <BookOpen size={18} className="text-slate-700" />
-              Biblioteca
+              <BookOpen size={22} className={mobileNavActive === "readings" ? "text-slate-900" : "text-slate-700"} />
+              Leituras
             </button>
 
             <button
               type="button"
-              onClick={openPatientContract}
-              className="flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-slate-600 active:scale-95"
+              onClick={() => {
+                setMobileNavActive("contract");
+                openPatientContract();
+              }}
+              className={`min-h-[44px] w-full flex flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-2 text-[11px] font-semibold leading-none active:scale-95 transition ${
+                mobileNavActive === "contract" ? "bg-slate-100 text-slate-900" : "text-slate-600"
+              }`}
             >
-              <FileText size={18} className="text-slate-700" />
+              <FileText size={22} className={mobileNavActive === "contract" ? "text-slate-900" : "text-slate-700"} />
               Contrato
             </button>
+            </div>
           </div>
         </div>
         </div>
