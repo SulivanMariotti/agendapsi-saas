@@ -241,7 +241,7 @@ export default function PatientHeader({
             onClick={() => setContractOpen(false)}
           />
           <div className="absolute inset-0 flex items-end sm:items-center justify-center p-4">
-            <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden max-h-[calc(100dvh-2rem)] sm:max-h-[85vh] flex flex-col">
               <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-extrabold text-slate-900">Contrato Terapêutico</div>
@@ -259,7 +259,7 @@ export default function PatientHeader({
                 </button>
               </div>
 
-              <div className="p-5 space-y-3">
+              <div className="p-5 space-y-3 overflow-auto flex-1 min-h-0">
                 <div className="flex items-center justify-between gap-2">
                   <span
                     className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold ${contractStatusClass}`}
@@ -269,7 +269,7 @@ export default function PatientHeader({
                   <div className="text-[11px] text-slate-400">v{Number(currentContractVersion || 1)}</div>
                 </div>
 
-                <div className="max-h-[60vh] overflow-auto p-3 border border-slate-100 rounded-xl bg-slate-50 whitespace-pre-wrap text-sm text-slate-700 leading-relaxed">
+                <div className="p-3 border border-slate-100 rounded-xl bg-slate-50 whitespace-pre-wrap text-sm text-slate-700 leading-relaxed">
                   {safeContractText}
                 </div>
 
