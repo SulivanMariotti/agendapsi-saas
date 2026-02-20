@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Card } from "../../../components/DesignSystem";
+import { Button } from "../../../components/DesignSystem";
 import { Calendar, CalendarCheck } from "lucide-react";
 import AppointmentMiniRow from "./AppointmentMiniRow";
 import InlineLoading from "./InlineLoading";
@@ -114,7 +114,11 @@ export default function PatientAgendaCard({
 
   return (
 
-    <Card title="Agenda">
+    <div className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden flex flex-col">
+      <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-50 bg-white">
+        <h3 className="font-bold text-slate-800 text-base sm:text-lg tracking-tight">Agenda</h3>
+      </div>
+      <div className="flex-1 p-4 sm:p-6 min-h-0">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <div className="min-w-0">
           <div className="text-xs text-slate-500">Visualização</div>
@@ -285,7 +289,7 @@ export default function PatientAgendaCard({
           )}
         </div>
       )}
-
-    </Card>
+      </div>
+    </div>
   );
 }

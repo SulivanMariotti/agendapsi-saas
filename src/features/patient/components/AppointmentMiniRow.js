@@ -21,9 +21,9 @@ export default function AppointmentMiniRow({ a, isConfirmed }) {
   const st = statusChipFor(a?.status, isConfirmed);
 
   return (
-    <div className="px-3 py-2.5 rounded-2xl border border-slate-100 bg-white flex items-center justify-between gap-3">
+    <div className="px-3 py-2.5 rounded-2xl bg-white shadow-sm flex items-center justify-between gap-3">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="w-11 rounded-2xl border border-slate-100 bg-slate-50 p-2 text-center shrink-0">
+        <div className="w-11 rounded-2xl bg-slate-50 p-2 text-center shrink-0 shadow-sm">
           <div className="text-base font-black text-slate-800 leading-none">{day}</div>
           <div className="text-[10px] font-bold text-slate-500 mt-1">{mon}</div>
         </div>
