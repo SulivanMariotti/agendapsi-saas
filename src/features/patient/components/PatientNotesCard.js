@@ -281,16 +281,6 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
         </div>
       </Card>
 
-      {/* FAB notas (mobile) */}
-      <button
-        type="button"
-        onClick={() => setNoteModalOpen(true)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-2xl bg-violet-600 text-white shadow-xl shadow-violet-200 flex items-center justify-center active:scale-95 transition-transform md:hidden"
-        aria-label="Adicionar nota"
-      >
-        <Plus size={22} />
-      </button>
-
       {/* Modal Nova Nota */}
       {noteModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-4 animate-in fade-in">
