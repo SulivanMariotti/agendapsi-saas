@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button, Card } from "../../../components/DesignSystem";
 import { Calendar, CalendarCheck } from "lucide-react";
 import AppointmentMiniRow from "./AppointmentMiniRow";
@@ -27,6 +27,10 @@ export default function PatientAgendaCard({
   const [agendaView, setAgendaView] = useState("compact");
   const [showAllWeeks, setShowAllWeeks] = useState(false);
   const [showAllMonths, setShowAllMonths] = useState(false);
+
+  // 📱 mobile: grupos colapsáveis para leitura mais leve
+  const [openWeekKey, setOpenWeekKey] = useState(null);
+  const [openMonthKey, setOpenMonthKey] = useState(null);
 
   // ✅ sutil: última atualização da agenda (data/hora apenas)
   const agendaLastUpdate = useMemo(() => {
@@ -92,6 +96,21 @@ export default function PatientAgendaCard({
 
     return { highlights, weeks, months };
   }, [appointments]);
+
+  // abre automaticamente o primeiro grupo no mobile (sem forçar no desktop)
+  useEffect(() => {
+    if (!openWeekKey && agendaGroups?.weeks?.length) {
+      setOpenWeekKey(agendaGroups.weeks[0].key);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agendaGroups?.weeks?.length]);
+
+  useEffect(() => {
+    if (!openMonthKey && agendaGroups?.months?.length) {
+      setOpenMonthKey(agendaGroups.months[0].label);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agendaGroups?.months?.length]);
 
   return (
 
@@ -177,17 +196,37 @@ export default function PatientAgendaCard({
           <div className="space-y-2">
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Próximas semanas</div>
 
-            {(showAllWeeks ? agendaGroups.weeks : agendaGroups.weeks.slice(0, 3)).map((w) => (
-              <div key={w.key} className="space-y-2">
-                <div className="text-xs text-slate-400 font-semibold mt-2">{w.label}</div>
-                {w.list.slice(0, agendaView === "compact" ? 5 : 999).map((a) => (
-                  <AppointmentMiniRow key={a.id} a={a} isConfirmed={confirmedIds?.has?.(String(a.id))} />
-                ))}
-                {agendaView === "compact" && w.list.length > 5 && (
-                  <div className="text-xs text-slate-400">+ {w.list.length - 5} atendimentos nesta semana</div>
-                )}
-              </div>
-            ))}
+            {(showAllWeeks ? agendaGroups.weeks : agendaGroups.weeks.slice(0, 3)).map((w) => {
+              const limit = agendaView === "compact" ? 5 : 999;
+              const shown = w.list.slice(0, limit);
+              const hiddenCount = Math.max(0, w.list.length - shown.length);
+              const isOpen = openWeekKey === w.key;
+
+              return (
+                <div key={w.key} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-2.5 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setOpenWeekKey((prev) => (prev === w.key ? null : w.key))}
+                    className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-xl hover:bg-white/70 active:scale-[0.99]"
+                    aria-expanded={isOpen}
+                  >
+                    <div className="text-xs font-semibold text-slate-700 text-left">{w.label}</div>
+                    <div className="text-[11px] font-semibold text-slate-400 shrink-0">
+                      {w.list.length} {w.list.length === 1 ? "sessão" : "sessões"}
+                    </div>
+                  </button>
+
+                  <div className={`${isOpen ? "block" : "hidden"} sm:block space-y-2 px-2 pb-1`}>
+                    {shown.map((a) => (
+                      <AppointmentMiniRow key={a.id} a={a} isConfirmed={confirmedIds?.has?.(String(a.id))} />
+                    ))}
+                    {agendaView === "compact" && hiddenCount > 0 && (
+                      <div className="text-xs text-slate-400">+ {hiddenCount} atendimentos nesta semana</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
 
             {agendaGroups.weeks.length > 3 && (
               <Button
@@ -203,19 +242,39 @@ export default function PatientAgendaCard({
 
           {agendaGroups.months.length > 0 && (
             <div className="space-y-2">
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Depois</div>
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Próximos meses</div>
 
-              {(showAllMonths ? agendaGroups.months : agendaGroups.months.slice(0, 2)).map((m) => (
-                <div key={m.label} className="space-y-2">
-                  <div className="text-xs text-slate-400 font-semibold mt-2">{m.label}</div>
-                  {m.list.slice(0, agendaView === "compact" ? 4 : 999).map((a) => (
-                    <AppointmentMiniRow key={a.id} a={a} isConfirmed={confirmedIds?.has?.(String(a.id))} />
-                  ))}
-                  {agendaView === "compact" && m.list.length > 4 && (
-                    <div className="text-xs text-slate-400">+ {m.list.length - 4} atendimentos neste mês</div>
-                  )}
-                </div>
-              ))}
+              {(showAllMonths ? agendaGroups.months : agendaGroups.months.slice(0, 2)).map((m) => {
+                const limit = agendaView === "compact" ? 4 : 999;
+                const shown = m.list.slice(0, limit);
+                const hiddenCount = Math.max(0, m.list.length - shown.length);
+                const isOpen = openMonthKey === m.label;
+
+                return (
+                  <div key={m.label} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-2.5 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setOpenMonthKey((prev) => (prev === m.label ? null : m.label))}
+                      className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-xl hover:bg-white/70 active:scale-[0.99]"
+                      aria-expanded={isOpen}
+                    >
+                      <div className="text-xs font-semibold text-slate-700 text-left">{m.label}</div>
+                      <div className="text-[11px] font-semibold text-slate-400 shrink-0">
+                        {m.list.length} {m.list.length === 1 ? "sessão" : "sessões"}
+                      </div>
+                    </button>
+
+                    <div className={`${isOpen ? "block" : "hidden"} sm:block space-y-2 px-2 pb-1`}>
+                      {shown.map((a) => (
+                        <AppointmentMiniRow key={a.id} a={a} isConfirmed={confirmedIds?.has?.(String(a.id))} />
+                      ))}
+                      {agendaView === "compact" && hiddenCount > 0 && (
+                        <div className="text-xs text-slate-400">+ {hiddenCount} atendimentos neste mês</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
 
               {agendaGroups.months.length > 2 && (
                 <Button variant="secondary" className="w-full" onClick={() => setShowAllMonths((v) => !v)}>
