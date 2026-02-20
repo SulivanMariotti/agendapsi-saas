@@ -409,7 +409,17 @@ useEffect(() => {
     <>
       {toast?.msg && <Toast message={toast.msg} type={toast.type} onClose={() => setToast({ msg: "" })} />}
 
-      <div className={`min-h-[100dvh] bg-slate-50 ${needsContractAcceptance ? "pb-36" : "pb-28"} sm:pb-10`}>
+      {/*
+        Mobile: reserva espaço real para o bottom-nav + safe-area (iOS).
+        Isso evita que o fim do conteúdo fique "debaixo" da barra em telas menores.
+      */}
+      <div
+        className={`min-h-[100dvh] bg-slate-50 ${
+          needsContractAcceptance
+            ? "pb-[calc(env(safe-area-inset-bottom)+9rem)]"
+            : "pb-[calc(env(safe-area-inset-bottom)+7rem)]"
+        } sm:pb-10`}
+      >
         <div className="max-w-5xl mx-auto px-[var(--pad)] pt-2 sm:pt-6 space-y-2 sm:space-y-6">
           {/* Header */}
           <PatientHeader
