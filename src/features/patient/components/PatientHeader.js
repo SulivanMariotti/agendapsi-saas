@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../../components/DesignSystem";
-import { LogOut, FileText, X, Phone, BookOpen } from "lucide-react";
+import { LogOut, FileText, X, Phone, BookOpen, Menu } from "lucide-react";
 import { formatPhoneBR } from "../lib/phone";
 import PatientLibraryModal from "./PatientLibraryModal";
 
@@ -20,6 +20,9 @@ export default function PatientHeader({
   const [contractOpen, setContractOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
 
+  const btnMenuRef = useRef(null);
+  const btnCloseRef = useRef(null);
+
   const safeContractText = useMemo(
     () => String(contractText || "Contrato não configurado."),
     [contractText]
@@ -29,6 +32,38 @@ export default function PatientHeader({
   const contractStatusClass = needsContractAcceptance
     ? "bg-amber-50 text-amber-900 border-amber-100"
     : "bg-emerald-50 text-emerald-800 border-emerald-100";
+
+  function closeMobileMenu() {
+    setMobileMenuOpen(false);
+    // devolve o foco para o botão que abriu o menu (acessibilidade)
+    window.requestAnimationFrame(() => {
+      btnMenuRef.current?.focus?.();
+    });
+  }
+
+  // UX mobile: trava scroll do body quando o drawer estiver aberto
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    // foca o botão "Fechar"
+    window.requestAnimationFrame(() => {
+      btnCloseRef.current?.focus?.();
+    });
+
+    function onKeyDown(e) {
+      if (e.key === "Escape") closeMobileMenu();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileMenuOpen]);
 
   return (
     <>
@@ -41,7 +76,7 @@ export default function PatientHeader({
             <div className="mt-2 inline-flex items-center gap-2.5 text-xs px-3 py-1.5 rounded-full border border-slate-200 bg-white text-slate-800 shadow-sm">
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100">
                 <Phone size={14} className="text-violet-600" />
-                WhatsApp
+                Telefone
               </span>
               <span className="font-semibold text-slate-900">{formatPhoneBR(patientPhone)}</span>
             </div>
@@ -50,7 +85,6 @@ export default function PatientHeader({
 
         {/* Desktop actions */}
         <div className="hidden sm:flex gap-2">
-
           <Button onClick={() => setLibraryOpen(true)} variant="secondary" icon={BookOpen}>
             Biblioteca
           </Button>
@@ -59,24 +93,81 @@ export default function PatientHeader({
             Contrato
           </Button>
 
-          <Button onClick={onLogout} variant="secondary" icon={LogOut} className="text-slate-900 hover:text-slate-900">
+          <Button
+            onClick={onLogout}
+            variant="secondary"
+            icon={LogOut}
+            className="text-slate-900 hover:text-slate-900"
+          >
             Sair
           </Button>
         </div>
 
-        {/* Mobile menu */}
-        <div className="sm:hidden relative">
-          <Button variant="secondary" onClick={() => setMobileMenuOpen((v) => !v)}>
+        {/* Mobile drawer menu */}
+        {/* Mobile drawer menu */}
+        <div className="sm:hidden">
+          <button
+            ref={btnMenuRef}
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-controls="patient-mobile-drawer"
+            aria-expanded={mobileMenuOpen ? "true" : "false"}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all duration-200 active:scale-95 cursor-pointer text-sm bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-800 shadow-sm"
+          >
+            <Menu size={18} className="text-slate-700" />
             Menu
-          </Button>
+          </button>
+        </div>
 
-          {mobileMenuOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden z-30">
+      </div>
+
+      {/* Drawer mobile (off-canvas) */}
+      {mobileMenuOpen && (
+        <div
+          id="patient-mobile-drawer"
+          className="fixed inset-0 z-40"
+          aria-hidden={mobileMenuOpen ? "false" : "true"}
+        >
+          {/* Overlay */}
+          <button
+            className="absolute inset-0 bg-slate-900/40"
+            aria-label="Fechar menu"
+            onClick={closeMobileMenu}
+          />
+
+          {/* Panel */}
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="absolute right-0 top-0 h-full w-[min(86vw,340px)] bg-white border-l border-slate-100 shadow-2xl flex flex-col"
+            style={{
+              paddingTop: "calc(16px + env(safe-area-inset-top))",
+              paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
+            }}
+          >
+            <div className="px-4 pb-4 border-b border-slate-100 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-extrabold text-slate-900">Menu</div>
+                <div className="text-xs text-slate-500">
+                  Seu horário é um espaço de cuidado — a constância sustenta o processo.
+                </div>
+              </div>
 
               <button
-                className="w-full text-left px-[var(--pad)] py-3 text-sm text-slate-800 font-medium hover:bg-slate-50 flex items-center gap-2"
+                ref={btnCloseRef}
+                className="p-2 rounded-xl hover:bg-slate-50 text-slate-600"
+                onClick={closeMobileMenu}
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3 flex-1 overflow-auto">
+              <button
+                className="w-full text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2"
                 onClick={() => {
-                  setMobileMenuOpen(false);
+                  closeMobileMenu();
                   setLibraryOpen(true);
                 }}
               >
@@ -84,28 +175,37 @@ export default function PatientHeader({
               </button>
 
               <button
-                className="w-full text-left px-[var(--pad)] py-3 text-sm text-slate-800 font-medium hover:bg-slate-50 flex items-center gap-2"
+                className="mt-1 w-full text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2"
                 onClick={() => {
-                  setMobileMenuOpen(false);
+                  closeMobileMenu();
                   setContractOpen(true);
                 }}
               >
                 <FileText size={16} className="text-slate-600" /> Contrato
               </button>
 
-              <button
-                className="w-full text-left px-[var(--pad)] py-3 text-sm text-slate-900 font-semibold hover:bg-slate-50 flex items-center gap-2"
+              <div className="mt-4 px-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 text-xs text-slate-600 leading-relaxed">
+                Quando você vem, você não “cumpre uma agenda” — você sustenta um processo.
+                Se estiver difícil comparecer, isso é um dado importante para ser levado para a sessão.
+              </div>
+            </div>
+
+            <div className="px-4 pt-3 border-t border-slate-100">
+              <Button
                 onClick={() => {
-                  setMobileMenuOpen(false);
+                  closeMobileMenu();
                   onLogout();
                 }}
+                variant="secondary"
+                icon={LogOut}
+                className="w-full justify-center"
               >
-                <LogOut size={16} className="text-slate-900" /> Sair
-              </button>
+                Sair
+              </Button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Modal: leitura do contrato (sempre disponível) */}
       {contractOpen && (
@@ -135,7 +235,9 @@ export default function PatientHeader({
 
               <div className="p-5 space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold ${contractStatusClass}`}>
+                  <span
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold ${contractStatusClass}`}
+                  >
                     {contractStatusLabel}
                   </span>
                   <div className="text-[11px] text-slate-400">v{Number(currentContractVersion || 1)}</div>
@@ -146,8 +248,8 @@ export default function PatientHeader({
                 </div>
 
                 <div className="text-xs text-slate-500">
-                  Ler o contrato ajuda a sustentar o compromisso com o processo.
-                  Faltar não é “só” perder uma hora — é interromper o ritmo de evolução. A constância é parte do cuidado.
+                  Ler o contrato ajuda a sustentar o compromisso com o processo. Faltar não é “só”
+                  perder uma hora — é interromper o ritmo de evolução. A constância é parte do cuidado.
                 </div>
               </div>
 

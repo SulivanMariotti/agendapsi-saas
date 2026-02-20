@@ -6,9 +6,9 @@ export const metadata = {
 };
 
 export const viewport = {
-  width: \"device-width\",
+  width: "device-width",
   initialScale: 1,
-  viewportFit: \"cover\",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }) {
