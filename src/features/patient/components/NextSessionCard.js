@@ -65,7 +65,7 @@ export default function NextSessionCard({
           Próxima sessão
         </div>
 
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 space-y-2 sm:space-y-3">
           {/* Linha 1: data + chips */}
           <div className="flex items-start gap-3 min-w-0">
             <div className={`w-12 rounded-2xl ${PT.accentSoft} shadow-sm p-2 text-center shrink-0`}>
@@ -108,7 +108,7 @@ export default function NextSessionCard({
                   type="button"
                   onClick={() => setDetailsOpen((v) => !v)}
                   aria-expanded={detailsOpen ? "true" : "false"}
-                  className={`text-[12px] font-semibold ${PT.accentText} underline underline-offset-2`}
+                  className={`inline-flex items-center py-1 text-[12px] font-semibold ${PT.accentText} underline underline-offset-2`}
                 >
                   {detailsOpen ? "Ocultar detalhes" : "Ver detalhes"}
                 </button>
@@ -166,11 +166,11 @@ export default function NextSessionCard({
 
             <div className="mt-3 flex flex-col gap-2">
               {nextMeta?.wa && !nextMeta?.waDisabled ? (
-                <Button onClick={onConfirmPresence} disabled={confirmBusy} icon={MessageCircle} className="w-full">
+                <Button onClick={onConfirmPresence} disabled={confirmBusy} icon={MessageCircle} className="w-full min-h-[44px]">
                   {confirmBusy ? "Abrindo..." : isConfirmed ? "Reconfirmar no WhatsApp" : "Confirmar presença"}
                 </Button>
               ) : (
-                <Button disabled variant="secondary" icon={MessageCircle} className="w-full">
+                <Button disabled variant="secondary" icon={MessageCircle} className="w-full min-h-[44px]">
                   WhatsApp não configurado
                 </Button>
               )}
@@ -185,7 +185,7 @@ export default function NextSessionCard({
               <button
                 type="button"
                 onClick={() => setWhyOpen((v) => !v)}
-                className={`text-[12px] font-semibold ${PT.accentText} underline underline-offset-2 ml-1`}
+                className={`inline-flex items-center py-1 text-[12px] font-semibold ${PT.accentText} underline underline-offset-2 ml-1`}
                 aria-expanded={whyOpen ? "true" : "false"}
               >
                 {whyOpen ? "Ocultar" : "Por que isso importa?"}

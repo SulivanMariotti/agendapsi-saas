@@ -31,7 +31,7 @@ export default function PatientSessionsCard({
   showConsistencyHint = true,
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2 sm:space-y-3">
       <NextSessionCard
         nextAppointment={nextAppointment}
         nextLabel={nextLabel}

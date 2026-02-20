@@ -115,13 +115,13 @@ export default function PatientAgendaCard({
   return (
 
     <div className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden flex flex-col">
-      <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-50 bg-white">
+      <div className="px-4 sm:px-6 py-3 sm:py-5 border-b border-slate-50 bg-white">
         <h3 className="font-bold text-slate-800 text-base sm:text-lg tracking-tight">Agenda</h3>
       </div>
       <div className="flex-1 p-4 sm:p-6 min-h-0">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <div className="min-w-0">
-          <div className="text-xs text-slate-500">Visualização</div>
+          <div className="text-[11px] text-slate-500">Visualização</div>
 
           {agendaLastUpdate?.label ? (
             <div className="text-[11px] text-slate-400 mt-1 leading-snug">
@@ -138,7 +138,7 @@ export default function PatientAgendaCard({
               setShowAllWeeks(false);
               setShowAllMonths(false);
             }}
-            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-full text-xs font-semibold transition ${
+            className={`flex-1 sm:flex-none px-3 py-2 min-h-[40px] rounded-full text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${
               agendaView === "compact"
                 ? "bg-white text-violet-800 shadow-sm"
                 : "bg-transparent text-slate-700"
@@ -153,7 +153,7 @@ export default function PatientAgendaCard({
               setShowAllWeeks(true);
               setShowAllMonths(true);
             }}
-            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-full text-xs font-semibold transition ${
+            className={`flex-1 sm:flex-none px-3 py-2 min-h-[40px] rounded-full text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${
               agendaView === "all"
                 ? "bg-white text-violet-800 shadow-sm"
                 : "bg-transparent text-slate-700"
@@ -211,7 +211,7 @@ export default function PatientAgendaCard({
                   <button
                     type="button"
                     onClick={() => setOpenWeekKey((prev) => (prev === w.key ? null : w.key))}
-                    className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-xl hover:bg-white/70 active:scale-[0.99]"
+                    className="w-full flex items-center justify-between gap-3 px-2 py-2 min-h-[44px] rounded-xl hover:bg-white/70 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
                     aria-expanded={isOpen}
                   >
                     <div className="text-xs font-semibold text-slate-700 text-left">{w.label}</div>
@@ -259,7 +259,7 @@ export default function PatientAgendaCard({
                     <button
                       type="button"
                       onClick={() => setOpenMonthKey((prev) => (prev === m.label ? null : m.label))}
-                      className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-xl hover:bg-white/70 active:scale-[0.99]"
+                      className="w-full flex items-center justify-between gap-3 px-2 py-2 min-h-[44px] rounded-xl hover:bg-white/70 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
                       aria-expanded={isOpen}
                     >
                       <div className="text-xs font-semibold text-slate-700 text-left">{m.label}</div>

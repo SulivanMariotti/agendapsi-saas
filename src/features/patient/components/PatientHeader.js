@@ -137,7 +137,7 @@ export default function PatientHeader({
             onClick={() => setMobileMenuOpen(true)}
             aria-controls="patient-mobile-drawer"
             aria-expanded={mobileMenuOpen ? "true" : "false"}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 active:scale-95 cursor-pointer text-sm bg-white text-slate-700 hover:bg-slate-50 shadow-sm"
+            className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 active:scale-95 cursor-pointer text-sm bg-white text-slate-700 hover:bg-slate-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
           >
             <Menu size={16} className="text-slate-700" />
             Menu
@@ -180,7 +180,7 @@ export default function PatientHeader({
 
               <button
                 ref={btnCloseRef}
-                className="p-2 rounded-xl hover:bg-slate-50 text-slate-600"
+                className="w-11 h-11 inline-flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
                 onClick={closeMobileMenu}
                 aria-label="Fechar"
               >
@@ -190,7 +190,7 @@ export default function PatientHeader({
 
             <div className="p-3 flex-1 overflow-auto">
               <button
-                className="w-full text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2"
+                className="w-full min-h-[44px] text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
                 onClick={() => {
                   closeMobileMenu();
                   setLibraryOpen(true);
@@ -200,7 +200,7 @@ export default function PatientHeader({
               </button>
 
               <button
-                className="mt-1 w-full text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2"
+                className="mt-1 w-full min-h-[44px] text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
                 onClick={() => {
                   closeMobileMenu();
                   setContractOpen(true);
@@ -250,7 +250,7 @@ export default function PatientHeader({
                 </div>
 
                 <button
-                  className="p-2 rounded-xl hover:bg-slate-50 text-slate-600"
+                  className="w-11 h-11 inline-flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
                   onClick={() => setContractOpen(false)}
                   aria-label="Fechar"
                 >

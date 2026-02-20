@@ -179,7 +179,7 @@ export default function NotificationStatusCard({
           <div className="mt-2">
             <button
               type="button"
-              className="text-xs font-semibold text-slate-600 underline underline-offset-4"
+              className="inline-flex items-center py-1 text-xs font-semibold text-slate-600 underline underline-offset-4"
               onClick={() => setShowHelp((v) => !v)}
             >
               {showHelp ? "Ocultar" : "Por que isso importa?"}
@@ -203,7 +203,7 @@ export default function NotificationStatusCard({
           <div className="mt-2 flex items-center justify-between">
             <button
               type="button"
-              className="text-xs font-semibold text-emerald-900 underline underline-offset-4"
+              className="inline-flex items-center py-1 text-xs font-semibold text-emerald-900 underline underline-offset-4"
               onClick={() => setShowHelp((v) => !v)}
             >
               {showHelp ? "Ocultar" : "Por que isso importa?"}
@@ -272,7 +272,7 @@ export default function NotificationStatusCard({
         <div className="mt-2 flex items-center justify-between">
           <button
             type="button"
-            className={`text-xs font-semibold ${PT.accentText} underline underline-offset-4`}
+            className={`inline-flex items-center py-1 text-xs font-semibold ${PT.accentText} underline underline-offset-4`}
             onClick={() => setShowHelp((v) => !v)}
           >
             {showHelp ? "Ocultar" : "Por que isso importa?"}
