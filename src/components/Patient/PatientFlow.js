@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Calendar, BookOpen, NotebookPen } from "lucide-react";
+import { Calendar, BookOpen, NotebookPen, FileText } from "lucide-react";
 import PatientHeader from "../../features/patient/components/PatientHeader";
 import PatientSessionsCard from "../../features/patient/components/PatientSessionsCard";
 import PatientNotificationsCard from "../../features/patient/components/PatientNotificationsCard";
@@ -57,6 +57,14 @@ const [profile, setProfile] = useState(null);
   const openPatientLibrary = () => {
     try {
       window.dispatchEvent(new Event("lp:patient:openLibrary"));
+    } catch (_) {
+      // silencioso
+    }
+  };
+
+  const openPatientContract = () => {
+    try {
+      window.dispatchEvent(new Event("lp:patient:openContract"));
     } catch (_) {
       // silencioso
     }
@@ -476,7 +484,7 @@ useEffect(() => {
           className="sm:hidden fixed left-0 right-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur"
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
-          <div className="max-w-5xl mx-auto px-[var(--pad)] h-14 flex items-center justify-around">
+          <div className="max-w-5xl mx-auto px-[var(--pad)] h-14 grid grid-cols-4 items-center">
             <button
               type="button"
               onClick={() => scrollToSection("lp-section-agenda")}
@@ -502,6 +510,15 @@ useEffect(() => {
             >
               <BookOpen size={18} className="text-slate-700" />
               Biblioteca
+            </button>
+
+            <button
+              type="button"
+              onClick={openPatientContract}
+              className="flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-slate-600 active:scale-95"
+            >
+              <FileText size={18} className="text-slate-700" />
+              Contrato
             </button>
           </div>
         </div>
