@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Card } from "../../../components/DesignSystem";
 import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 
 /**
@@ -34,24 +33,25 @@ export default function PatientMantraCard({ mantras: mantrasProp, intervalMs = 9
   if (!current) return null;
 
   return (
-    <Card>
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden flex flex-col">
+      <div className="p-4 sm:p-6">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-lg shadow-violet-200 shrink-0">
-            <Sparkles size={18} />
+        <div className="flex gap-2 sm:gap-3 min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-lg shadow-violet-200 shrink-0">
+            <Sparkles size={16} />
           </div>
 
           <div className="min-w-0">
-            <div className="font-extrabold text-slate-900 truncate">{current.title}</div>
-            <div className="text-sm text-slate-600 mt-1">{current.text}</div>
-            <div className="text-[11px] text-slate-400 mt-2">Lembrete Psi é tecnologia a serviço do vínculo terapêutico.</div>
+            <div className="font-extrabold text-slate-900 truncate text-sm sm:text-base">{current.title}</div>
+            <div className="text-xs sm:text-sm text-slate-600 mt-0.5 sm:mt-1">{current.text}</div>
+            <div className="hidden sm:block text-[11px] text-slate-400 mt-2">Lembrete Psi é tecnologia a serviço do vínculo terapêutico.</div>
           </div>
         </div>
 
         <div className="shrink-0 flex items-center gap-1">
           <button
             type="button"
-            className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center"
             onClick={() => setIndex((i) => (i - 1 + mantras.length) % mantras.length)}
             aria-label="Anterior"
           >
@@ -59,7 +59,7 @@ export default function PatientMantraCard({ mantras: mantrasProp, intervalMs = 9
           </button>
           <button
             type="button"
-            className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center"
             onClick={() => setIndex((i) => (i + 1) % mantras.length)}
             aria-label="Próximo"
           >
@@ -68,11 +68,12 @@ export default function PatientMantraCard({ mantras: mantrasProp, intervalMs = 9
         </div>
       </div>
 
-      <div className="flex items-center gap-1 mt-3">
+      <div className="hidden sm:flex items-center gap-1 mt-3">
         {mantras.map((_, i) => (
           <div key={i} className={`h-1.5 w-6 rounded-full ${i === index ? "bg-violet-600" : "bg-slate-200"}`} />
         ))}
       </div>
-    </Card>
+      </div>
+    </div>
   );
 }

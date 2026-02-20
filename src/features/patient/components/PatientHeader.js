@@ -96,10 +96,10 @@ export default function PatientHeader({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs text-slate-400 uppercase tracking-wider">Área do Paciente</div>
-          <div className="text-lg font-extrabold text-slate-900 truncate">{patientName}</div>
+          <div className="text-base sm:text-lg font-extrabold text-slate-900 truncate">{patientName}</div>
 
           {patientPhone ? (
-            <div className="mt-2 inline-flex items-center gap-2.5 text-xs px-3 py-1.5 rounded-full border border-slate-200 bg-white text-slate-800 shadow-sm">
+            <div className="mt-1.5 sm:mt-2 inline-flex items-center gap-2 sm:gap-2.5 text-xs px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full border border-slate-200 bg-white text-slate-800 shadow-sm">
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100">
                 <Phone size={14} className="text-violet-600" />
                 Telefone
@@ -138,9 +138,9 @@ export default function PatientHeader({
             onClick={() => setMobileMenuOpen(true)}
             aria-controls="patient-mobile-drawer"
             aria-expanded={mobileMenuOpen ? "true" : "false"}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all duration-200 active:scale-95 cursor-pointer text-sm bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-800 shadow-sm"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 active:scale-95 cursor-pointer text-sm bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-800 shadow-sm"
           >
-            <Menu size={18} className="text-slate-700" />
+            <Menu size={16} className="text-slate-700" />
             Menu
           </button>
         </div>
