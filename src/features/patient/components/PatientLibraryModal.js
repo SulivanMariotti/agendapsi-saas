@@ -12,10 +12,10 @@ function Chip({ active, onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
         active
-          ? "bg-violet-50 text-violet-700 border-violet-100"
-          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          ? "bg-violet-100 text-violet-800"
+          : "bg-slate-50 text-slate-600 hover:bg-slate-100"
       }`}
     >
       {children}
@@ -66,7 +66,7 @@ function computeReadingTimeFromParagraphs(paragraphs) {
 
 function ArticleRow({ article, expanded, onToggle }) {
   return (
-    <div className="border border-slate-100 rounded-xl sm:rounded-2xl overflow-hidden bg-white">
+    <div className="rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-sm">
       <button
         type="button"
         onClick={onToggle}
@@ -75,7 +75,7 @@ function ArticleRow({ article, expanded, onToggle }) {
       >
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-slate-50 text-slate-700 border-slate-100">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700">
               {article.category}
             </span>
             <span className="text-[11px] text-slate-400">
@@ -94,7 +94,7 @@ function ArticleRow({ article, expanded, onToggle }) {
 
       {expanded ? (
         <div className="px-4 pb-4">
-          <div className="p-4 rounded-xl sm:rounded-2xl bg-slate-50 border border-slate-100 text-[13px] text-slate-700 leading-relaxed space-y-3">
+          <div className="p-4 rounded-xl sm:rounded-2xl bg-slate-50 text-[13px] text-slate-700 leading-relaxed space-y-3">
             {Array.isArray(article.paragraphs)
               ? article.paragraphs.map((p, idx) => (
                   <p key={idx} className="whitespace-pre-wrap">
@@ -233,7 +233,7 @@ export default function PatientLibraryModal({ open, onClose }) {
           onKeyDown={(e) => {
             if (e.key === "Escape") onClose?.();
           }}
-          className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden max-h-[calc(100dvh-2rem)] flex flex-col"
+          className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[calc(100dvh-2rem)] flex flex-col"
         >
           {/* Header */}
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
@@ -258,9 +258,9 @@ export default function PatientLibraryModal({ open, onClose }) {
             <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-100">
               <div className="px-4 sm:px-5 pt-4 pb-3 space-y-3">
                 {/* Mantra fixo */}
-                <div className="rounded-2xl border border-violet-100 bg-violet-50 p-3">
+                <div className="rounded-2xl bg-violet-50 p-3 shadow-sm">
                   <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-2xl bg-white border border-violet-100 flex items-center justify-center text-violet-700 shrink-0">
+                    <div className="w-9 h-9 rounded-2xl bg-white/80 shadow-sm flex items-center justify-center text-violet-700 shrink-0">
                       <Sparkles size={18} />
                     </div>
                     <div className="min-w-0">
@@ -303,9 +303,9 @@ export default function PatientLibraryModal({ open, onClose }) {
             <div className="px-4 sm:px-5 py-4 space-y-5 pb-[calc(16px+env(safe-area-inset-bottom))]">
               {/* Aviso (fallback / erro de carga) */}
               {warning ? (
-                <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                <div className="rounded-2xl bg-amber-50 p-4 shadow-sm">
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-white border border-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                    <div className="w-10 h-10 rounded-2xl bg-white/80 shadow-sm flex items-center justify-center text-amber-700 shrink-0">
                       <AlertTriangle size={18} />
                     </div>
                     <div className="min-w-0">
@@ -327,7 +327,7 @@ export default function PatientLibraryModal({ open, onClose }) {
                 </div>
 
                 {filtered.length === 0 ? (
-                  <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50 text-sm text-slate-700">
+                  <div className="p-4 rounded-2xl bg-slate-50 text-sm text-slate-700 shadow-sm">
                     Não encontrei nada com esse filtro. Tente outra palavra.
                   </div>
                 ) : (
@@ -343,9 +343,9 @@ export default function PatientLibraryModal({ open, onClose }) {
               </div>
 
               {/* Para levar para a sessão */}
-              <div className="rounded-2xl border border-slate-100 bg-white p-4">
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 shadow-sm flex items-center justify-center text-emerald-700 shrink-0">
                     <CheckCircle2 size={18} />
                   </div>
                   <div className="min-w-0">

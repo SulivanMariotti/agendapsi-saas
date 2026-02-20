@@ -179,9 +179,9 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
 
   return (
     <>
-      <Card title="Diário rápido">
+      <Card title="Diário rápido" className="border-0 shadow-sm">
         <div className="space-y-4">
-          <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
+          <div className="rounded-2xl bg-violet-50/70 p-4 shadow-sm">
             <div className="flex items-center gap-2 text-slate-800">
               <Sparkles size={16} className="text-violet-600" />
               <div className="font-semibold text-sm">Anote agora para chegar mais presente na sessão</div>
@@ -225,7 +225,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
           {/* Atalho de busca (mobile): deixa “buscar” mais óbvio sem ocupar a tela */}
           <button
             type="button"
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:bg-slate-50 active:scale-[0.99]"
+            className="w-full rounded-2xl bg-white px-4 py-3 text-left shadow-sm transition hover:bg-slate-50 active:scale-[0.99]"
             onClick={() => {
               setHistoryModalOpen(true);
               setHistorySearch("");
@@ -273,7 +273,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
               {previewNotes.map((n, idx) => {
                 const when = n?.createdAt?.seconds ? new Date(n.createdAt.seconds * 1000).toLocaleString("pt-BR") : "";
                 return (
-                  <div key={n.id} className="p-4 rounded-2xl border border-slate-100 bg-white">
+                  <div key={n.id} className="p-4 rounded-2xl bg-white shadow-sm">
                     {pinnedNote && idx === 0 ? (
                       <div className="inline-flex items-center gap-2 mb-2 text-[11px] font-semibold text-violet-700">
                         <Star size={14} className="text-violet-600" />
@@ -291,7 +291,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
               {notesCount > 2 ? (
                 <button
                   type="button"
-                  className="w-full p-3 rounded-2xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-700 hover:bg-slate-100 transition"
+                  className="w-full p-3 rounded-2xl bg-slate-50 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100 transition"
                   onClick={() => {
                     setHistoryModalOpen(true);
                     setHistorySearch("");
@@ -308,7 +308,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
       {/* Modal Nova Nota */}
       {noteModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-100">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <div className="font-bold text-slate-800">Nova anotação</div>
               <button type="button" onClick={() => setNoteModalOpen(false)} className="text-slate-400 hover:text-slate-600" disabled={busy}>
@@ -328,7 +328,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
                     type="button"
                     onClick={() => injectPrompt(p.value)}
                     disabled={busy}
-                    className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 active:scale-[0.98] transition"
+                    className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium bg-slate-50 text-slate-700 hover:bg-slate-100 active:scale-[0.98] transition"
                   >
                     {p.label}
                   </button>
@@ -365,7 +365,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
       {/* Modal Histórico */}
       {historyModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-100">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <div className="font-bold text-slate-800">Histórico de anotações</div>
               <button
@@ -409,7 +409,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
                   {filteredNotes.map((n) => {
                     const when = n?.createdAt?.seconds ? new Date(n.createdAt.seconds * 1000).toLocaleString("pt-BR") : "";
                     return (
-                      <div key={n.id} className="p-4 rounded-2xl border border-slate-100 bg-white flex items-start justify-between gap-4">
+                      <div key={n.id} className="p-4 rounded-2xl bg-white shadow-sm flex items-start justify-between gap-4">
                         <div className="min-w-0">
                           <div className="text-sm text-slate-700 whitespace-pre-wrap break-words">{n.content}</div>
                           {when ? <div className="text-[11px] text-slate-400 mt-2">{when}</div> : null}
