@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../../components/DesignSystem";
-import { LogOut, FileText, X, Phone, BookOpen, Menu } from "lucide-react";
+import { LogOut, FileText, X, Phone, BookOpen } from "lucide-react";
 import { formatPhoneBR } from "../lib/phone";
 import { PT } from "../lib/uiTokens";
 import PatientLibraryModal from "./PatientLibraryModal";
@@ -94,7 +94,7 @@ export default function PatientHeader({
     <>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-xs text-slate-400 uppercase tracking-wider">Área do Paciente</div>
+          <div className="hidden sm:block text-xs text-slate-400 uppercase tracking-wider">Área do Paciente</div>
           <div className="text-base sm:text-lg font-extrabold text-slate-900 truncate">{patientName}</div>
 
           {patientPhone ? (
@@ -127,23 +127,6 @@ export default function PatientHeader({
             Sair
           </Button>
         </div>
-
-        {/* Mobile drawer menu */}
-        {/* Mobile drawer menu */}
-        <div className="sm:hidden">
-          <button
-            ref={btnMenuRef}
-            type="button"
-            onClick={() => setMobileMenuOpen(true)}
-            aria-controls="patient-mobile-drawer"
-            aria-expanded={mobileMenuOpen ? "true" : "false"}
-            className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 active:scale-95 cursor-pointer text-sm bg-white text-slate-700 hover:bg-slate-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
-          >
-            <Menu size={16} className="text-slate-700" />
-            Menu
-          </button>
-        </div>
-
       </div>
 
       {/* Drawer mobile (off-canvas) */}
