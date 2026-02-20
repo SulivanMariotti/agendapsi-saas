@@ -25,6 +25,7 @@ export default function NextSessionCard({
 
   // Mobile: manter "1 olhar e pronto". Detalhes ficam colapsados por padrão.
   const [detailsOpen, setDetailsOpen] = React.useState(false);
+  const [whyOpen, setWhyOpen] = React.useState(false);
 
   const titleNode = (
     <span className="inline-flex items-center gap-2">
@@ -51,6 +52,8 @@ export default function NextSessionCard({
   const localRaw = nextAppointment.local || nextAppointment.location || "";
   const place = nextPlaceLabel || localRaw || "Não informado";
   const service = nextServiceLabel || "Sessão";
+
+  const isConfirmed = nextStatusChip?.text === "Confirmada";
 
   return (
     <Card
@@ -169,26 +172,64 @@ export default function NextSessionCard({
           </div>
         </div>
 
-        {/* CTA principal */}
-        <div className="flex flex-col gap-2">
-          {nextMeta?.wa && !nextMeta?.waDisabled ? (
-            <Button onClick={onConfirmPresence} disabled={confirmBusy} icon={MessageCircle} className="w-full">
-              {confirmBusy ? "Registrando..." : "Confirmar presença no WhatsApp"}
-            </Button>
-          ) : (
-            <Button disabled variant="secondary" icon={MessageCircle} className="w-full">
-              WhatsApp não configurado (admin)
-            </Button>
-          )}
-        </div>
+        {/* Confirmação (high-contrast, mobile-first) */}
+        <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-3 sm:p-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 h-10 w-10 rounded-2xl bg-white/80 border border-violet-100 flex items-center justify-center shrink-0">
+              <MessageCircle size={18} className="text-violet-700" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-extrabold text-slate-900">
+                {isConfirmed ? "Presença confirmada" : "Confirmação rápida"}
+              </div>
+              <div className="text-[12px] text-slate-600 leading-snug mt-0.5">
+                {isConfirmed
+                  ? "Seu horário segue reservado para você. Obrigado por sustentar sua constância."
+                  : "Leva poucos segundos e ajuda a sustentar seu compromisso com esse cuidado."}
+              </div>
+            </div>
+          </div>
 
-        {/* Nota clínica */}
-        <div className="text-[12px] text-slate-500 leading-snug">
-          Este botão é apenas para <b>confirmar presença</b>. Seu horário está reservado para você.
-          <div className="text-[11px] text-slate-400 mt-1">
-            A constância sustenta seu processo.
-            <span className="hidden sm:inline"> Se surgir vontade de faltar, isso também pode dizer algo importante — vale levar para a terapia.</span>
-            <span className={`${detailsOpen ? "inline" : "hidden"} sm:hidden`}> Se surgir vontade de faltar, isso também pode dizer algo importante — vale levar para a terapia.</span>
+          <div className="mt-3 flex flex-col gap-2">
+            {nextMeta?.wa && !nextMeta?.waDisabled ? (
+              <Button
+                onClick={onConfirmPresence}
+                disabled={confirmBusy}
+                icon={MessageCircle}
+                className="w-full"
+              >
+                {confirmBusy ? "Abrindo..." : isConfirmed ? "Reconfirmar no WhatsApp" : "Confirmar presença"}
+              </Button>
+            ) : (
+              <Button disabled variant="secondary" icon={MessageCircle} className="w-full">
+                WhatsApp não configurado
+              </Button>
+            )}
+
+            {confirmedLoading ? (
+              <div className="text-[11px] text-slate-500">Atualizando status…</div>
+            ) : null}
+          </div>
+
+          {/* Nota clínica (curta, expandível) */}
+          <div className="mt-3 text-[12px] text-slate-600 leading-snug">
+            Este espaço existe para te apoiar a <b>comparecer</b>. A sessão acontece na continuidade.
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => setWhyOpen((v) => !v)}
+                className="text-[12px] font-semibold text-violet-700 underline underline-offset-2"
+                aria-expanded={whyOpen ? "true" : "false"}
+              >
+                {whyOpen ? "Ocultar" : "Por que isso importa?"}
+              </button>
+            </div>
+            {whyOpen ? (
+              <div className="mt-2 text-[12px] text-slate-600">
+                Quando dá vontade de faltar, isso também pode dizer algo importante. Em vez de interromper o processo,
+                vale levar esse movimento para a sessão — é aí que a terapia trabalha.
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
