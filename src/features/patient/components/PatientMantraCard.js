@@ -33,7 +33,7 @@ export default function PatientMantraCard({ mantras: mantrasProp, intervalMs = 9
   if (!current) return null;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden flex flex-col">
+    <div className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden flex flex-col">
       <div className="p-4 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div className="flex gap-2 sm:gap-3 min-w-0">
@@ -51,7 +51,7 @@ export default function PatientMantraCard({ mantras: mantrasProp, intervalMs = 9
         <div className="shrink-0 flex items-center gap-1">
           <button
             type="button"
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-50 hover:bg-slate-100 flex items-center justify-center shadow-sm"
             onClick={() => setIndex((i) => (i - 1 + mantras.length) % mantras.length)}
             aria-label="Anterior"
           >
@@ -59,7 +59,7 @@ export default function PatientMantraCard({ mantras: mantrasProp, intervalMs = 9
           </button>
           <button
             type="button"
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-50 hover:bg-slate-100 flex items-center justify-center shadow-sm"
             onClick={() => setIndex((i) => (i + 1) % mantras.length)}
             aria-label="Próximo"
           >

@@ -32,7 +32,7 @@ export default function ContractStatusCard({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="w-full flex items-center justify-between gap-2 p-3 rounded-xl border border-slate-100 bg-white hover:bg-slate-50 transition-colors"
+            className="w-full flex items-center justify-between gap-2 p-3 rounded-xl bg-white shadow-sm hover:bg-slate-50 transition-colors"
           >
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
               <FileText size={18} className="text-violet-600" />
@@ -43,11 +43,11 @@ export default function ContractStatusCard({
 
           <div className="flex items-center justify-between gap-2">
             {needsContractAcceptance ? (
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 text-amber-900 border border-amber-100 text-xs font-semibold">
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 text-amber-900 text-xs font-semibold shadow-sm">
                 <AlertTriangle size={14} /> Contrato pendente
               </span>
             ) : (
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-100 text-xs font-semibold">
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold shadow-sm">
                 <CheckCircle size={14} /> Contrato OK
               </span>
             )}
@@ -58,7 +58,7 @@ export default function ContractStatusCard({
           </div>
 
           {open && (
-            <div className="p-3 border border-slate-100 rounded-xl bg-slate-50 whitespace-pre-wrap text-sm text-slate-700 leading-relaxed">
+            <div className="p-3 rounded-xl bg-slate-50 whitespace-pre-wrap text-sm text-slate-700 leading-relaxed shadow-sm">
               {safeText}
             </div>
           )}

@@ -124,7 +124,7 @@ export default function NotificationStatusCard({
     })();
 
     const Help = () => (
-      <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-700">
+      <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700 shadow-sm">
         <div className="flex items-start gap-2">
           <Info size={16} className="mt-0.5 text-slate-500" />
           <div>
@@ -158,7 +158,7 @@ export default function NotificationStatusCard({
     // Conteúdo principal (compacto)
     if (typeof window === "undefined") {
       return (
-        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600 flex gap-2">
+        <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600 flex gap-2 shadow-sm">
           <Loader2 size={16} className="mt-0.5 animate-spin text-slate-400" />
           <div>Carregando status de notificações…</div>
         </div>
@@ -168,7 +168,7 @@ export default function NotificationStatusCard({
     if (!notifSupported) {
       return (
         <div>
-          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-700 flex gap-2">
+          <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700 flex gap-2 shadow-sm">
             <AlertTriangle size={16} className="mt-0.5 text-slate-500" />
             <div>
               Este navegador pode não suportar notificações.
@@ -192,7 +192,7 @@ export default function NotificationStatusCard({
     if (notifHasToken) {
       return (
         <div>
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900 flex gap-2">
+          <div className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900 flex gap-2 shadow-sm">
             <CheckCircle size={16} className="mt-0.5" />
             <div>
               <b>Notificações ativas neste aparelho</b>
@@ -219,7 +219,7 @@ export default function NotificationStatusCard({
     if (notifPermission === "denied") {
       return (
         <div>
-          <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-900 flex gap-2">
+          <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 flex gap-2 shadow-sm">
             <AlertTriangle size={16} className="mt-0.5" />
             <div>
               <b>Notificações bloqueadas</b>
@@ -247,7 +247,7 @@ export default function NotificationStatusCard({
     // default: desativado e suportado
     return (
       <div>
-        <div className="rounded-xl border border-violet-100 bg-violet-50 p-3 text-sm text-violet-900 flex items-start justify-between gap-3">
+        <div className="rounded-xl bg-violet-50 p-3 text-sm text-violet-900 flex items-start justify-between gap-3 shadow-sm">
           <div className="flex gap-2">
             <Bell size={16} className="mt-0.5 text-violet-700" />
             <div>
@@ -294,7 +294,7 @@ export default function NotificationStatusCard({
         {/* Pill */}
         <div>
           {typeof window === "undefined" ? (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-50 text-slate-700 shadow-sm">
               Carregando
             </span>
           ) : (
@@ -308,24 +308,24 @@ export default function NotificationStatusCard({
                 : "off";
               if (key === "active")
                 return (
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-emerald-50 text-emerald-900 border-emerald-200">
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-900 shadow-sm">
                     Ativo
                   </span>
                 );
               if (key === "blocked")
                 return (
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-900 border-amber-200">
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 shadow-sm">
                     Bloqueado
                   </span>
                 );
               if (key === "off")
                 return (
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-violet-50 text-violet-900 border-violet-200">
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 text-violet-900 shadow-sm">
                     Desativado
                   </span>
                 );
               return (
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-50 text-slate-700 shadow-sm">
                   Indisponível
                 </span>
               );

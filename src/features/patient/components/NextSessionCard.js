@@ -29,7 +29,7 @@ export default function NextSessionCard({
 
   if (!nextAppointment) {
     return (
-      <div className="relative rounded-2xl border border-violet-100 ring-2 ring-violet-200/70 bg-gradient-to-br from-violet-50/60 via-white to-white overflow-hidden before:absolute before:inset-y-0 before:left-0 before:w-1.5 before:bg-violet-500/30 before:content-['']">
+      <div className="relative rounded-2xl bg-gradient-to-br from-violet-50/60 via-white to-white shadow-sm overflow-hidden before:absolute before:inset-y-0 before:left-0 before:w-1.5 before:bg-violet-500/30 before:content-['']">
         <div className="p-4 sm:p-6">
           <div className="inline-flex items-center gap-2 text-[13px] sm:text-base font-extrabold text-slate-900">
             <Sparkles size={18} className="text-violet-600" />
@@ -52,7 +52,7 @@ export default function NextSessionCard({
   const isConfirmed = nextStatusChip?.text === "Confirmada";
 
   return (
-    <div className="relative rounded-2xl border border-violet-100 ring-2 ring-violet-200/70 bg-gradient-to-br from-violet-50/60 via-white to-white overflow-hidden before:absolute before:inset-y-0 before:left-0 before:w-1.5 before:bg-violet-500/30 before:content-['']">
+    <div className="relative rounded-2xl bg-gradient-to-br from-violet-50/60 via-white to-white shadow-sm overflow-hidden before:absolute before:inset-y-0 before:left-0 before:w-1.5 before:bg-violet-500/30 before:content-['']">
       <div className="p-4 sm:p-6">
         {/* Título (compacto no mobile) */}
         <div className="inline-flex items-center gap-2 text-[13px] sm:text-base font-extrabold text-slate-900">
@@ -63,7 +63,7 @@ export default function NextSessionCard({
         <div className="mt-3 space-y-3">
           {/* Linha 1: data + chips */}
           <div className="flex items-start gap-3 min-w-0">
-            <div className="w-12 rounded-2xl border border-slate-100 bg-white/80 p-2 text-center shrink-0">
+            <div className="w-12 rounded-2xl bg-white/80 shadow-sm p-2 text-center shrink-0">
               <div className="text-lg font-black text-slate-900 leading-none">{parts.day}</div>
               <div className="text-[10px] font-bold text-slate-500 mt-1 uppercase">{parts.mon}</div>
             </div>
@@ -77,13 +77,13 @@ export default function NextSessionCard({
 
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {nextLabel ? (
-                  <span className={`text-[11px] px-2 py-1 rounded-full border font-semibold ${chipClass(nextLabel.style)}`}>
+                  <span className={`text-[11px] px-2 py-1 rounded-full font-semibold shadow-sm ${chipClass(nextLabel.style)}`}>
                     {nextLabel.text}
                   </span>
                 ) : null}
 
                 {nextStatusChip ? (
-                  <span className={`text-[11px] px-2 py-1 rounded-full border font-semibold ${nextStatusChip.cls}`}>
+                  <span className={`text-[11px] px-2 py-1 rounded-full font-semibold shadow-sm ${nextStatusChip.cls}`}>
                     {nextStatusChip.text}
                   </span>
                 ) : null}
@@ -115,7 +115,7 @@ export default function NextSessionCard({
 
           {/* Detalhes: colapsado no mobile, sempre visível no desktop */}
           <div className={`${detailsOpen ? "block" : "hidden"} sm:block`}>
-            <div className="rounded-2xl border border-slate-100 bg-white/70 p-3 sm:p-4">
+            <div className="rounded-2xl bg-white/70 shadow-sm p-3 sm:p-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-slate-700">
                 <div className="leading-snug min-w-0">
                   <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Serviço</div>
@@ -155,7 +155,7 @@ export default function NextSessionCard({
           </div>
 
           {/* Confirmação (compacta, ainda com destaque) */}
-          <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-3 sm:p-4">
+          <div className="rounded-2xl bg-violet-50/70 p-3 sm:p-4 shadow-sm">
             <div className="text-sm font-extrabold text-slate-900">
               {isConfirmed ? "Presença confirmada" : "Confirme sua presença"}
             </div>

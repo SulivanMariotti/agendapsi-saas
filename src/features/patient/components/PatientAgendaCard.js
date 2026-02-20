@@ -126,7 +126,7 @@ export default function PatientAgendaCard({
           ) : null}
         </div>
 
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-1 w-full sm:w-auto bg-slate-100/80 p-1 rounded-full">
           <button
             type="button"
             onClick={() => {
@@ -134,10 +134,10 @@ export default function PatientAgendaCard({
               setShowAllWeeks(false);
               setShowAllMonths(false);
             }}
-            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-full text-xs font-semibold border ${
+            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-full text-xs font-semibold transition ${
               agendaView === "compact"
-                ? "bg-violet-50 border-violet-100 text-violet-900"
-                : "bg-white border-slate-200 text-slate-700"
+                ? "bg-white text-violet-900 shadow-sm"
+                : "bg-transparent text-slate-700"
             }`}
           >
             Compacta
@@ -149,10 +149,10 @@ export default function PatientAgendaCard({
               setShowAllWeeks(true);
               setShowAllMonths(true);
             }}
-            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-full text-xs font-semibold border ${
+            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-full text-xs font-semibold transition ${
               agendaView === "all"
-                ? "bg-violet-50 border-violet-100 text-violet-900"
-                : "bg-white border-slate-200 text-slate-700"
+                ? "bg-white text-violet-900 shadow-sm"
+                : "bg-transparent text-slate-700"
             }`}
           >
             Completa
@@ -203,7 +203,7 @@ export default function PatientAgendaCard({
               const isOpen = openWeekKey === w.key;
 
               return (
-                <div key={w.key} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-2.5 space-y-2">
+                <div key={w.key} className="rounded-2xl bg-white shadow-sm p-2.5 space-y-2">
                   <button
                     type="button"
                     onClick={() => setOpenWeekKey((prev) => (prev === w.key ? null : w.key))}
@@ -251,7 +251,7 @@ export default function PatientAgendaCard({
                 const isOpen = openMonthKey === m.label;
 
                 return (
-                  <div key={m.label} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-2.5 space-y-2">
+                  <div key={m.label} className="rounded-2xl bg-white shadow-sm p-2.5 space-y-2">
                     <button
                       type="button"
                       onClick={() => setOpenMonthKey((prev) => (prev === m.label ? null : m.label))}
