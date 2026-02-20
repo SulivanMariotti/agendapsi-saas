@@ -20,6 +20,13 @@ export const PT = {
   accentIcon: "text-violet-600",
   focusRing: "focus:ring-2 focus:ring-violet-200",
 
+  // App bar (mobile top header)
+  // Darker tone of the palette to create a clear "app" framing without adding CTA.
+  appBarBg: "bg-violet-950/95 text-white",
+  appBarBorder: "border-white/10",
+  appBarIcon: "text-white/90",
+  appBarIconHover: "hover:text-white hover:bg-white/10",
+
   // States
   ok: "bg-emerald-50 text-emerald-800",
   warn: "bg-amber-50 text-amber-900",

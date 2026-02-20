@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Calendar, BookOpen, NotebookPen, FileText, Menu } from "lucide-react";
+import { Calendar, BookOpen, NotebookPen, FileText } from "lucide-react";
 import PatientHeader from "../../features/patient/components/PatientHeader";
+import PatientTopAppBar from "../../features/patient/components/PatientTopAppBar";
 import PatientSessionsCard from "../../features/patient/components/PatientSessionsCard";
 import PatientNotificationsCard from "../../features/patient/components/PatientNotificationsCard";
 import PatientNotesCard from "../../features/patient/components/PatientNotesCard";
@@ -420,43 +421,21 @@ useEffect(() => {
             : "pb-[calc(env(safe-area-inset-bottom)+7rem)]"
         } sm:pb-10`}
       >
-        
+
         {/* Top app bar (mobile): marca fixa no topo, estilo app nativo */}
-        <div className="sm:hidden fixed top-0 left-0 right-0 z-30">
-          <div
-            className="bg-violet-950/95 backdrop-blur-md border-b border-white/10 shadow-sm"
-            style={{ paddingTop: "env(safe-area-inset-top)" }}
-          >
-            <div className="max-w-5xl mx-auto px-[var(--pad)] h-14 flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <img
-                  src="/brand/permitta-mark-128.png"
-                  alt="Lembrete Psi"
-                  className="w-6 h-6 rounded-md"
-                />
-                <div className="text-sm font-extrabold text-white tracking-wide truncate">
-                  Lembrete Psi
-                </div>
-              </div>
+        <PatientTopAppBar
+          appName={String(globalConfig?.patientAppName || "Lembrete Psi")}
+          logoSrc={globalConfig?.patientAppLogoUrl || globalConfig?.patientAppLogo || null}
+          onOpenMenu={() => {
+            try {
+              window.dispatchEvent(new Event("lp:patient:openMenu"));
+            } catch (_) {
+              // silencioso
+            }
+          }}
+        />
 
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    window.dispatchEvent(new Event("lp:patient:openMenu"));
-                  } catch (_) {
-                    // silencioso
-                  }
-                }}
-                aria-label="Abrir menu"
-                className="w-11 h-11 inline-flex items-center justify-center rounded-xl text-white/90 hover:text-white hover:bg-white/10 active:scale-95 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-              >
-                <Menu size={20} />
-              </button>
-            </div>
-          </div>
-        </div>
-
+        
         <div className="max-w-5xl mx-auto px-[var(--pad)] pt-[calc(env(safe-area-inset-top)+64px)] sm:pt-6 space-y-2 sm:space-y-6">
           {/* Header */}
           <PatientHeader
