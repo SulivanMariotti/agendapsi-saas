@@ -41,6 +41,32 @@ export default function PatientHeader({
     });
   }
 
+
+  // Permite abrir ações do header a partir de outros componentes (ex.: bottom nav no mobile)
+  useEffect(() => {
+    function openMenu() {
+      setMobileMenuOpen(true);
+    }
+    function openLibrary() {
+      setMobileMenuOpen(false);
+      setLibraryOpen(true);
+    }
+    function openContract() {
+      setMobileMenuOpen(false);
+      setContractOpen(true);
+    }
+
+    window.addEventListener("lp:patient:openMenu", openMenu);
+    window.addEventListener("lp:patient:openLibrary", openLibrary);
+    window.addEventListener("lp:patient:openContract", openContract);
+
+    return () => {
+      window.removeEventListener("lp:patient:openMenu", openMenu);
+      window.removeEventListener("lp:patient:openLibrary", openLibrary);
+      window.removeEventListener("lp:patient:openContract", openContract);
+    };
+  }, []);
+
   // UX mobile: trava scroll do body quando o drawer estiver aberto
   useEffect(() => {
     if (!mobileMenuOpen) return;

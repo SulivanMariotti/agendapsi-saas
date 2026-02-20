@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { Calendar, BookOpen, NotebookPen } from "lucide-react";
 import PatientHeader from "../../features/patient/components/PatientHeader";
 import PatientSessionsCard from "../../features/patient/components/PatientSessionsCard";
 import PatientNotificationsCard from "../../features/patient/components/PatientNotificationsCard";
@@ -41,7 +42,26 @@ const [profile, setProfile] = useState(null);
     if (typeof showToastFromProps === "function") showToastFromProps(msg, type);
   };
 
-  const [confirmBusy, setConfirmBusy] = useState(false);
+  
+
+  const scrollToSection = (id) => {
+    try {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (_) {
+      // silencioso
+    }
+  };
+
+  const openPatientLibrary = () => {
+    try {
+      window.dispatchEvent(new Event("lp:patient:openLibrary"));
+    } catch (_) {
+      // silencioso
+    }
+  };
+const [confirmBusy, setConfirmBusy] = useState(false);
 
   const [acceptContractBusy, setAcceptContractBusy] = useState(false);
 
@@ -378,7 +398,7 @@ useEffect(() => {
     <>
       {toast?.msg && <Toast message={toast.msg} type={toast.type} onClose={() => setToast({ msg: "" })} />}
 
-      <div className={`min-h-[100dvh] bg-slate-50 ${needsContractAcceptance ? "pb-24" : "pb-10"}`}>
+      <div className={`min-h-[100dvh] bg-slate-50 ${needsContractAcceptance ? "pb-36" : "pb-28"} sm:pb-10`}>
         <div className="max-w-5xl mx-auto px-[var(--pad)] pt-4 sm:pt-6 space-y-4 sm:space-y-6">
           {/* Header */}
           <PatientHeader
@@ -395,6 +415,8 @@ useEffect(() => {
 
           {/* Cards rotativos de reflexão (psicoeducação passiva) */}
           <PatientMantraCard />
+
+          <div id="lp-section-agenda" />
 
           {/* Sessões (prioridade: próxima sessão + agenda) */}
           <PatientSessionsCard
@@ -433,6 +455,8 @@ useEffect(() => {
               acceptBusy={acceptContractBusy}
             />
           ) : null}
+          <div id="lp-section-notes" />
+
           {/* Diário */}
           <PatientNotesCard
             patientUid={user?.uid || null}
@@ -445,6 +469,42 @@ useEffect(() => {
             deleteNote={deleteNote}
             showToast={showToast}
           />
+
+
+        {/* Bottom nav (mobile): navegação rápida sem fricção */}
+        <div
+          className="sm:hidden fixed left-0 right-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          <div className="max-w-5xl mx-auto px-[var(--pad)] h-14 flex items-center justify-around">
+            <button
+              type="button"
+              onClick={() => scrollToSection("lp-section-agenda")}
+              className="flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-slate-600 active:scale-95"
+            >
+              <Calendar size={18} className="text-slate-700" />
+              Agenda
+            </button>
+
+            <button
+              type="button"
+              onClick={() => scrollToSection("lp-section-notes")}
+              className="flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-slate-600 active:scale-95"
+            >
+              <NotebookPen size={18} className="text-slate-700" />
+              Diário
+            </button>
+
+            <button
+              type="button"
+              onClick={openPatientLibrary}
+              className="flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-slate-600 active:scale-95"
+            >
+              <BookOpen size={18} className="text-slate-700" />
+              Biblioteca
+            </button>
+          </div>
+        </div>
         </div>
       </div>
     </>
