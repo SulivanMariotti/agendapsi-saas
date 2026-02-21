@@ -75,6 +75,19 @@ Rotina diária (Admin → Agenda):
 - Tokens centralizados em `src/features/patient/lib/uiTokens.js`.
 - Botões `primary` do paciente usam **tema** (override) sem afetar o Admin.
 
+---
+
+### Admin (paleta) — alinhamento com o paciente (somente cores)
+Objetivo: o Admin manter **desktop-first**, mas com a **mesma paleta em escala de cinza** do paciente (sem rosado).
+
+- Admin pode herdar a mesma paleta do paciente usando **`skin-patient`** no wrapper do Admin:
+  - arquivo: `src/app/admin/layout.js`
+  - troca: `skin-admin` → `skin-patient`
+- Padronização do roxo (para eliminar resíduos):
+  - `src/app/globals.css`: `--color-violet-600: var(--color-violet-800)`
+  - substituir usos diretos de `#7c3aed` por `#5b21b6` (violet-800)
+- Tokens de acento (`--accent-*`) documentados para completar escala até `1000`.
+
 **Conteúdo**
 - Próxima sessão em modo “1-olhar”: resumo curto + detalhes colapsados no mobile.
 - Agenda colapsável por semana/mês.

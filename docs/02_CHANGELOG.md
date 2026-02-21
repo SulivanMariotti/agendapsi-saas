@@ -133,3 +133,14 @@
 - Primário do paciente migrado para **`bg-violet-950/95`** (inclui “Confirmar presença”).
 - Tokens centralizados em `src/features/patient/lib/uiTokens.js`.
 - **Tema do paciente** sobrescreve estilos do `DesignSystem.Button` apenas no paciente (Admin não é afetado).
+
+---
+
+## 2026-02-20 — Admin (somente cores)
+
+- Admin passou a poder usar **a mesma paleta em escala de cinza do paciente** (sem rosado), mantendo layout desktop-first.
+  - ajuste: wrapper do Admin pode usar `skin-patient` (em vez de `skin-admin`).
+- Padronização do roxo (remoção de resíduos):
+  - substituição de `#7c3aed` → `#5b21b6` (violet-800)
+  - alias global: `--color-violet-600: var(--color-violet-800)`
+- Escala `--accent-*` documentada para completar sequência até `1000`.

@@ -20,6 +20,11 @@ Você é um dev master full stack + olhar clínico para o projeto **Lembrete Psi
   - Paleta do paciente em **escala de cinza** (sem rosado) + primário **`bg-violet-950/95`**.
   - Tokens em `src/features/patient/lib/uiTokens.js` + tema do paciente sobrescrevendo `Button primary` sem afetar Admin.
 
+- **Admin (somente cores)**:
+  - Admin desktop-first, mas paleta alinhada ao paciente (escala de cinza) via `skin-patient`.
+  - Padronização do roxo: substituir `#7c3aed` → `#5b21b6` e forçar `violet-600` → `violet-800` em `src/app/globals.css`.
+  - Escala `--accent-*` documentada até `1000`.
+
 ## Próximo passo (prioridade)
 - **Pendência para nota ≥ 9/10**: migrar `ADMIN_PASSWORD` → login Admin forte (preferido: Firebase Auth + MFA/TOTP obrigatório; alternativa: magic link) com migração progressiva e desligamento do legado em produção.
 

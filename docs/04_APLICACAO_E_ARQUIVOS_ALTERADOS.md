@@ -102,3 +102,19 @@ Se você aplicou o ZIP “idempotência/placeholder” e depois o ZIP “hardeni
 1) Faça backup dos arquivos atuais
 2) Substitua pelos arquivos acima (mesmos caminhos)
 3) Rode `npm run dev` e valide no celular/emulador
+
+---
+
+# Aplicação das alterações (Handoff 2026-02-20 — Admin (somente cores))
+
+## Objetivo
+Alinhar o **Admin** à **paleta do paciente (escala de cinza)**, sem mexer em estrutura/layout (Admin continua desktop-first).
+
+## Arquivos alterados
+- `src/app/admin/layout.js` *(wrapper pode usar `skin-patient` em vez de `skin-admin`)*
+- `src/app/globals.css` *(padronização do roxo + alias `violet-600` → `violet-800` + tokens `--accent-*`)*
+
+## Substituição
+1) Faça backup dos arquivos atuais
+2) Substitua pelos arquivos acima (mesmos caminhos)
+3) Rode `npm run dev` e valide visualmente (Admin + Paciente)
