@@ -7,6 +7,17 @@
   --fs-base: clamp(14px, 1.2vw + 12px, 16px);
   --fs-title: clamp(18px, 2vw + 14px, 24px);
 
+  /* Patient-only radius map (make EVERYTHING less rounded)
+     Tune these numbers to taste and all mapped Tailwind rounded-* classes will follow. */
+  --r-none: 0px;
+  --r-sm: 2px;
+  --r-md: 4px;
+  --r-lg: 6px;
+  --r-xl: 8px;
+  --r-2xl: 10px;
+  --r-3xl: 12px;
+  --r-pill: 14px;
+
   font-size: var(--fs-base);
   line-height: 1.5;
 
@@ -20,12 +31,166 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Slightly straighter corners (patient-only): remap Tailwind radii down one step.
-   This avoids touching shared DesignSystem/Admin while making the UI feel less "bubbly". */
-.patientRoot :global(.rounded-2xl){ border-radius: 12px !important; }
-.patientRoot :global(.rounded-xl){ border-radius: 8px !important; }
-.patientRoot :global(.rounded-lg){ border-radius: 6px !important; }
-.patientRoot :global(.rounded-md){ border-radius: 4px !important; }
+/* Patient-only: FULL remap of Tailwind rounded-* utilities
+   Goal: make all elements more "reto" without touching Admin/shared styles.
+   If you want *even more* reto: lower the --r-* values above. */
+
+/* All corners */
+.patientRoot :global(.rounded-none){ border-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-sm){ border-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded){ border-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-md){ border-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-lg){ border-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-xl){ border-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-2xl){ border-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-3xl){ border-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-full){ border-radius: var(--r-pill) !important; }
+
+/* Top */
+.patientRoot :global(.rounded-t-none){ border-top-left-radius: var(--r-none) !important; border-top-right-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-t-sm){ border-top-left-radius: var(--r-sm) !important; border-top-right-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-t){ border-top-left-radius: var(--r-md) !important; border-top-right-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-t-md){ border-top-left-radius: var(--r-md) !important; border-top-right-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-t-lg){ border-top-left-radius: var(--r-lg) !important; border-top-right-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-t-xl){ border-top-left-radius: var(--r-xl) !important; border-top-right-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-t-2xl){ border-top-left-radius: var(--r-2xl) !important; border-top-right-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-t-3xl){ border-top-left-radius: var(--r-3xl) !important; border-top-right-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-t-full){ border-top-left-radius: var(--r-pill) !important; border-top-right-radius: var(--r-pill) !important; }
+
+/* Bottom */
+.patientRoot :global(.rounded-b-none){ border-bottom-left-radius: var(--r-none) !important; border-bottom-right-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-b-sm){ border-bottom-left-radius: var(--r-sm) !important; border-bottom-right-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-b){ border-bottom-left-radius: var(--r-md) !important; border-bottom-right-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-b-md){ border-bottom-left-radius: var(--r-md) !important; border-bottom-right-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-b-lg){ border-bottom-left-radius: var(--r-lg) !important; border-bottom-right-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-b-xl){ border-bottom-left-radius: var(--r-xl) !important; border-bottom-right-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-b-2xl){ border-bottom-left-radius: var(--r-2xl) !important; border-bottom-right-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-b-3xl){ border-bottom-left-radius: var(--r-3xl) !important; border-bottom-right-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-b-full){ border-bottom-left-radius: var(--r-pill) !important; border-bottom-right-radius: var(--r-pill) !important; }
+
+/* Left */
+.patientRoot :global(.rounded-l-none){ border-top-left-radius: var(--r-none) !important; border-bottom-left-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-l-sm){ border-top-left-radius: var(--r-sm) !important; border-bottom-left-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-l){ border-top-left-radius: var(--r-md) !important; border-bottom-left-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-l-md){ border-top-left-radius: var(--r-md) !important; border-bottom-left-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-l-lg){ border-top-left-radius: var(--r-lg) !important; border-bottom-left-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-l-xl){ border-top-left-radius: var(--r-xl) !important; border-bottom-left-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-l-2xl){ border-top-left-radius: var(--r-2xl) !important; border-bottom-left-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-l-3xl){ border-top-left-radius: var(--r-3xl) !important; border-bottom-left-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-l-full){ border-top-left-radius: var(--r-pill) !important; border-bottom-left-radius: var(--r-pill) !important; }
+
+/* Right */
+.patientRoot :global(.rounded-r-none){ border-top-right-radius: var(--r-none) !important; border-bottom-right-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-r-sm){ border-top-right-radius: var(--r-sm) !important; border-bottom-right-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-r){ border-top-right-radius: var(--r-md) !important; border-bottom-right-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-r-md){ border-top-right-radius: var(--r-md) !important; border-bottom-right-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-r-lg){ border-top-right-radius: var(--r-lg) !important; border-bottom-right-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-r-xl){ border-top-right-radius: var(--r-xl) !important; border-bottom-right-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-r-2xl){ border-top-right-radius: var(--r-2xl) !important; border-bottom-right-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-r-3xl){ border-top-right-radius: var(--r-3xl) !important; border-bottom-right-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-r-full){ border-top-right-radius: var(--r-pill) !important; border-bottom-right-radius: var(--r-pill) !important; }
+
+/* Individual corners */
+.patientRoot :global(.rounded-tl-none){ border-top-left-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-tl-sm){ border-top-left-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-tl){ border-top-left-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-tl-md){ border-top-left-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-tl-lg){ border-top-left-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-tl-xl){ border-top-left-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-tl-2xl){ border-top-left-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-tl-3xl){ border-top-left-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-tl-full){ border-top-left-radius: var(--r-pill) !important; }
+
+.patientRoot :global(.rounded-tr-none){ border-top-right-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-tr-sm){ border-top-right-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-tr){ border-top-right-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-tr-md){ border-top-right-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-tr-lg){ border-top-right-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-tr-xl){ border-top-right-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-tr-2xl){ border-top-right-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-tr-3xl){ border-top-right-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-tr-full){ border-top-right-radius: var(--r-pill) !important; }
+
+.patientRoot :global(.rounded-br-none){ border-bottom-right-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-br-sm){ border-bottom-right-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-br){ border-bottom-right-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-br-md){ border-bottom-right-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-br-lg){ border-bottom-right-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-br-xl){ border-bottom-right-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-br-2xl){ border-bottom-right-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-br-3xl){ border-bottom-right-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-br-full){ border-bottom-right-radius: var(--r-pill) !important; }
+
+.patientRoot :global(.rounded-bl-none){ border-bottom-left-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-bl-sm){ border-bottom-left-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-bl){ border-bottom-left-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-bl-md){ border-bottom-left-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-bl-lg){ border-bottom-left-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-bl-xl){ border-bottom-left-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-bl-2xl){ border-bottom-left-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-bl-3xl){ border-bottom-left-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-bl-full){ border-bottom-left-radius: var(--r-pill) !important; }
+
+/* Logical radius (start/end) for modern Tailwind setups */
+.patientRoot :global(.rounded-s-none){ border-start-start-radius: var(--r-none) !important; border-end-start-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-s-sm){ border-start-start-radius: var(--r-sm) !important; border-end-start-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-s){ border-start-start-radius: var(--r-md) !important; border-end-start-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-s-md){ border-start-start-radius: var(--r-md) !important; border-end-start-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-s-lg){ border-start-start-radius: var(--r-lg) !important; border-end-start-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-s-xl){ border-start-start-radius: var(--r-xl) !important; border-end-start-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-s-2xl){ border-start-start-radius: var(--r-2xl) !important; border-end-start-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-s-3xl){ border-start-start-radius: var(--r-3xl) !important; border-end-start-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-s-full){ border-start-start-radius: var(--r-pill) !important; border-end-start-radius: var(--r-pill) !important; }
+
+.patientRoot :global(.rounded-e-none){ border-start-end-radius: var(--r-none) !important; border-end-end-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-e-sm){ border-start-end-radius: var(--r-sm) !important; border-end-end-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-e){ border-start-end-radius: var(--r-md) !important; border-end-end-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-e-md){ border-start-end-radius: var(--r-md) !important; border-end-end-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-e-lg){ border-start-end-radius: var(--r-lg) !important; border-end-end-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-e-xl){ border-start-end-radius: var(--r-xl) !important; border-end-end-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-e-2xl){ border-start-end-radius: var(--r-2xl) !important; border-end-end-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-e-3xl){ border-start-end-radius: var(--r-3xl) !important; border-end-end-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-e-full){ border-start-end-radius: var(--r-pill) !important; border-end-end-radius: var(--r-pill) !important; }
+
+.patientRoot :global(.rounded-ss-none){ border-start-start-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-ss-sm){ border-start-start-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-ss){ border-start-start-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-ss-md){ border-start-start-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-ss-lg){ border-start-start-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-ss-xl){ border-start-start-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-ss-2xl){ border-start-start-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-ss-3xl){ border-start-start-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-ss-full){ border-start-start-radius: var(--r-pill) !important; }
+
+.patientRoot :global(.rounded-se-none){ border-start-end-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-se-sm){ border-start-end-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-se){ border-start-end-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-se-md){ border-start-end-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-se-lg){ border-start-end-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-se-xl){ border-start-end-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-se-2xl){ border-start-end-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-se-3xl){ border-start-end-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-se-full){ border-start-end-radius: var(--r-pill) !important; }
+
+.patientRoot :global(.rounded-es-none){ border-end-start-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-es-sm){ border-end-start-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-es){ border-end-start-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-es-md){ border-end-start-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-es-lg){ border-end-start-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-es-xl){ border-end-start-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-es-2xl){ border-end-start-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-es-3xl){ border-end-start-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-es-full){ border-end-start-radius: var(--r-pill) !important; }
+
+.patientRoot :global(.rounded-ee-none){ border-end-end-radius: var(--r-none) !important; }
+.patientRoot :global(.rounded-ee-sm){ border-end-end-radius: var(--r-sm) !important; }
+.patientRoot :global(.rounded-ee){ border-end-end-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-ee-md){ border-end-end-radius: var(--r-md) !important; }
+.patientRoot :global(.rounded-ee-lg){ border-end-end-radius: var(--r-lg) !important; }
+.patientRoot :global(.rounded-ee-xl){ border-end-end-radius: var(--r-xl) !important; }
+.patientRoot :global(.rounded-ee-2xl){ border-end-end-radius: var(--r-2xl) !important; }
+.patientRoot :global(.rounded-ee-3xl){ border-end-end-radius: var(--r-3xl) !important; }
+.patientRoot :global(.rounded-ee-full){ border-end-end-radius: var(--r-pill) !important; }
 
 /* Consistent horizontal breathing room */
 .patientPadX{
