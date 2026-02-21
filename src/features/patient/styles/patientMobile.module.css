@@ -10,13 +10,13 @@
   /* Patient-only radius map (make EVERYTHING less rounded)
      Tune these numbers to taste and all mapped Tailwind rounded-* classes will follow. */
   --r-none: 0px;
-  --r-sm: 2px;
-  --r-md: 4px;
-  --r-lg: 6px;
-  --r-xl: 8px;
-  --r-2xl: 10px;
-  --r-3xl: 12px;
-  --r-pill: 14px;
+  --r-sm: 1px;
+  --r-md: 2px;
+  --r-lg: 3px;
+  --r-xl: 4px;
+  --r-2xl: 5px;
+  --r-3xl: 6px;
+  --r-pill: 7px;
 
   font-size: var(--fs-base);
   line-height: 1.5;
