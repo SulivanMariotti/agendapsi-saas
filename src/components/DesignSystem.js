@@ -1,5 +1,8 @@
+"use client";
+
 import React, { useEffect } from 'react';
 import { CheckCircle, AlertTriangle, Clock, XCircle } from 'lucide-react';
+import { useUiTheme } from './uiTheme';
 
 // --- Toast (Notificação Flutuante) ---
 export const Toast = ({ message, type, onClose }) => {
@@ -27,6 +30,7 @@ export const Toast = ({ message, type, onClose }) => {
 
 // --- Botão Padrão (Suavizado) ---
 export const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false, icon: Icon, as = 'button', ...props }) => {
+  const uiTheme = useUiTheme();
   const variants = {
     primary: "bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-200 border border-transparent",
     secondary: "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-800 shadow-sm",
@@ -38,11 +42,15 @@ export const Button = ({ children, onClick, variant = 'primary', className = '',
   const finalVariant = disabled && variant !== 'danger' ? 'secondary' : variant;
   const Component = as;
 
+  // Theme override (used by Patient skin). Admin keeps default.
+  const themedVariants = uiTheme?.buttonVariants || uiTheme?.button?.variants;
+  const variantClass = themedVariants?.[finalVariant] || variants[finalVariant];
+
   return (
     <Component 
       onClick={onClick} 
       disabled={disabled} 
-      className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-sm ${variants[finalVariant]} ${className}`} 
+      className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-sm ${variantClass} ${className}`} 
       {...props}
     >
       {Icon && <Icon size={18} strokeWidth={2.5} />}

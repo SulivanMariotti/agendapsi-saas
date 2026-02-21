@@ -30,7 +30,7 @@ export default function NextSessionCard({
   const containerCls =
     "relative rounded-2xl " +
     PT.card +
-    " overflow-hidden before:absolute before:inset-y-0 before:left-0 before:w-1.5 before:bg-violet-600/20 before:content-['']";
+    " overflow-hidden before:absolute before:inset-y-0 before:left-0 before:w-1.5 before:bg-violet-950/10 before:content-['']";
 
   if (!nextAppointment) {
     return (

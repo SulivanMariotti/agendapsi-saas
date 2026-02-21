@@ -110,7 +110,7 @@ export default function PatientLogin() {
                   className={[
                     "px-3 py-2 rounded-xl text-sm border",
                     mode === "code"
-                      ? "bg-violet-600 text-white border-violet-600"
+                      ? "bg-violet-950/95 text-white border-transparent"
                       : "bg-white text-slate-600 border-slate-200 hover:border-slate-300",
                   ].join(" ")}
                 >
@@ -126,7 +126,7 @@ export default function PatientLogin() {
                   className={[
                     "px-3 py-2 rounded-xl text-sm border",
                     mode === "email"
-                      ? "bg-violet-600 text-white border-violet-600"
+                      ? "bg-violet-950/95 text-white border-transparent"
                       : "bg-white text-slate-600 border-slate-200 hover:border-slate-300",
                   ].join(" ")}
                 >

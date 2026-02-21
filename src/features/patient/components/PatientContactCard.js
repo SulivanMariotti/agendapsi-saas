@@ -18,7 +18,7 @@ export default function PatientContactCard({
     <Card>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-4 min-w-0">
-          <div className="w-12 h-12 rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-lg shadow-violet-200 shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-violet-950/95 text-white flex items-center justify-center shadow-lg shadow-black/10 shrink-0">
             <User size={20} />
           </div>
 

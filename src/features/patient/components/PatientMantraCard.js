@@ -72,7 +72,7 @@ export default function PatientMantraCard({ mantras: mantrasProp, intervalMs = 9
 
         <div className="hidden sm:flex items-center gap-1 mt-3">
           {mantras.map((_, i) => (
-            <div key={i} className={`h-1.5 w-6 rounded-full ${i === index ? "bg-violet-600" : "bg-slate-200"}`} />
+            <div key={i} className={`h-1.5 w-6 rounded-full ${i === index ? "bg-violet-950/95" : "bg-slate-200"}`} />
           ))}
         </div>
       </div>

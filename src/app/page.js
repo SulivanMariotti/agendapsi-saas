@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 
 import { app } from "./firebase";
 import { Toast } from "../components/DesignSystem";
+import { UiThemeProvider } from "../components/uiTheme";
 
 import { useData } from "../hooks/useData";
 import PatientFlow from "../components/Patient/PatientFlow";
@@ -17,6 +18,19 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ msg: "", type: "" });
+
+  // Patient-only UI theme: makes primary actions match the TopAppBar tone.
+  const patientTheme = useMemo(
+    () => ({
+      buttonVariants: {
+        primary:
+          "bg-violet-950/95 text-white hover:bg-violet-950 shadow-lg shadow-black/10 border border-transparent",
+        white:
+          "bg-white text-violet-950 hover:bg-white/90 shadow-lg shadow-black/5 border-transparent",
+      },
+    }),
+    []
+  );
 
   // ✅ Paciente não carrega coleções sensíveis no client
   const { globalConfig } = useData(false);
@@ -55,7 +69,7 @@ export default function App() {
   // 1) MODO PACIENTE LOGADO
   if (user) {
     return (
-      <>
+      <UiThemeProvider theme={patientTheme}>
         {toast?.msg && (
           <Toast
             message={toast.msg}
@@ -72,13 +86,13 @@ export default function App() {
             showToast={showToast}
           />
         </div>
-      </>
+      </UiThemeProvider>
     );
   }
 
   // 2) TELA DE LOGIN (PACIENTE)
   return (
-    <>
+    <UiThemeProvider theme={patientTheme}>
       {toast?.msg && (
         <Toast
           message={toast.msg}
@@ -90,6 +104,6 @@ export default function App() {
       <div className={`skin-patient ${styles.patientRoot}`}>
         <PatientLogin />
       </div>
-    </>
+    </UiThemeProvider>
   );
 }

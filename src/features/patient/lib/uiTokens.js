@@ -14,10 +14,10 @@ export const PT = {
   cardSoft: "bg-slate-50 shadow-sm",
 
   // Accent (brand / clinical)
-  accentBg: "bg-violet-600 text-white",
+  accentBg: "bg-violet-950/95 text-white",
   accentSoft: "bg-violet-50",
-  accentText: "text-violet-800",
-  accentIcon: "text-violet-600",
+  accentText: "text-violet-950",
+  accentIcon: "text-violet-950",
   focusRing: "focus:ring-2 focus:ring-violet-200",
 
   // App bar (mobile top header)
