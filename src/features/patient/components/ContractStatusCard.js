@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { Card, Button } from "../../../components/DesignSystem";
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { PT } from "../lib/uiTokens";
 
 /**
  * ContractStatusCard
@@ -35,7 +36,7 @@ export default function ContractStatusCard({
             className="w-full flex items-center justify-between gap-2 p-3 rounded-xl bg-white shadow-sm hover:bg-slate-50 transition-colors"
           >
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <FileText size={18} className="text-violet-600" />
+              <FileText size={18} className={PT.accentIcon} />
               {toggleLabel}
             </div>
             {open ? <ChevronUp size={18} className="text-slate-400" /> : <ChevronDown size={18} className="text-slate-400" />}

@@ -163,7 +163,7 @@ export default function PatientHeader({
 
               <button
                 ref={btnCloseRef}
-                className="w-11 h-11 inline-flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
+                className={`w-11 h-11 inline-flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 focus-visible:outline-none ${PT.focusRingVisible}`}
                 onClick={closeMobileMenu}
                 aria-label="Fechar"
               >
@@ -173,7 +173,7 @@ export default function PatientHeader({
 
             <div className="p-3 flex-1 overflow-auto">
               <button
-                className="w-full min-h-[44px] text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
+                className={`w-full min-h-[44px] text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2 focus-visible:outline-none ${PT.focusRingVisible}`}
                 onClick={() => {
                   closeMobileMenu();
                   setLibraryOpen(true);
@@ -183,7 +183,7 @@ export default function PatientHeader({
               </button>
 
               <button
-                className="mt-1 w-full min-h-[44px] text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
+                className={`mt-1 w-full min-h-[44px] text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2 focus-visible:outline-none ${PT.focusRingVisible}`}
                 onClick={() => {
                   closeMobileMenu();
                   setContractOpen(true);
@@ -233,7 +233,7 @@ export default function PatientHeader({
                 </div>
 
                 <button
-                  className="w-11 h-11 inline-flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
+                  className={`w-11 h-11 inline-flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 focus-visible:outline-none ${PT.focusRingVisible}`}
                   onClick={() => setContractOpen(false)}
                   aria-label="Fechar"
                 >

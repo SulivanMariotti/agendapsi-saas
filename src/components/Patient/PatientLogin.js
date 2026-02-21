@@ -75,7 +75,7 @@ export default function PatientLogin() {
       <div className="w-full max-w-md space-y-3">
         {/* Cabeçalho compacto */}
         <div className="text-center px-2">
-          <div className="flex items-center justify-center gap-2 text-violet-700">
+          <div className="flex items-center justify-center gap-2 text-violet-950">
             <div className="w-11 h-11 rounded-2xl bg-white ring-1 ring-slate-200 flex items-center justify-center shadow-lg shadow-slate-200">
               <Image
                 src="/brand/permitta-mark-256.png"
@@ -155,7 +155,7 @@ export default function PatientLogin() {
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase ml-1">Telefone (DDD + número)</label>
                   <input
-                    className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200 text-slate-700"
+                    className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200/60 text-slate-700"
                     placeholder="(11) 99999-9999"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
@@ -167,7 +167,7 @@ export default function PatientLogin() {
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase ml-1">Código de vinculação</label>
                   <input
-                    className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200 text-slate-700 tracking-widest"
+                    className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200/60 text-slate-700 tracking-widest"
                     placeholder="XXXX-XXXX-XXXX"
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
@@ -196,7 +196,7 @@ export default function PatientLogin() {
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 text-slate-400" size={18} />
                     <input
-                      className="w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200 text-slate-700"
+                      className="w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200/60 text-slate-700"
                       placeholder="paciente@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}

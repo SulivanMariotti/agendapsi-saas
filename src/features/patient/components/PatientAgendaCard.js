@@ -15,6 +15,7 @@ import {
   formatDateTimeBR,
 } from "../lib/dates";
 import { startDateTimeFromAppointment } from "../lib/ics";
+import { PT } from "../lib/uiTokens";
 
 export default function PatientAgendaCard({
   appointments = [],
@@ -138,9 +139,9 @@ export default function PatientAgendaCard({
               setShowAllWeeks(false);
               setShowAllMonths(false);
             }}
-            className={`flex-1 sm:flex-none px-3 py-2 min-h-[40px] rounded-full text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${
+            className={`flex-1 sm:flex-none px-3 py-2 min-h-[40px] rounded-full text-xs font-semibold transition focus-visible:outline-none ${PT.focusRingVisible} ${
               agendaView === "compact"
-                ? "bg-white text-violet-800 shadow-sm"
+                ? `bg-white ${PT.accentText} shadow-sm`
                 : "bg-transparent text-slate-700"
             }`}
           >
@@ -153,9 +154,9 @@ export default function PatientAgendaCard({
               setShowAllWeeks(true);
               setShowAllMonths(true);
             }}
-            className={`flex-1 sm:flex-none px-3 py-2 min-h-[40px] rounded-full text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${
+            className={`flex-1 sm:flex-none px-3 py-2 min-h-[40px] rounded-full text-xs font-semibold transition focus-visible:outline-none ${PT.focusRingVisible} ${
               agendaView === "all"
-                ? "bg-white text-violet-800 shadow-sm"
+                ? `bg-white ${PT.accentText} shadow-sm`
                 : "bg-transparent text-slate-700"
             }`}
           >
@@ -211,7 +212,7 @@ export default function PatientAgendaCard({
                   <button
                     type="button"
                     onClick={() => setOpenWeekKey((prev) => (prev === w.key ? null : w.key))}
-                    className="w-full flex items-center justify-between gap-3 px-2 py-2 min-h-[44px] rounded-xl hover:bg-white/70 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
+                    className={`w-full flex items-center justify-between gap-3 px-2 py-2 min-h-[44px] rounded-xl hover:bg-white/70 active:scale-[0.99] focus-visible:outline-none ${PT.focusRingVisible}`}
                     aria-expanded={isOpen}
                   >
                     <div className="text-xs font-semibold text-slate-700 text-left">{w.label}</div>
@@ -259,7 +260,7 @@ export default function PatientAgendaCard({
                     <button
                       type="button"
                       onClick={() => setOpenMonthKey((prev) => (prev === m.label ? null : m.label))}
-                      className="w-full flex items-center justify-between gap-3 px-2 py-2 min-h-[44px] rounded-xl hover:bg-white/70 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
+                      className={`w-full flex items-center justify-between gap-3 px-2 py-2 min-h-[44px] rounded-xl hover:bg-white/70 active:scale-[0.99] focus-visible:outline-none ${PT.focusRingVisible}`}
                       aria-expanded={isOpen}
                     >
                       <div className="text-xs font-semibold text-slate-700 text-left">{m.label}</div>

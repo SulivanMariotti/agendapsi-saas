@@ -259,14 +259,14 @@ export default function PatientLibraryModal({ open, onClose }) {
             <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-100">
               <div className="px-4 sm:px-5 pt-4 pb-3 space-y-3">
                 {/* Mantra fixo */}
-                <div className="rounded-2xl bg-violet-50 p-3 shadow-sm">
+                <div className={`rounded-2xl ${PT.accentSoft} p-3 shadow-sm`}>
                   <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-2xl bg-white/80 shadow-sm flex items-center justify-center text-violet-800 shrink-0">
+                    <div className={`w-9 h-9 rounded-2xl bg-white/80 shadow-sm flex items-center justify-center ${PT.accentIcon} shrink-0`}>
                       <Sparkles size={18} />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-sm font-extrabold text-violet-800">{LIBRARY_TOP_MANTRA.title}</div>
-                      <div className="mt-1 text-[12px] text-violet-800 leading-relaxed line-clamp-2 sm:line-clamp-none">
+                      <div className={`text-sm font-extrabold ${PT.accentText}`}>{LIBRARY_TOP_MANTRA.title}</div>
+                      <div className={`mt-1 text-[12px] ${PT.accentText} leading-relaxed line-clamp-2 sm:line-clamp-none`}>
                         {LIBRARY_TOP_MANTRA.text}
                       </div>
                     </div>
@@ -280,7 +280,7 @@ export default function PatientLibraryModal({ open, onClose }) {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Buscar por tema, palavra ou ideia..."
-                    className="w-full pl-9 pr-3 py-2.5 rounded-2xl border border-slate-200 bg-white text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                    className={`w-full pl-9 pr-3 py-2.5 rounded-2xl border border-slate-200 bg-white text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none ${PT.focusRing}`}
                   />
                 </div>
 

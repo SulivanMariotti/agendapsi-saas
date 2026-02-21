@@ -7,6 +7,7 @@ import { Button, Card } from "../../../components/DesignSystem";
 import InlineLoading from "./InlineLoading";
 import EmptyState from "./EmptyState";
 import InlineError from "./InlineError";
+import { PT } from "../lib/uiTokens";
 
 /**
  * Diário rápido (Notas)
@@ -181,9 +182,9 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
     <>
       <Card title="Diário rápido" className="border-0 shadow-sm">
         <div className="space-y-4">
-          <div className="rounded-2xl bg-violet-50 p-4 shadow-sm">
+          <div className={`rounded-2xl ${PT.accentSoft} p-4 shadow-sm`}>
             <div className="flex items-center gap-2 text-slate-800">
-              <Sparkles size={16} className="text-violet-600" />
+              <Sparkles size={16} className={PT.accentIcon} />
               <div className="font-semibold text-sm">Anote agora para chegar mais presente na sessão</div>
             </div>
             <div className="text-xs text-slate-600 mt-1">
@@ -192,7 +193,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
 
             {nextSessionDateTimeLabel ? (
               <div className="mt-2 inline-flex items-center gap-2 text-xs text-slate-700">
-                <CalendarCheck size={14} className="text-violet-600" />
+                <CalendarCheck size={14} className={PT.accentIcon} />
                 <span>Para sua próxima sessão:</span>
                 <span className="font-semibold text-slate-900">{nextSessionDateTimeLabel}</span>
               </div>
@@ -275,8 +276,8 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
                 return (
                   <div key={n.id} className="p-4 rounded-2xl bg-white shadow-sm">
                     {pinnedNote && idx === 0 ? (
-                      <div className="inline-flex items-center gap-2 mb-2 text-[11px] font-semibold text-violet-800">
-                        <Star size={14} className="text-violet-600" />
+                      <div className={`inline-flex items-center gap-2 mb-2 text-[11px] font-semibold ${PT.accentText}`}>
+                        <Star size={14} className={PT.accentIcon} />
                         <span>Em destaque para sua próxima sessão</span>
                       </div>
                     ) : null}
@@ -418,7 +419,7 @@ export default function PatientNotesCard({ patientUid = null, notes, loadingNote
                           <button
                             type="button"
                             onClick={() => togglePinned(n.id)}
-                            className={`transition-colors mt-1 ${pinnedNoteId === n.id ? 'text-violet-600' : 'text-slate-400 hover:text-slate-600'}`}
+                            className={`transition-colors mt-1 ${pinnedNoteId === n.id ? PT.accentText : 'text-slate-400 hover:text-slate-600'}`}
                             title={pinnedNoteId === n.id ? 'Remover destaque' : 'Destacar para a próxima sessão'}
                             aria-pressed={pinnedNoteId === n.id}
                             disabled={busy}

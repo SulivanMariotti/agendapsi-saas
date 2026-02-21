@@ -15,10 +15,13 @@ export const PT = {
 
   // Accent (brand / clinical)
   accentBg: "bg-violet-950/95 text-white",
-  accentSoft: "bg-violet-50",
+  // Subtle tint that matches the new primary (and is NOT remapped by skin-patient).
+  accentSoft: "bg-violet-950/5",
   accentText: "text-violet-950",
   accentIcon: "text-violet-950",
-  focusRing: "focus:ring-2 focus:ring-violet-200",
+  // Focus ring (avoid skin remap): keep /60 opacity variant.
+  focusRing: "focus:ring-2 focus:ring-violet-200/60",
+  focusRingVisible: "focus-visible:ring-2 focus-visible:ring-violet-200/60",
 
   // App bar (mobile top header)
   // Darker tone of the palette to create a clear "app" framing without adding CTA.
