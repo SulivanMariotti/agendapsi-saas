@@ -21,14 +21,9 @@
   --accent-100: #ede9fe;
   --accent-200: #ddd6fe;
   --accent-300: #c4b5fd;
-  --accent-400: #a78bfa;
-  --accent-500: #8b5cf6;
-  --accent-600: #7c3aed;
+  --accent-600: #5b21b6;
   --accent-700: #6d28d9;
   --accent-800: #5b21b6;
-  --accent-900: #4c1d95;
-  --accent-950: #2e1065;
-  --accent-1000: #250d51;
 
   /* Force all Tailwind violet-600 utilities to render as violet-800 */
   --color-violet-600: var(--color-violet-800);

@@ -3,5 +3,5 @@ export const metadata = {
 };
 
 export default function AdminLayout({ children }) {
-  return <div className="skin-admin">{children}</div>;
+  return <div className="skin-patient">{children}</div>;
 }
