@@ -1,8 +1,18 @@
 # Lembrete Psi — Onde paramos
 
-> Este arquivo espelha o `docs/00_ONDE_PARAMOS.md` para manter compatibilidade com históricos antigos.
+> Este arquivo **espelha** o `docs/00_ONDE_PARAMOS.md` para manter compatibilidade com históricos antigos.
 
-# Onde paramos — Lembrete Psi (2026-02-18)
+# Onde paramos — Lembrete Psi (2026-02-20)
+
+## Objetivo do sistema (norte clínico)
+O Lembrete Psi não é “agenda com disparo”. É ferramenta clínica para **sustentar vínculo e constância**.
+
+- **Cuidado ativo**: lembrar e facilitar a presença (48h/24h/mananhã).
+- **Psicoeducação**: reforçar que faltar interrompe o processo.
+- **Responsabilização**: o horário existe por contrato terapêutico.
+- Painel do paciente: **sem botão/CTA de cancelar/remarcar**.
+
+---
 
 ## Estado atual (validado)
 
@@ -11,67 +21,73 @@ Rotina diária (Admin → Agenda):
 
 **Carregar Planilha → Verificar → Sincronizar → Gerar Preview do Disparo → Enviar lembrete**
 
-- Janela de upload: **hoje → +30 dias** (rodar também em fim de semana/feriado).
-- **Não há Cron Jobs configurados** na Vercel (decisão atual: **modo manual**).
-- Se cron for ligado no futuro, as rotas `/api/cron/*` já estão **endurecidas** (header-only + rotação de secret).
+- Janela de upload: **hoje → +30 dias**.
+- Cron **não habilitado** (decisão atual). Rotas `/api/cron/*` permanecem endurecidas para futuro.
 
-### Diretriz clínica/UX (painel do paciente)
-- O painel do paciente existe para **lembrar + psicoeducar + responsabilizar**.
-- **Sem botão/CTA** de **cancelar/remarcar**.
-- Quando existir WhatsApp/contato: **apenas confirmação de presença** (reforço de compromisso), nunca como atalho de cancelamento.
+### Segurança v1 (concluída) + pós-v1 aplicado
+- Paciente por **telefone + código** (single-use por dispositivo).
+- Login inseguro do paciente por e-mail: **desativado por padrão**.
+- Admin: **custom claims** (`admin:true`) + guards server-side.
+- Firestore rules endurecidas + headers/CSP em produção + origin guard + rate limit.
+- Logs com `expireAt` + **TTL ativo** em `history` e `audit_logs`.
+
+**Pós-v1 recente**
+- `requirePatient()` aplicado nas rotas do paciente (role estrita).
+- `POST /api/attendance/confirm` deriva telefone do perfil (ignora `phone` do client).
+- `_push_old/*` desativado (410 dev / 404 prod).
+- Helper de validação **schema-lite** (`src/lib/server/payloadSchema.js`) em rotas críticas.
+- **Acesso do paciente**: bloqueio só por flag explícita (`accessDisabled/securityHold/...`), não por “status clínico”.
+- Endpoint Admin para suspender/liberar acesso com auditoria: `POST /api/admin/patient/access`.
+
+> Pendência de segurança para nota ≥ 9: substituir `ADMIN_PASSWORD` por login Admin forte (MFA/TOTP ou magic link) com migração progressiva.
+
+### Presença/Faltas (constância terapêutica)
+- Import CSV robusto (BOM + `;`/`,`/TAB) + **DATA/HORA** em coluna única.
+- Coluna **TELEFONE** opcional (fallback) para vínculo operacional.
+- Painel de constância (janela 30 dias) calculado por **`isoDate`** (data real da sessão).
+- Follow-ups com segurança: bloqueia envio em `unlinked_patient`, `ambiguous_phone`, `phone_mismatch`.
+
+**Melhorias aplicadas**
+- `GET /api/admin/attendance/summary` retorna:
+  - `byDay`, `daysWithData/daysWithoutData`, `attention`, `computedAt`, `range`
+  - filtros (`pro/service/location/patientId/phone`) + `segments` + `trend`
+- UI Admin de constância:
+  - filtros (chips + limpar), trend/segments, ordenação por prioridade, filtro rápido por telefone
+
+### Biblioteca (psicoeducação)
+- Paciente: modal com rolagem, busca, mantra fixo e “Para levar para a sessão”.
+- Admin: CRUD de artigos + categorias (criação inline no editor). Paciente vê só `published`.
+
+### Painel do paciente (mobile-first — somente paciente)
+**Admin segue desktop-first.** O painel do paciente recebeu uma rodada completa de “1 olhar e pronto”, sem CTA de cancelar/remarcar.
+
+**Topo e navegação**
+- **Top AppBar fixa** (branding “Lembrete Psi” + logo branco): fica **fixa** no topo, respeita **safe-area** (iOS) e mantém o **Menu** sempre acessível.
+- **Bottom nav premium** (fixa + safe-area): **Sessão / Diário / Leituras / Contrato**, com item ativo em **pílula** (claro e nativo).
+- **Contrato**:
+  - título não some no mobile (modal com altura limitada + scroll interno)
+  - acesso também via bottom nav
+
+**Leitura e hierarquia (menos “cara de botão”)**
+- Removidos `border/ring` de cards informativos (viraram **superfícies** com sombra leve).
+- Borda fica apenas onde faz sentido: **inputs** e **separadores**.
+
+**Paleta (consistência)**
+- Fundo geral do paciente em **escala de cinza** (sem rosado).
+- Primário do paciente migrado para **`bg-violet-950/95`**.
+- Estados preservados: **ok (emerald)** e **atenção (amber)**.
+- Tokens centralizados em `src/features/patient/lib/uiTokens.js`.
+- Botões `primary` do paciente usam **tema** (override) sem afetar o Admin.
+
+**Conteúdo**
+- Próxima sessão em modo “1-olhar”: resumo curto + detalhes colapsados no mobile.
+- Agenda colapsável por semana/mês.
+- Diário com busca mais clara.
+- Biblioteca com busca/categorias sticky.
 
 ---
 
-## Entregas desta rodada (2026-02-18)
-
-### 1) Segurança v1 (pronto para produção)
-**Bloqueadores críticos resolvidos** (sem mudar o modo de operação manual):
-
-- Login do paciente por **e-mail sem verificação**: **desativado por padrão**.
-- Paciente: acesso por **vínculo de aparelho (telefone + código)** (single-use por dispositivo).
-- Admin: acesso apenas com **custom claims** (sem fallback perigoso via `users.role`).
-- Firestore rules:
-  - `users/{uid}`: paciente só atualiza **lastSeen/contractAccepted*** (sem editar identidade/role).
-  - `audit_logs` e `subscribers`: **admin-only**.
-  - `patient_notes`: trava de `patientId` no update.
-- **Trocar paciente (DEV)** removido do painel do paciente.
-- Hardening de produção:
-  - Headers (HSTS, nosniff, referrer-policy, permissions-policy, etc.).
-  - **CSP ENFORCE em produção** (Report-Only em dev).
-  - Rate limit + erros seguros em rotas sensíveis.
-  - Origin/CSRF guard padronizado nas rotas POST.
-- Logs e retenção:
-  - PII mascarada em `history/audit_logs`.
-  - Campo `expireAt` gravado para expiração automática.
-  - **TTL Firestore configurado** para `history.expireAt` e `audit_logs.expireAt` (pode levar até ~24h para excluir após expirar).
-
-### 2) Paciente — Biblioteca (psicoeducação + vínculo)
-- Novo menu **Biblioteca** no painel do paciente (desktop + mobile).
-- Modal com:
-  - **mantra fixo**: “Leitura não substitui sessão. A mudança acontece na continuidade.”
-  - **rolagem interna** + fechar por **X**, botão **Fechar** e tecla **ESC**.
-  - busca por título/conteúdo e seções por categoria.
-  - seção **“Para levar para a sessão”** (prompts de reflexão/anotação).
-
-### 3) Admin — Repositório de artigos (CRUD) + Categorias
-- Admin pode **criar/editar/publicar/despublicar/excluir** artigos.
-- Categorias:
-  - Tela dedicada de **Categorias** (CRUD + ativar/desativar/ordenar).
-  - No editor do artigo, dá para **selecionar categoria** e **criar nova inline**.
-- Paciente vê **apenas artigos publicados** (carregados via API server-side).
-
----
-
-### 4) Hardening pós-v1 (Segurança — Passos 1–5)
-Refinamentos de segurança aplicados para evitar brechas de autorização e abuso em ambiente serverless:
-
-- **RBAC do paciente estrito**: novo helper `requirePatient()` (nega se `role` ausente/incorreta) + fallback seguro via `users/{uid}.role`.
-- **Presença (integridade)**: `POST /api/attendance/confirm` **ignora `phone` do client** e deriva do perfil (`users/{uid}.phoneCanonical`/`phone`).
-- **Metadados operacionais**: `GET /api/appointments/last-sync` agora é **admin-only**.
-- **Redução de superfície**: endpoints legados `_push_old/*` desativados (**410** em dev / **404** em produção).
-- **Rate limit global (serverless-safe)**: rotas críticas usam limiter com backing no Firestore (coleção `_rate_limits`) + recomendação de **TTL** em `_rate_limits.expireAt`.
-
-## Próximo foco (sequência recomendada)
-1) **Presença/Faltas** — melhorar painel de constância (30 dias) com insights clínicos (sem moralismo).
-2) Processar **segunda planilha/relatório** (presença/faltas) para painel de constância e follow-ups futuros.
-3) Documentar modelo NoSQL (denormalização + chave única do paciente) para evitar inconsistências.
+## Próximo passo (sequência recomendada)
+1) **Segurança (Admin)**: migrar `ADMIN_PASSWORD` → login Admin forte (preferido: Firebase Auth + MFA/TOTP obrigatório; alternativa: magic link), com migração progressiva e desligamento do legado em produção.
+2) **Presença/Faltas**: validar ingestão da **2ª planilha real** (modo mapeado) e consolidar métricas clínicas (sem moralismo).
+3) **Dados/Consistência**: documentar modelo NoSQL Firestore (denormalização + chave única do paciente).

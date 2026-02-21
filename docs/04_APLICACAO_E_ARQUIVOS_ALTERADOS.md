@@ -61,3 +61,44 @@ Se você aplicou o ZIP “idempotência/placeholder” e depois o ZIP “hardeni
   - `audit_logs.expireAt`
 - Adicionar TTL para rate limit global:
   - `_rate_limits.expireAt`
+
+---
+
+# Aplicação das alterações (Handoff 2026-02-20 — Paciente UI)
+
+## Arquivos alterados (Paciente)
+- `src/components/Patient/PatientFlow.js`
+- `src/components/Patient/PatientLogin.js`
+- `src/features/patient/components/PatientTopAppBar.js` *(novo)*
+- `src/features/patient/components/PatientHeader.js`
+- `src/features/patient/components/PatientTopMantraBar.js`
+- `src/features/patient/components/PatientMantraCard.js`
+- `src/features/patient/components/NextSessionCard.js`
+- `src/features/patient/components/PatientSessionsCard.js`
+- `src/features/patient/components/NotificationStatusCard.js`
+- `src/features/patient/components/PatientAgendaCard.js`
+- `src/features/patient/components/AppointmentMiniRow.js`
+- `src/features/patient/components/PatientNotesCard.js`
+- `src/features/patient/components/PatientLibraryModal.js`
+- `src/features/patient/components/ContractStatusCard.js`
+- `src/features/patient/components/PatientContactCard.js`
+- `src/features/patient/components/EmptyState.js`
+- `src/features/patient/components/InlineError.js`
+- `src/features/patient/lib/uiTokens.js`
+- `src/features/patient/lib/appointments.js`
+
+## Tema (Paciente-only)
+- `src/components/uiTheme.js` *(novo)*
+- `src/components/DesignSystem.js`
+- `src/app/page.js`
+
+## Skin / Paleta (Paciente-only)
+- `src/app/globals.css`
+
+## Assets
+- `public/brand/lembretepsi-logo-white.png` *(novo)*
+
+## Substituição
+1) Faça backup dos arquivos atuais
+2) Substitua pelos arquivos acima (mesmos caminhos)
+3) Rode `npm run dev` e valide no celular/emulador

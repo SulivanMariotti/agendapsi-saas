@@ -1,4 +1,4 @@
-# Backlog (lista viva — atualizado em 2026-02-19)
+# Backlog (lista viva — atualizado em 2026-02-20)
 
 > Marque com [x] quando concluir.
 
@@ -37,11 +37,15 @@
 - [x] Robustez do import (BOM + separador autodetect + TELEFONE opcional + DATA/HORA em coluna única + colunas opcionais não bloqueiam)
 - [x] Follow-ups com idempotência (anti-spam): `attendance_logs.followup.sentAt`
 - [x] Bloqueios de segurança em follow-ups: unlinked_patient / ambiguous_phone (sem vínculo) / phone_mismatch
-- [ ] **Melhorar painel de constância (30 dias)**:
-  - métricas (presenças/faltas/adiamentos) + tendência
-  - insights clínicos (sem moralismo) e reforço de constância
-  - filtros por período/profissional/paciente (se aplicável)
-- [ ] Processar **segunda planilha/relatório** (presença/faltas) para montar painel de constância e disparar notificações futuras (parabenizar presença e orientar em caso de falta). (Modo mapeado pronto; falta validar com relatório real)
+- [x] Painel de constância (30 dias) — **fase 1**:
+  - `attendance_logs` por `isoDate`
+  - `summary` expandido (byDay/cobertura/attention) + filtros + trend/segments
+  - UI com filtros e ordenação por prioridade
+- [ ] Painel de constância — **fase 2** (clínico):
+  - insights de vínculo/constância (sem moralismo)
+  - mensagens/trechos de psicoeducação por padrão (cards)
+  - validação com dados reais (2ª planilha)
+- [ ] Processar **segunda planilha/relatório** (presença/faltas) para montar painel de constância e disparar notificações futuras (parabenizar presença e orientar em caso de falta).
 
 ## 5) Segurança / Acesso (v1 concluída)
 - [x] Desativar login paciente por e-mail sem verificação (padrão)
@@ -53,12 +57,13 @@
 - [x] Origin/CSRF guard padronizado
 - [x] Retenção: `expireAt` + **TTL ativo** em `history` e `audit_logs`
 - [x] Cron endpoints endurecidos (header-only + rotação) **(cron ainda não implantado)**
-- [x] Schema-lite (payload) em rotas críticas: src/lib/server/payloadSchema.js (allowedKeys + maxBytes)
+- [x] Schema-lite (payload) em rotas críticas: `src/lib/server/payloadSchema.js` (allowedKeys + maxBytes)
 - [ ] Expandir schema-lite para todas as rotas com escrita + (futuro) schema forte (Zod)
+- [ ] **Admin Auth forte (PENDÊNCIA ≥ 9/10):** migrar `ADMIN_PASSWORD` → Firebase Auth + MFA/TOTP obrigatório (ou magic link), com migração progressiva e desligamento do legado em produção.
 - [ ] **Futuro:** autenticação do paciente com menos fricção e segura (OTP/magic link) antes de PWA/App
 
 ## 6) Dados / Consistência (Firestore)
-- [ ] Documentar modelo NoSQL Firestore (sem joins), estratégia de denormalização e chave única (ex.: patientId + phone canônico)
+- [ ] Documentar modelo NoSQL Firestore (sem joins), estratégia de denormalização e chave única (ex.: `patientId` + `phoneCanonical`)
 - [ ] Deduplicar `users` por email/phoneCanonical; normalizar telefone no `users/{uid}`
 
 ## 7) Futuro (pós “100% OK”): SaaS / Revenda
@@ -66,17 +71,18 @@
 - [ ] Custom claims/roles por tenant
 - [ ] Onboarding (criar tenant + admin) + billing (planos/limites)
 - [ ] Conteúdos (Artigos/Biblioteca) e templates/configs **por tenant** (por clínica)
+
 ## 9) Mobile (somente Painel do Paciente)
 - [x] Viewport + base mobile-first (spacing/typography) apenas no paciente.
 - [x] Drawer menu (off-canvas) no paciente.
-- [x] Bottom nav (Agenda/Diário/Biblioteca).
+- [x] Bottom nav premium **(Sessão/Diário/Leituras/Contrato)**.
 - [x] Remover FAB “+” das notas (redundante).
 - [x] Agenda em cards colapsáveis (mobile).
 - [x] Diário: busca visível + foco automático.
 - [x] Próxima sessão compacta + confirmação em destaque (sem CTA de cancelar/remarcar).
 - [x] Notificações compactas (status pill + explicação opcional).
 - [x] Biblioteca: busca/categorias sticky no modal (mobile).
-- [ ] **(Próximo)** Reduzir altura/“peso” do topo do painel (mantra/header) para leitura 1-olhar.
-
-## 10) Segurança — elevar para ≥ 9/10
-- [ ] Migrar login Admin legado (`ADMIN_PASSWORD`) para **Firebase Auth + MFA/TOTP obrigatório** (preferido) ou magic link (alternativa), com migração progressiva e desativação do legado em produção.
+- [x] Contrato: título sempre visível no mobile + acesso via bottom nav.
+- [x] Reduzir altura/“peso” do topo (Top AppBar fixa + mantra compacto).
+- [x] Remover contornos excessivos (cards viram superfície; borda só em inputs/separadores).
+- [x] Paleta do paciente: fundo em escala de cinza + primário `bg-violet-950/95` + tokens/tema.

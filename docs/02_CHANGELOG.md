@@ -114,3 +114,22 @@
 - Remoção do FAB “+” (notas).
 - Agenda colapsável (semanas/meses), diário com busca/foco, próxima sessão compacta com confirmação destacada.
 - Notificações compactas e Biblioteca com busca/categorias sticky.
+
+---
+
+## 2026-02-20 — Paciente (UI “1 olhar” + paleta consistente)
+
+### Navegação e topo
+- **Top AppBar fixa** no mobile (branding “Lembrete Psi” + logo branco), respeitando **safe-area**.
+- **Bottom nav premium** com 4 itens: **Sessão / Diário / Leituras / Contrato**, item ativo em pílula + safe-area.
+- **Contrato**: modal com título sempre visível no mobile (altura limitada + scroll interno) e acesso também via bottom nav.
+
+### Leitura (menos “cara de botão”)
+- Remoção de `border/ring` em cards informativos do paciente; UI passa a usar **superfície** (bg + sombra leve).
+- Borda fica apenas onde faz sentido: **inputs** e **separadores**.
+
+### Paleta (sem rosado)
+- Fundo geral do paciente migrou para **escala de cinza** (skin-patient sem tonalidade rosada).
+- Primário do paciente migrado para **`bg-violet-950/95`** (inclui “Confirmar presença”).
+- Tokens centralizados em `src/features/patient/lib/uiTokens.js`.
+- **Tema do paciente** sobrescreve estilos do `DesignSystem.Button` apenas no paciente (Admin não é afetado).

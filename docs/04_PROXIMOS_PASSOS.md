@@ -7,11 +7,17 @@
 - Validar Web Push:
   - desregistrar SW (`firebase-messaging-sw.js`) no navegador e recarregar.
 
-## B) Prioridade clínica (próxima entrega)
-- [ ] **Painel do paciente (mobile)**: reduzir altura/“peso” do topo (mantra/header) e melhorar leitura “1 olhar e pronto”, mantendo tom clínico e **sem CTA de cancelar/remarcar**.
-- [ ] **Presença/Faltas**: validar ingestão da **2ª planilha real** (modo mapeado) conforme cabeçalhos reais.
-- [ ] **Segurança**: migrar login Admin legado (`ADMIN_PASSWORD`) para login forte (preferido: Firebase Auth + MFA/TOTP obrigatório; alternativa: magic link) com migração progressiva e desligamento do legado em produção.
+## B) Prioridade clínica (próximas entregas)
+- [x] **Painel do paciente (mobile)**: “1 olhar e pronto”
+  - Top AppBar fixa + bottom nav premium (Sessão/Diário/Leituras/Contrato)
+  - menos contornos (cards sem border/ring)
+  - paleta cinza + primário `bg-violet-950/95` + tokens/tema
+- [ ] **Segurança (Admin)**: migrar login Admin legado (`ADMIN_PASSWORD`) para login forte (preferido: Firebase Auth + MFA/TOTP obrigatório; alternativa: magic link) com migração progressiva e desligamento do legado em produção.
+- [ ] **Presença/Faltas**: validar ingestão da **2ª planilha real** (modo mapeado) conforme cabeçalhos reais e consolidar métricas/insights clínicos (sem moralismo).
 
 ## C) Hardening contínuo (pós-v1)
 - Expandir validação de payload (schema mais forte) e revisar endpoints Admin SDK (ownership + logs consistentes).
 - CSP: planejar migração para reduzir/retirar `unsafe-inline` (nonce/hashes).
+
+## D) Dados / Consistência (Firestore)
+- Documentar modelo NoSQL (sem joins), estratégia de denormalização e chave única do paciente (ex.: `patientId` + `phoneCanonical`).

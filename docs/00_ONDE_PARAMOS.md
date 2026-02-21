@@ -3,7 +3,7 @@
 ## Objetivo do sistema (norte clínico)
 O Lembrete Psi não é “agenda com disparo”. É ferramenta clínica para **sustentar vínculo e constância**.
 
-- **Cuidado ativo**: lembrar e facilitar a presença (48h/24h/manhã).
+- **Cuidado ativo**: lembrar e facilitar a presença (48h/24h/mananhã).
 - **Psicoeducação**: reforçar que faltar interrompe o processo.
 - **Responsabilização**: o horário existe por contrato terapêutico.
 - Painel do paciente: **sem botão/CTA de cancelar/remarcar**.
@@ -44,7 +44,7 @@ Rotina diária (Admin → Agenda):
 - Follow-ups com segurança: bloqueia envio em `unlinked_patient`, `ambiguous_phone`, `phone_mismatch`.
 
 **Melhorias aplicadas**
-- `GET /api/admin/attendance/summary` agora retorna:
+- `GET /api/admin/attendance/summary` retorna:
   - `byDay`, `daysWithData/daysWithoutData`, `attention`, `computedAt`, `range`
   - filtros (`pro/service/location/patientId/phone`) + `segments` + `trend`
 - UI Admin de constância:
@@ -54,19 +54,36 @@ Rotina diária (Admin → Agenda):
 - Paciente: modal com rolagem, busca, mantra fixo e “Para levar para a sessão”.
 - Admin: CRUD de artigos + categorias (criação inline no editor). Paciente vê só `published`.
 
-### Painel do paciente (mobile-first: somente paciente)
-Admin segue desktop. O **painel do paciente** recebeu melhorias de usabilidade mobile:
-- Viewport + base de spacing/typography.
-- Menu em **drawer** (off-canvas) com overlay/ESC/trava scroll.
-- **Bottom nav**: Agenda / Diário / Biblioteca.
-- Remoção do **FAB “+”** (redundante).
-- Agenda em **cards colapsáveis** por semana/mês (mobile).
-- Diário: busca mais visível + foco automático.
-- Próxima sessão: card mais compacto + confirmação de presença em bloco de alto contraste.
-- Notificações (lembretes): card compacto + status pill + “por que isso importa?”.
-- Biblioteca: busca/categorias sticky no mobile.
+### Painel do paciente (mobile-first — somente paciente)
+**Admin segue desktop-first.** O painel do paciente recebeu uma rodada completa de “1 olhar e pronto”, sem CTA de cancelar/remarcar.
+
+**Topo e navegação**
+- **Top AppBar fixa** (branding “Lembrete Psi” + logo branco): fica **fixa** no topo, respeita **safe-area** (iOS) e mantém o **Menu** sempre acessível.
+- **Bottom nav premium** (fixa + safe-area): **Sessão / Diário / Leituras / Contrato**, com item ativo em **pílula** (claro e nativo).
+- **Contrato**:
+  - título não some no mobile (modal com altura limitada + scroll interno)
+  - acesso também via bottom nav
+
+**Leitura e hierarquia (menos “cara de botão”)**
+- Removidos `border/ring` de cards informativos (viraram **superfícies** com sombra leve).
+- Borda fica apenas onde faz sentido: **inputs** e **separadores**.
+
+**Paleta (consistência)**
+- Fundo geral do paciente em **escala de cinza** (sem rosado).
+- Primário do paciente migrado para **`bg-violet-950/95`**.
+- Estados preservados: **ok (emerald)** e **atenção (amber)**.
+- Tokens centralizados em `src/features/patient/lib/uiTokens.js`.
+- Botões `primary` do paciente usam **tema** (override) sem afetar o Admin.
+
+**Conteúdo**
+- Próxima sessão em modo “1-olhar”: resumo curto + detalhes colapsados no mobile.
+- Agenda colapsável por semana/mês.
+- Diário com busca mais clara.
+- Biblioteca com busca/categorias sticky.
 
 ---
 
-## Próximo passo (já definido)
-**Mobile (Paciente):** reduzir altura/“peso” do topo (mantra/barra superior) e melhorar leitura “1 olhar e pronto” (sem perder tom clínico).
+## Próximo passo (sequência recomendada)
+1) **Segurança (Admin)**: migrar `ADMIN_PASSWORD` → login Admin forte (preferido: Firebase Auth + MFA/TOTP obrigatório; alternativa: magic link), com migração progressiva e desligamento do legado em produção.
+2) **Presença/Faltas**: validar ingestão da **2ª planilha real** (modo mapeado) e consolidar métricas clínicas (sem moralismo).
+3) **Dados/Consistência**: documentar modelo NoSQL Firestore (denormalização + chave única do paciente).
