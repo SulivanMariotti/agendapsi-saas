@@ -20,6 +20,13 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Slightly straighter corners (patient-only): remap Tailwind radii down one step.
+   This avoids touching shared DesignSystem/Admin while making the UI feel less "bubbly". */
+.patientRoot :global(.rounded-2xl){ border-radius: 12px !important; }
+.patientRoot :global(.rounded-xl){ border-radius: 8px !important; }
+.patientRoot :global(.rounded-lg){ border-radius: 6px !important; }
+.patientRoot :global(.rounded-md){ border-radius: 4px !important; }
+
 /* Consistent horizontal breathing room */
 .patientPadX{
   padding-left: var(--pad);
