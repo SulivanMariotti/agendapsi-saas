@@ -58,25 +58,17 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Patient skin: swap violet → Permittá brand (patient area only) */
+/* Patient skin: grayscale surfaces + Lembrete Psi accent (patient area only) */
 @layer utilities {
   .skin-patient {
-    --accent-50: var(--brand-50);
-    --accent-100: var(--brand-100);
-    --accent-200: var(--brand-200);
-    --accent-300: var(--brand-300);
-    --accent-600: var(--brand-600);
-    --accent-700: var(--brand-700);
-    --accent-800: var(--brand-800);
-
-    /* Neutrals (surface) tuned to Permittá — keeps alerts untouched */
-    --surface-bg: #fbf3f8;          /* page background */
-    --surface-muted: #f7e7f1;       /* subtle fills (chips/sections) */
-    --surface-muted-2: #f0d6e6;     /* stronger fills (hover/active) */
-    --surface-border: #edd0e1;      /* soft borders */
-    --surface-border-strong: #e3b7d0; /* stronger borders */
-    --surface-shadow: 90 23 78;     /* rgb (brand-800) */
-    --surface-card-rgb: 255 250 252; /* near-white card surface */
+    /* Neutrals (surface) — grayscale only (keeps alerts untouched) */
+    --surface-bg: #f8fafc;            /* slate-50 */
+    --surface-muted: #f1f5f9;         /* slate-100 */
+    --surface-muted-2: #e2e8f0;       /* slate-200 */
+    --surface-border: #e2e8f0;        /* slate-200 */
+    --surface-border-strong: #cbd5e1; /* slate-300 */
+    --surface-shadow: 15 23 42;       /* slate-900 (neutral shadow tint) */
+    --surface-card-rgb: 255 255 255;  /* true white cards */
   }
 
   /* Page + neutrals harmonization (patient) */
@@ -99,7 +91,7 @@ body {
   .skin-patient .border-slate-50 { border-color: var(--surface-border) !important; }
   .skin-patient .border-slate-100 { border-color: var(--surface-border) !important; }
   .skin-patient .border-slate-200 { border-color: var(--surface-border-strong) !important; }
-  .skin-patient .border-slate-300 { border-color: rgb(213 149 188) !important; } /* brand-300 */
+  .skin-patient .border-slate-300 { border-color: var(--surface-border-strong) !important; }
 
   /* Tinted shadows for a more premium feel (patient) */
   .skin-patient .shadow-sm { --tw-shadow: 0 1px 2px 0 rgb(var(--surface-shadow) / 0.08) !important; }
@@ -120,55 +112,8 @@ body {
   .skin-patient .placeholder\:text-slate-400::placeholder { color: rgb(100 116 139) !important; } /* slate-500 */
   .skin-patient .placeholder\:text-slate-500::placeholder { color: rgb(71 85 105) !important; }  /* slate-600 */
 
-  /* Core swaps */
-  .skin-patient .text-violet-900 { color: var(--brand-900) !important; }
-  .skin-patient .text-violet-800 { color: var(--brand-800) !important; }
-  .skin-patient .text-violet-700 { color: var(--brand-700) !important; }
-  .skin-patient .text-violet-600 { color: var(--brand-600) !important; }
-  .skin-patient .text-violet-500 { color: var(--brand-500) !important; }
-
-  .skin-patient .bg-violet-600 { background-color: var(--brand-600) !important; }
-  /* Step 20: interaction-state completeness (avoid any leftover violet) */
-  .skin-patient .bg-violet-500 { background-color: var(--brand-500) !important; }
-  .skin-patient .bg-violet-700 { background-color: var(--brand-700) !important; }
-
-  .skin-patient .border-violet-600 { border-color: var(--brand-600) !important; }
-  .skin-patient .focus\:border-violet-200:focus { border-color: var(--brand-200) !important; }
-
-  .skin-patient .text-violet-400 { color: var(--brand-400) !important; }
-
-  .skin-patient .ring-violet-100 { --tw-ring-color: rgb(244 203 225) !important; }
-  .skin-patient .focus\:ring-violet-100:focus { --tw-ring-color: rgb(244 203 225) !important; }
-
-  /* Selection tint (patient) */
-  .skin-patient ::selection { background: rgb(233 175 211 / 0.45); }
-
-  .skin-patient .bg-violet-50 { background-color: var(--brand-50) !important; }
-  .skin-patient .bg-violet-100 { background-color: var(--brand-100) !important; }
-  .skin-patient .bg-violet-200 { background-color: var(--brand-200) !important; }
-
-  .skin-patient .border-violet-100 { border-color: var(--brand-100) !important; }
-  .skin-patient .border-violet-200 { border-color: var(--brand-200) !important; }
-
-  .skin-patient .hover\:bg-violet-700:hover { background-color: var(--brand-700) !important; }
-  .skin-patient .hover\:bg-violet-50:hover { background-color: var(--brand-50) !important; }
-
-  /* Ring + focus ring */
-  .skin-patient .ring-violet-200 { --tw-ring-color: rgb(233 175 211) !important; }
-  .skin-patient .focus\:ring-violet-200:focus { --tw-ring-color: rgb(233 175 211) !important; }
-
-  /* Shadow tint */
-  .skin-patient .shadow-violet-200 { --tw-shadow-color: rgb(233 175 211) !important; }
-
-  /* Classes with opacity modifiers (Tailwind escapes '/') */
-  .skin-patient .ring-violet-200\/70 { --tw-ring-color: rgb(233 175 211 / 0.7) !important; }
-  .skin-patient .from-violet-50\/60 {
-    --tw-gradient-from: rgb(252 242 248 / 0.6) !important;
-    --tw-gradient-to: rgb(252 242 248 / 0) !important;
-    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
-  }
-  .skin-patient .before\:bg-violet-500\/30::before { background-color: rgb(163 94 135 / 0.3) !important; }
-  .skin-patient .text-violet-800\/70 { color: rgb(90 23 78 / 0.7) !important; }
+  /* Selection tint (patient) — neutral */
+  .skin-patient ::selection { background: rgb(226 232 240 / 0.85); }
 
   /* Admin skin: swap violet → Permittá brand (admin area) */
   .skin-admin {
