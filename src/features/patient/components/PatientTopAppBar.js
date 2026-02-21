@@ -12,8 +12,8 @@ export default function PatientTopAppBar({
   const [imgOk, setImgOk] = useState(true);
 
   const finalLogoSrc = useMemo(() => {
-    // Prefer the provided logo, otherwise fallback to the existing brand mark.
-    return String(logoSrc || "/brand/permitta-mark-128.png");
+    // Prefer the provided logo, otherwise fallback to the Lembrete Psi mark.
+    return String(logoSrc || "/brand/lembretepsi-logo-white.png");
   }, [logoSrc]);
 
   return (
@@ -28,7 +28,7 @@ export default function PatientTopAppBar({
               <img
                 src={finalLogoSrc}
                 alt={appName}
-                className="w-6 h-6 rounded-md"
+                className="w-6 h-6 object-contain"
                 onError={() => setImgOk(false)}
               />
             ) : (
