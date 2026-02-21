@@ -31,7 +31,7 @@
   --accent-1000: #250d51;
 
   /* Force all Tailwind violet-600 utilities to render as violet-800 */
-  --color-violet-600: var(--color-violet-800);
+  --color-violet-600: var(--color-violet-900);
 }
 
 @theme inline {
@@ -242,14 +242,14 @@ body {
   */
   :root {
     --r-none: 0px;
-    --r-sm: 1px;   /* was 2px */
+    --r-sm: 2px;   /* was 2px */
     --r: 2px;      /* was 4px */
-    --r-md: 3px;   /* was 6px */
-    --r-lg: 4px;   /* was 8px */
-    --r-xl: 5px;   /* was 12px */
-    --r-2xl: 6px;  /* was 16px */
-    --r-3xl: 10px; /* was 24px */
-    --r-pill: 10px; /* replaces rounded-full (less “pílula”) */
+    --r-md: 2px;   /* was 6px */
+    --r-lg: 2px;   /* was 8px */
+    --r-xl: 2px;   /* was 12px */
+    --r-2xl: 2px;  /* was 16px */
+    --r-3xl: 2px; /* was 24px */
+    --r-pill: 2px; /* replaces rounded-full (less “pílula”) */
   }
 
   /* Core */

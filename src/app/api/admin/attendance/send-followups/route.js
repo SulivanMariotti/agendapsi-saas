@@ -177,7 +177,8 @@ export async function POST(req) {
     const bodyRes = await readJsonObjectBody(req, {
       maxBytes: 15000,
       defaultValue: {},
-      allowedKeys: ["days", "limit", "fromIsoDate", "toIsoDate"],
+      // dryRun é usado pela UI para gerar prévia (não envia push)
+      allowedKeys: ["days", "limit", "fromIsoDate", "toIsoDate", "dryRun"],
       label: "attendance-followups",
       showKeys: true,
     });
