@@ -24,9 +24,9 @@ export default function App() {
     () => ({
       buttonVariants: {
         primary:
-          "bg-violet-950/95 text-white hover:bg-violet-950 shadow-lg shadow-black/10 border border-transparent",
+          "bg-violet-950/95 text-white hover:bg-violet-950 active:bg-violet-900/95 shadow-lg shadow-black/10 border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
         white:
-          "bg-white text-violet-950 hover:bg-white/90 shadow-lg shadow-black/5 border-transparent",
+          "bg-white text-violet-950 hover:bg-white/95 active:bg-slate-50 shadow-lg shadow-black/5 border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
       },
     }),
     []
