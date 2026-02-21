@@ -499,9 +499,10 @@ export default function AdminPanelView({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    // Admin desktop-first: reduzir sidebar (mais ~10% em cima do ajuste anterior) para dar mais área útil ao conteúdo.
+    <div className="grid grid-cols-1 lg:grid-cols-[2.7fr_13.3fr] gap-6">
       {/* Sidebar */}
-      <div className="lg:col-span-3">
+      <div className="min-w-0">
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 sticky top-4">
           <div className="flex items-start justify-between gap-3 mb-6">
             <div className="flex items-center gap-3 min-w-0">
@@ -643,7 +644,7 @@ export default function AdminPanelView({
       </div>
 
       {/* Conteúdo */}
-      <div className="lg:col-span-9 space-y-6">
+      <div className="min-w-0 space-y-6">
         {(adminTab === 'schedule' || adminTab === 'attendance') && (
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">

@@ -633,9 +633,11 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
       <Card className="p-4 mb-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex items-center gap-2 w-full md:w-auto">
-            <Search size={18} />
+            <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-slate-50 border border-slate-200 text-slate-600">
+              <Search size={18} />
+            </span>
             <input
-              className="border rounded px-3 py-2 w-full md:w-[360px]"
+              className="border border-slate-200 bg-white rounded-xl px-3 py-2 w-full md:w-[360px] text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400"
               placeholder="Buscar por nome, email, telefone ou ID"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -662,7 +664,7 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
               type="button"
               onClick={() => toggleFilter('noPush')}
               className={`px-3 py-1 rounded-full text-xs border transition ${
-                filters.noPush ? 'bg-violet-600 text-white border-violet-600' : 'bg-white hover:bg-slate-50 border-slate-200'
+                filters.noPush ? 'bg-violet-800 text-white border-violet-800' : 'bg-white hover:bg-slate-50 border-slate-200'
               }`}
               title="Mostra somente pacientes sem Push ativo (notificações)."
             >
@@ -673,7 +675,7 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
               type="button"
               onClick={() => toggleFilter('noContract')}
               className={`px-3 py-1 rounded-full text-xs border transition ${
-                filters.noContract ? 'bg-violet-600 text-white border-violet-600' : 'bg-white hover:bg-slate-50 border-slate-200'
+                filters.noContract ? 'bg-violet-800 text-white border-violet-800' : 'bg-white hover:bg-slate-50 border-slate-200'
               }`}
               title="Mostra pacientes que ainda não aceitaram a versão atual do contrato."
             >
@@ -684,7 +686,7 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
               type="button"
               onClick={() => toggleFilter('noCode')}
               className={`px-3 py-1 rounded-full text-xs border transition ${
-                filters.noCode ? 'bg-violet-600 text-white border-violet-600' : 'bg-white hover:bg-slate-50 border-slate-200'
+                filters.noCode ? 'bg-violet-800 text-white border-violet-800' : 'bg-white hover:bg-slate-50 border-slate-200'
               }`}
               title="Mostra pacientes sem código de vinculação (útil para gerar acesso)."
             >
@@ -782,17 +784,33 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
 
       <Card className="p-0 overflow-hidden">
         <div className="overflow-auto" style={{ maxHeight: `${tableMaxHeightPx}px` }}>
-          <table className="w-full text-[13px]">
+          <table className="w-full text-[13px] table-fixed">
             <thead>
               <tr className="text-left border-b bg-slate-50/60">
-                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur">Paciente</th>
-                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur">Email</th>
-                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur">Telefone</th>
-                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur">Push</th>
-                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur">Cadastro</th>
-                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur">Contrato</th>
-                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur">Código</th>
-                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur text-right">Ações</th>
+                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur text-[11px] uppercase tracking-wide text-slate-600 font-semibold w-[220px]">
+                  Paciente
+                </th>
+                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur text-[11px] uppercase tracking-wide text-slate-600 font-semibold w-[240px]">
+                  Email
+                </th>
+                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur text-[11px] uppercase tracking-wide text-slate-600 font-semibold w-[150px]">
+                  Telefone
+                </th>
+                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur text-[11px] uppercase tracking-wide text-slate-600 font-semibold w-[180px]">
+                  Push
+                </th>
+                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur text-[11px] uppercase tracking-wide text-slate-600 font-semibold w-[190px]">
+                  Cadastro
+                </th>
+                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur text-[11px] uppercase tracking-wide text-slate-600 font-semibold w-[170px]">
+                  Contrato
+                </th>
+                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur text-[11px] uppercase tracking-wide text-slate-600 font-semibold w-[200px]">
+                  Código
+                </th>
+                <th className="px-3 py-2 sticky top-0 z-10 bg-slate-50/90 backdrop-blur text-[11px] uppercase tracking-wide text-slate-600 font-semibold text-right w-[320px]">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -803,17 +821,24 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
                   </td>
                 </tr>
               ) : (
-                filteredPatients.map((u) => (
-                  <tr key={u.uid || u.id} className="border-b last:border-b-0 hover:bg-slate-50/40">
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-slate-800 leading-tight">{u?.name || '—'}</div>
+                filteredPatients.map((u, idx) => (
+                  <tr
+                    key={u.uid || u.id}
+                    className={`border-b last:border-b-0 hover:bg-slate-100/40 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
+                  >
+                    <td className="px-3 py-2.5 align-top">
+                      <div className="font-semibold text-slate-900 leading-tight truncate">{u?.name || '—'}</div>
                       {u?.patientExternalId ? (
                         <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">ID: {u?.patientExternalId}</div>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2">{u?.email || '—'}</td>
-                    <td className="px-3 py-2">{u?.phoneCanonical || u?.phone || '—'}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5 align-top">
+                      <div className="truncate text-slate-700">{u?.email || '—'}</div>
+                    </td>
+                    <td className="px-3 py-2.5 align-top whitespace-nowrap text-slate-700">
+                      {u?.phoneCanonical || u?.phone || '—'}
+                    </td>
+                    <td className="px-3 py-2.5 align-top">
                       <IndicatorPill
                         kind="push"
                         ok={Boolean(u?.hasPushToken)}
@@ -825,7 +850,7 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
                         }
                       />
                     </td>
-                    <td className="px-3 py-2 space-y-1">
+                    <td className="px-3 py-2.5 align-top space-y-1">
                       <IndicatorPill
                         kind="status"
                         ok={String(u?.status || '').toLowerCase() === 'active'}
@@ -852,7 +877,7 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
                         }
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5 align-top">
                       <IndicatorPill
                         kind="contract"
                         ok={Number(u?.contractAcceptedVersion || 0) >= currentContractVersion}
@@ -864,7 +889,7 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
                         title={`Aceite do contrato: v${Number(u?.contractAcceptedVersion || 0)} • Versão atual: v${currentContractVersion}`}
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5 align-top">
                       <PairCodePill
                         status={u?.pairCodeStatus}
                         last4={u?.pairCodeLast4}
@@ -872,8 +897,8 @@ export default function AdminPatientsTab({ showToast, globalConfig }) {
                         usedAt={u?.pairCodeUsedAt}
                       />
                     </td>
-                    <td className="px-3 py-2">
-                      <div className="flex justify-end gap-2">
+                    <td className="px-3 py-2.5 align-top">
+                      <div className="flex justify-end gap-2 items-center">
                         <Button
                           variant="secondary"
                           onClick={() => handleGeneratePairCode(u)}
