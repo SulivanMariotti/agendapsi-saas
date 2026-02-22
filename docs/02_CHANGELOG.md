@@ -144,3 +144,24 @@
   - substituição de `#7c3aed` → `#5b21b6` (violet-800)
   - alias global: `--color-violet-600: var(--color-violet-800)`
 - Escala `--accent-*` documentada para completar sequência até `1000`.
+
+## 2026-02-21
+
+### Operação / Produção
+- Validado `config/global`, rules publicadas, TTL ativo e Web Push (limpeza de SW).
+
+### Presença/Faltas
+- Ingestão e validação da 2ª planilha real (modo mapeado) + métricas ok.
+- Follow-ups: endpoint agora aceita `dryRun` (prévia) sem quebrar validação.
+
+### Hardening
+- Schema-lite “body vazio” em rotas sem payload + `showKeys` quiet em produção.
+
+### Dados / Consistência
+- Normalização `phoneCanonical` + relatório de duplicatas (oculta desativados por padrão).
+- Reativação oficial de paciente no Admin (sem recadastro).
+- Fixes de envio: ativo vence inativo em duplicidade por telefone; lookup de push token robusto.
+
+### Auditoria (batchId)
+- `batchId` em envios (Admin/Cron/Follow-ups) + filtro/resumo no Histórico.
+- **Pendente para amanhã**: card de batchId no Dashboard + link para Histórico filtrado.

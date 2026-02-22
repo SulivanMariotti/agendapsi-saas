@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { adminError } from "@/lib/server/adminError";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
+import { readJsonObjectBody } from "@/lib/server/payloadSchema";
 
 export const runtime = "nodejs";
 
@@ -37,6 +38,17 @@ async function ensureUniqueSlug(db, baseSlug) {
  * - Não altera artigos; apenas garante que a lista de categorias exista.
  */
 export async function POST(req) {
+  const bodyRes = await readJsonObjectBody(req, {
+    allowedKeys: [],
+    maxBytes: 2_000,
+    defaultValue: {},
+    label: "library:categories:bootstrap",
+    showKeys: false,
+  });
+  if (!bodyRes.ok) {
+    return NextResponse.json({ ok: false, error: bodyRes.error }, { status: 400 });
+  }
+
   const auth = await requireAdmin(req);
   if (!auth.ok) return auth.res;
 

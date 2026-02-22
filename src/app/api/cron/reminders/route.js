@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import { writeHistory } from "@/lib/server/historyLog";
 import { requireCron } from "@/lib/server/cronAuth";
+import { fetchSubscriberMetaByPhone } from "@/lib/server/subscriberLookup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -155,13 +156,26 @@ function pickTemplate(cfg, reminderType) {
 
 function isUserInactive(u) {
   if (!u) return false;
-  const st = String(u.status || "").toLowerCase();
+
+  // Flags explícitas de segurança/acesso (fonte de verdade no Lembrete Psi)
+  if (u.accessDisabled === true) return true;
+  if (u.securityHold === true) return true;
+  if (u.accessDisabledAt || (u.access && u.access.disabledAt)) return true;
+
+  const accessStatus = String(u.accessStatus || (u.access && u.access.status) || "").toLowerCase().trim();
+  if (["disabled", "blocked", "suspended", "hold"].includes(accessStatus)) return true;
+
+  // Status cadastral (legado/compat)
+  const st = String(u.status || "").toLowerCase().trim();
   if (["inactive", "disabled", "archived", "deleted"].includes(st)) return true;
+
   if (u.deletedAt || u.disabledAt) return true;
   if (u.isActive === false || u.disabled === true) return true;
   if (u.mergedTo) return true;
+
   return false;
 }
+
 
 async function sendWithConcurrency(messaging, messages, concurrency = 20) {
   const results = new Array(messages.length);
@@ -262,22 +276,14 @@ export async function GET(req) {
   }
   const phones = Array.from(byPhone.keys());
 
-  // Subscribers em batch
+  // Subscribers em batch (canonical + compat legado 55)
+  const subMetaByPhone = await fetchSubscriberMetaByPhone(db, phones);
   const subByPhone = {};
-  const chunkSize = 50;
-  for (let i = 0; i < phones.length; i += chunkSize) {
-    const chunk = phones.slice(i, i + chunkSize);
-    const refs = chunk.map((p) => db.collection("subscribers").doc(p));
-    const snaps = await db.getAll(...refs);
-    snaps.forEach((s, idx) => {
-      const phone = chunk[idx];
-      const d = s.exists ? s.data() : null;
-      subByPhone[phone] = {
-        token: d?.pushToken || d?.fcmToken || d?.token || null,
-        inactive: Boolean(d?.status === "inactive" || d?.isActive === false),
-      };
-    });
+  for (const phone of phones) {
+    const m = subMetaByPhone[phone] || { token: null, inactive: false };
+    subByPhone[phone] = { token: m.token ? String(m.token) : null, inactive: Boolean(m.inactive) };
   }
+
 
   // Users inativos (best effort)
   const userInactiveByPhone = {};
@@ -294,8 +300,11 @@ export async function GET(req) {
         const data = doc.data() || {};
         const ph = String(data.phoneCanonical || "").trim();
         if (!ph) return;
-        userInactiveByPhone[ph] = isUserInactive(data);
-      });
+        const inactive = isUserInactive(data);
+          // Se existir QUALQUER perfil ativo com este telefone, o telefone NÃO deve ser tratado como inativo.
+          // (evita que um registro antigo/inativo "vença" quando há duplicatas)
+          userInactiveByPhone[ph] = (userInactiveByPhone[ph] ?? true) && inactive;
+});
     }
   }
 

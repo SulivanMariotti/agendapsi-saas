@@ -1,4 +1,4 @@
-# Prompt para iniciar novo chat — Lembrete Psi (2026-02-20)
+# Prompt para iniciar novo chat — Lembrete Psi (2026-02-21)
 
 Você é um dev master full stack + olhar clínico para o projeto **Lembrete Psi** (Next.js App Router + Firebase).
 
@@ -10,24 +10,25 @@ Você é um dev master full stack + olhar clínico para o projeto **Lembrete Psi
 
 ## Estado atual (resumo)
 - Operação manual: Admin→Agenda: Carregar planilha→Verificar→Sincronizar→Preview→Enviar; janela hoje→+30 dias; cron desativado.
-- Segurança v1 ok (rules/headers/origin guard/rate limit/logs TTL). Acesso do paciente bloqueia só por flags explícitas (`accessDisabled/securityHold`), não por status clínico.
-- Presença/Faltas: `attendance_logs` por `isoDate`; summary expandido (byDay/cobertura/attention) + filtros + trend/segments; UI Admin com filtros e prioridades.
-- **Paciente/Mobile (concluído)**:
-  - Top AppBar fixa (Lembrete Psi + logo), safe-area.
-  - Bottom nav premium com 4 itens: **Sessão / Diário / Leituras / Contrato**.
-  - Contrato com título sempre visível no mobile + acesso via bottom nav.
-  - Menos contornos (cards informativos sem border/ring; bordas só em inputs/separadores).
-  - Paleta do paciente em **escala de cinza** (sem rosado) + primário **`bg-violet-950/95`**.
-  - Tokens em `src/features/patient/lib/uiTokens.js` + tema do paciente sobrescrevendo `Button primary` sem afetar Admin.
+- Segurança v1 ok (rules/headers/origin guard/rate limit/logs TTL).
+- Presença/Faltas: `attendance_logs` por `isoDate`; summary expandido (byDay/cobertura/attention) + filtros + trend/segments; follow-ups com idempotência; endpoint aceita `dryRun`.
+- **Paciente/Mobile (concluído)**: Top AppBar fixa + bottom nav (Sessão/Diário/Leituras/Contrato), paleta cinza + primário `bg-violet-950/95`, sem CTA cancelar/remarcar.
+- **Layout geral**: cantos mais quadrados (≈ -60% radius); sidebar do Admin reduzida.
+- **Dados/consistência**:
+  - normalização `phoneCanonical` + relatório de duplicatas (por padrão ocultando desativados, com toggle).
+  - **Reativação oficial** no Admin (mostrar desativados + botão Reativar; reativa `users` e `subscribers` sem recadastro).
+  - correção: duplicidade por telefone → ativo vence inativo (não bloqueia envio).
+  - push token: status-batch e lookup no envio corrigidos.
 
-- **Admin (somente cores)**:
-  - Admin desktop-first, mas paleta alinhada ao paciente (escala de cinza) via `skin-patient`.
-  - Padronização do roxo: substituir `#7c3aed` → `#5b21b6` e forçar `violet-600` → `violet-800` em `src/app/globals.css`.
-  - Escala `--accent-*` documentada até `1000`.
+## Lista de pendências (mantida)
+A) Produção ✅ concluído (config/global + rules publicadas + TTL ativo + Web Push)
+B) Admin Auth forte (≥9/10) **deixar por último**
+C) Presença/Faltas ✅ ingestão 2ª planilha + métricas + follow-ups ok; fase 2 clínica ainda pendente
+D) Hardening ✅ (schema-lite body vazio + showKeys quiet em prod); ainda falta expandir para “todas as rotas” se houver gaps
+E) Dados ✅ documentação + ferramentas; ainda falta merge/dedup assistido
+F) Auditoria batchId ✅ parcial (F1/F2 ok) — **F3 ficou para amanhã**
+G) Futuro: multi-tenant/OTP paciente etc (só depois)
 
-## Próximo passo (prioridade)
-- **Pendência para nota ≥ 9/10**: migrar `ADMIN_PASSWORD` → login Admin forte (preferido: Firebase Auth + MFA/TOTP obrigatório; alternativa: magic link) com migração progressiva e desligamento do legado em produção.
+## Próximo passo recomendado (começar por aqui no novo chat)
+**Item F — Passo F3**: adicionar no Dashboard o card “Últimos lotes (batchId)” + link que abre Histórico já filtrado por `batchId`.
 
-## Outras próximas entregas
-- Validar ingestão da **2ª planilha real** de Presença/Faltas (modo mapeado) e consolidar métricas clínicas.
-- Documentar modelo NoSQL Firestore (denormalização + chave única do paciente).

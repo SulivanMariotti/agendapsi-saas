@@ -6,6 +6,7 @@ import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
 import { writeHistory } from "@/lib/server/historyLog";
 import { asPlainObject, enforceAllowedKeys, readJsonBody } from "@/lib/server/payloadSchema";
+import { fetchSubscriberMetaByPhone } from "@/lib/server/subscriberLookup";
 
 export const runtime = "nodejs";
 
@@ -209,13 +210,26 @@ async function sendWithConcurrency(messaging, messages, concurrency = 20) {
 
 function isUserInactive(u) {
   if (!u) return false;
-  const st = String(u.status || "").toLowerCase();
+
+  // Flags explícitas de segurança/acesso (fonte de verdade no Lembrete Psi)
+  if (u.accessDisabled === true) return true;
+  if (u.securityHold === true) return true;
+  if (u.accessDisabledAt || (u.access && u.access.disabledAt)) return true;
+
+  const accessStatus = String(u.accessStatus || (u.access && u.access.status) || "").toLowerCase().trim();
+  if (["disabled", "blocked", "suspended", "hold"].includes(accessStatus)) return true;
+
+  // Status cadastral (legado/compat)
+  const st = String(u.status || "").toLowerCase().trim();
   if (["inactive", "disabled", "archived", "deleted"].includes(st)) return true;
+
   if (u.deletedAt || u.disabledAt) return true;
   if (u.isActive === false || u.disabled === true) return true;
   if (u.mergedTo) return true;
+
   return false;
 }
+
 
 export async function POST(req) {
   let auth = null;
@@ -321,21 +335,14 @@ export async function POST(req) {
     }
     const phones = Array.from(byPhone.keys());
 
-    // Subscribers (token) em batch
+    // Subscribers (token) em batch (canonical + compat legado 55)
+    const subMetaByPhone = await fetchSubscriberMetaByPhone(db, phones);
     const resultsByPhone = {};
-    const chunkSize = 50;
-    for (let i = 0; i < phones.length; i += chunkSize) {
-      const chunk = phones.slice(i, i + chunkSize);
-      const refs = chunk.map((p) => db.collection("subscribers").doc(p));
-      const snaps = await db.getAll(...refs);
-      snaps.forEach((snap, idx) => {
-        const phone = chunk[idx];
-        const data = snap.exists ? snap.data() : null;
-        const token = data?.pushToken || data?.fcmToken || data?.token || null;
-        const inactive = data?.status === "inactive";
-        resultsByPhone[phone] = { token: token ? String(token) : null, inactive: Boolean(inactive) };
-      });
+    for (const phone of phones) {
+      const m = subMetaByPhone[phone] || { token: null, inactive: false };
+      resultsByPhone[phone] = { token: m.token ? String(m.token) : null, inactive: Boolean(m.inactive) };
     }
+
 
     // Users inativos (bloqueio) — best effort
     const userInactiveByPhone = {};
@@ -352,8 +359,11 @@ export async function POST(req) {
           const data = d.data() || {};
           const ph = String(data.phoneCanonical || "").trim();
           if (!ph) return;
-          userInactiveByPhone[ph] = isUserInactive(data);
-        });
+          const inactive = isUserInactive(data);
+          // Se existir QUALQUER perfil ativo com este telefone, o telefone NÃO deve ser tratado como inativo.
+          // (evita que um registro antigo/inativo "vença" quando há duplicatas)
+          userInactiveByPhone[ph] = (userInactiveByPhone[ph] ?? true) && inactive;
+});
       }
     }
 

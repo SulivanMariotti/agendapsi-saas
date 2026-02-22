@@ -26,6 +26,19 @@ function onlyDigits(v) {
   return String(v || "").replace(/\D/g, "");
 }
 
+function hasAnyToken(data) {
+  if (!data) return false;
+  // Primary
+  if (data.pushToken) return true;
+  // Compat / future-proof
+  if (data.fcmToken) return true;
+  if (data.token) return true;
+  if (Array.isArray(data.pushTokens) && data.pushTokens.length) return true;
+  if (Array.isArray(data.tokens) && data.tokens.length) return true;
+  if (data.push && (data.push.token || data.push.fcmToken || data.push.pushToken)) return true;
+  return false;
+}
+
 /**
  * Canonical phone for this project:
  * - DDD + número (10/11 dígitos)
@@ -38,6 +51,14 @@ function toPhoneCanonical(raw) {
   if (d.length === 10 || d.length === 11) return d;
   if (d.length > 11) return d.slice(-11);
   return d;
+}
+
+function toPhoneE164Like(phoneCanonical) {
+  const p = toPhoneCanonical(phoneCanonical);
+  if (!p) return "";
+  if (p.startsWith("55") && (p.length === 12 || p.length === 13)) return p;
+  if (p.length === 10 || p.length === 11) return `55${p}`;
+  return p;
 }
 
 export async function POST(req) {
@@ -75,14 +96,44 @@ export async function POST(req) {
     const chunks = [];
     for (let i = 0; i < phones.length; i += 500) chunks.push(phones.slice(i, i + 500));
 
+    // Robust lookup:
+    // - Prefer canonical doc id (SEM 55)
+    // - Also accept legacy doc id with 55 prefix (some older admin flows)
     for (const chunk of chunks) {
-      const refs = chunk.map((p) => db.collection("subscribers").doc(p));
+      const refs = [];
+      const index = new Map();
+
+      for (const p of chunk) {
+        const canon = toPhoneCanonical(p);
+        if (!canon) continue;
+        const e164 = toPhoneE164Like(canon);
+
+        // canonical
+        refs.push(db.collection("subscribers").doc(canon));
+        index.set(canon, (index.get(canon) || []).concat(canon));
+
+        // legacy (55+...)
+        if (e164 && e164 !== canon) {
+          refs.push(db.collection("subscribers").doc(e164));
+          index.set(canon, (index.get(canon) || []).concat(e164));
+        }
+      }
+
+      if (!refs.length) continue;
       const snaps = await db.getAll(...refs);
+
+      // id -> tokenPresent
+      const presentById = new Map();
       snaps.forEach((snap) => {
-        const phone = snap.id;
         const data = snap.exists ? snap.data() : null;
-        byPhone[phone] = !!(data && data.pushToken);
+        presentById.set(snap.id, hasAnyToken(data));
       });
+
+      // Collapse back to canonical keys
+      for (const [canon, ids] of index.entries()) {
+        const any = (ids || []).some((id) => presentById.get(id));
+        byPhone[canon] = Boolean(any);
+      }
     }
 
     return NextResponse.json({ ok: true, byPhone, count: Object.keys(byPhone).length });

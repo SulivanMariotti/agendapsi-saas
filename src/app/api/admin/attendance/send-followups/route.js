@@ -5,6 +5,8 @@ import { requireAdmin } from "@/lib/server/requireAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
+import { writeHistory } from "@/lib/server/historyLog";
+import { makeBatchId } from "@/lib/server/batchId";
 
 export const runtime = "nodejs";
 
@@ -177,7 +179,6 @@ export async function POST(req) {
     const bodyRes = await readJsonObjectBody(req, {
       maxBytes: 15000,
       defaultValue: {},
-      // dryRun é usado pela UI para gerar prévia (não envia push)
       allowedKeys: ["days", "limit", "fromIsoDate", "toIsoDate", "dryRun"],
       label: "attendance-followups",
       showKeys: true,
@@ -186,6 +187,9 @@ export async function POST(req) {
     const body = bodyRes.value;
 
     const dryRun = !!body.dryRun;
+
+    // batchId para rastrear este lote em history/audit e nos próprios logs
+    const batchId = makeBatchId("attendance_followups", dryRun ? "dry" : "send");
 
     const { fromIsoDate, toIsoDate, days } = parseBodyRange(body);
     const limit = Math.min(1000, Math.max(1, Number(body?.limit || 200)));
@@ -230,6 +234,7 @@ export async function POST(req) {
 
     const out = {
       ok: true,
+      batchId,
       dryRun,
       fromIsoDate,
       toIsoDate,
@@ -452,6 +457,7 @@ export async function POST(req) {
           {
             followup: {
               lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+              batchId,
               status,
               lastResult: "sending",
               lastError: null,
@@ -473,6 +479,7 @@ export async function POST(req) {
           phoneCanonical: phone,
           isoDate: String(current.isoDate || ""),
           logId: logId || "",
+          batchId: String(batchId),
         },
       };
 
@@ -485,6 +492,7 @@ export async function POST(req) {
             {
               followup: {
                 sentAt: admin.firestore.FieldValue.serverTimestamp(),
+                batchId,
                 status,
                 lastResult: "sent",
                 lastError: null,
@@ -502,6 +510,7 @@ export async function POST(req) {
             {
               followup: {
                 lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+                batchId,
                 status,
                 lastResult: "error",
                 lastError: safeErrMessage(e),
@@ -519,6 +528,7 @@ export async function POST(req) {
       actorEmail: auth.decoded?.email || null,
       action: "attendance_send_followups",
       meta: {
+        batchId,
         dryRun,
         fromIsoDate,
         toIsoDate,
@@ -539,6 +549,32 @@ export async function POST(req) {
         blockedErrors: out.blockedErrors,
         byStatus: out.byStatus,
       },
+    });
+
+    // History (resumo por lote) — útil para auditoria operacional sem depender só do audit_logs
+    await writeHistory(db, {
+      type: "attendance_followups_send_summary",
+      batchId,
+      dryRun,
+      fromIsoDate,
+      toIsoDate,
+      days: days ?? null,
+      limit,
+      totalLogs,
+      candidatesTotal,
+      candidates,
+      sent: out.sent,
+      blocked: out.blocked,
+      blockedAlreadySent: out.blockedAlreadySent,
+      blockedNoToken: out.blockedNoToken,
+      blockedNoPhone: out.blockedNoPhone,
+      blockedInactive: out.blockedInactive,
+      blockedUnlinkedPatient: out.blockedUnlinkedPatient,
+      blockedAmbiguousPhone: out.blockedAmbiguousPhone,
+      blockedPhoneMismatch: out.blockedPhoneMismatch,
+      blockedErrors: out.blockedErrors,
+      byStatus: out.byStatus,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     return NextResponse.json(out);

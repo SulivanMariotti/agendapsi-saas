@@ -2,12 +2,12 @@
 
 > Este arquivo **espelha** o `docs/00_ONDE_PARAMOS.md` para manter compatibilidade com históricos antigos.
 
-# Onde paramos — Lembrete Psi (2026-02-20)
+# Onde paramos — Lembrete Psi (2026-02-21)
 
 ## Objetivo do sistema (norte clínico)
 O Lembrete Psi não é “agenda com disparo”. É ferramenta clínica para **sustentar vínculo e constância**.
 
-- **Cuidado ativo**: lembrar e facilitar a presença (48h/24h/mananhã).
+- **Cuidado ativo**: lembrar e facilitar a presença (48h/24h/manhã).
 - **Psicoeducação**: reforçar que faltar interrompe o processo.
 - **Responsabilização**: o horário existe por contrato terapêutico.
 - Painel do paciente: **sem botão/CTA de cancelar/remarcar**.
@@ -19,75 +19,64 @@ O Lembrete Psi não é “agenda com disparo”. É ferramenta clínica para **s
 ### Operação (modo manual — recomendado)
 Rotina diária (Admin → Agenda):
 
-**Carregar Planilha → Verificar → Sincronizar → Gerar Preview do Disparo → Enviar lembrete**
+**Carregar Planilha → Verificar → Sincronizar → Preview → Enviar**  
+Janela: **hoje → +30 dias** (cron ainda desativado).
 
-- Janela de upload: **hoje → +30 dias**.
-- Cron **não habilitado** (decisão atual). Rotas `/api/cron/*` permanecem endurecidas para futuro.
-
-### Segurança v1 (concluída) + pós-v1 aplicado
-- Paciente por **telefone + código** (single-use por dispositivo).
-- Login inseguro do paciente por e-mail: **desativado por padrão**.
-- Admin: **custom claims** (`admin:true`) + guards server-side.
-- Firestore rules endurecidas + headers/CSP em produção + origin guard + rate limit.
-- Logs com `expireAt` + **TTL ativo** em `history` e `audit_logs`.
-
-**Pós-v1 recente**
-- `requirePatient()` aplicado nas rotas do paciente (role estrita).
-- `POST /api/attendance/confirm` deriva telefone do perfil (ignora `phone` do client).
-- `_push_old/*` desativado (410 dev / 404 prod).
-- Helper de validação **schema-lite** (`src/lib/server/payloadSchema.js`) em rotas críticas.
-- **Acesso do paciente**: bloqueio só por flag explícita (`accessDisabled/securityHold/...`), não por “status clínico”.
-- Endpoint Admin para suspender/liberar acesso com auditoria: `POST /api/admin/patient/access`.
-
-> Pendência de segurança para nota ≥ 9: substituir `ADMIN_PASSWORD` por login Admin forte (MFA/TOTP ou magic link) com migração progressiva.
-
-### Presença/Faltas (constância terapêutica)
-- Import CSV robusto (BOM + `;`/`,`/TAB) + **DATA/HORA** em coluna única.
-- Coluna **TELEFONE** opcional (fallback) para vínculo operacional.
-- Painel de constância (janela 30 dias) calculado por **`isoDate`** (data real da sessão).
-- Follow-ups com segurança: bloqueia envio em `unlinked_patient`, `ambiguous_phone`, `phone_mismatch`.
-
-**Melhorias aplicadas**
-- `GET /api/admin/attendance/summary` retorna:
-  - `byDay`, `daysWithData/daysWithoutData`, `attention`, `computedAt`, `range`
-  - filtros (`pro/service/location/patientId/phone`) + `segments` + `trend`
-- UI Admin de constância:
-  - filtros (chips + limpar), trend/segments, ordenação por prioridade, filtro rápido por telefone
-
-### Biblioteca (psicoeducação)
-- Paciente: modal com rolagem, busca, mantra fixo e “Para levar para a sessão”.
-- Admin: CRUD de artigos + categorias (criação inline no editor). Paciente vê só `published`.
-
-### Painel do paciente (mobile-first — somente paciente)
-**Admin segue desktop-first.** O painel do paciente recebeu uma rodada completa de “1 olhar e pronto”, sem CTA de cancelar/remarcar.
-
-**Topo e navegação**
-- **Top AppBar fixa** (branding “Lembrete Psi” + logo branco): fica **fixa** no topo, respeita **safe-area** (iOS) e mantém o **Menu** sempre acessível.
-- **Bottom nav premium** (fixa + safe-area): **Sessão / Diário / Leituras / Contrato**, com item ativo em **pílula** (claro e nativo).
-- **Contrato**:
-  - título não some no mobile (modal com altura limitada + scroll interno)
-  - acesso também via bottom nav
-
-**Leitura e hierarquia (menos “cara de botão”)**
-- Removidos `border/ring` de cards informativos (viraram **superfícies** com sombra leve).
-- Borda fica apenas onde faz sentido: **inputs** e **separadores**.
-
-**Paleta (consistência)**
-- Fundo geral do paciente em **escala de cinza** (sem rosado).
-- Primário do paciente migrado para **`bg-violet-950/95`**.
-- Estados preservados: **ok (emerald)** e **atenção (amber)**.
-- Tokens centralizados em `src/features/patient/lib/uiTokens.js`.
-- Botões `primary` do paciente usam **tema** (override) sem afetar o Admin.
-
-**Conteúdo**
-- Próxima sessão em modo “1-olhar”: resumo curto + detalhes colapsados no mobile.
-- Agenda colapsável por semana/mês.
-- Diário com busca mais clara.
-- Biblioteca com busca/categorias sticky.
+### Segurança (v1)
+- Rules/headers/CSP/originGuard/rate limit/logs TTL: **ok**
+- Acesso do paciente: bloqueio apenas por flags explícitas (`accessDisabled` / `securityHold`), nunca por “status clínico”.
 
 ---
 
-## Próximo passo (sequência recomendada)
-1) **Segurança (Admin)**: migrar `ADMIN_PASSWORD` → login Admin forte (preferido: Firebase Auth + MFA/TOTP obrigatório; alternativa: magic link), com migração progressiva e desligamento do legado em produção.
-2) **Presença/Faltas**: validar ingestão da **2ª planilha real** (modo mapeado) e consolidar métricas clínicas (sem moralismo).
-3) **Dados/Consistência**: documentar modelo NoSQL Firestore (denormalização + chave única do paciente).
+## Entregas concluídas hoje (2026-02-21)
+
+### A) Produção (checks)
+- `config/global` validado e salvo (msg1/msg2/msg3 + títulos + offsets + follow-ups).
+- Firestore rules **publicadas** (users/audit_logs/subscribers/library_*/patient_notes).
+- TTL **ativo** (`history.expireAt`, `audit_logs.expireAt`, `_rate_limits.expireAt`).
+- Web Push: limpeza de Service Worker e recarga validadas.
+
+### C) Presença/Faltas (dados reais)
+- Import/validação da **2ª planilha real** (modo mapeado) e métricas ok (byDay/cobertura/attention/trends).
+- Follow-ups (presença/falta): correção do endpoint para aceitar **`dryRun`**.
+- Segurança do follow-up: bloqueios críticos continuam (unlinked/ambiguous/mismatch) + idempotência (anti-spam).
+
+### D) Hardening contínuo (pós-v1)
+- Schema-lite “body vazio” (allowedKeys: []) em rotas que não deveriam aceitar payload.
+- `showKeys` menos verboso em produção (erros de payload sem “vazar” chaves).
+
+### E) Dados / Consistência (Firestore)
+- Padronização: `phoneCanonical` (normalização) + relatório de duplicatas com **toggle** (por padrão, igual lista: **oculta desativados**).
+- **Reativação oficial** no Admin:
+  - Toggle “Mostrar desativados” + botão **Reativar**
+  - Restaura `users.status=active` e `subscribers.status=active` sem recadastrar.
+- Fix crítico: em duplicidade por telefone, **ativo sempre vence inativo** (evita bloquear envio).
+- Push token:
+  - `status-batch` ajustado para detectar token corretamente.
+  - Envio real (Admin + Cron) usa lookup robusto (compat com doc legado `55...`).
+
+### UX/Layout (Admin + Paciente)
+- Sidebar do Admin reduzida (mais área útil à direita).
+- Cantos arredondados mais “quadrados” globalmente (≈ -60% radius).
+- Ajustes finos de layout na lista de pacientes (sem adicionar/remover informação).
+
+### F) Auditoria por lote (batchId) — **parcial (F3 ficou para amanhã)**
+- `batchId` gerado por execução em **Admin Send / Cron / Follow-ups** e persistido em `history` + `audit_logs`.
+- **Histórico**: filtro por `batchId` + resumo do lote (com hotfix do `rangeLogs`).
+
+---
+
+## Pontos importantes (para evitar regressão)
+- **Desativar ≠ apagar**: o doc inativo fica no Firestore (por isso duplicatas “globais” apareciam).  
+  Agora: relatório de duplicatas **oculta desativados por padrão** e existe **Reativar** no Admin.
+- Se aparecer “Sem Token”, confira `subscribers/{phoneCanonical}.pushToken`. (UI e status-batch foram corrigidos hoje.)
+- Se existir duplicidade de telefone, o sistema agora trata como: **se há ativo, não bloqueia por inativo**.
+
+---
+
+## Pendências (próxima sessão)
+- **F3 (deixar para amanhã)**: Dashboard com card “Últimos lotes (batchId)” + link para Histórico já filtrado.
+- Fase 2 do painel de constância (insights clínicos, sem moralismo).
+- Deduplicação/merge “assistido” (resolver duplicatas com segurança, sem risco de enviar para pessoa errada).
+- **Item B por último**: migrar `ADMIN_PASSWORD` → Firebase Auth + MFA/TOTP (ou magic link) com migração progressiva e desligamento do legado.
+

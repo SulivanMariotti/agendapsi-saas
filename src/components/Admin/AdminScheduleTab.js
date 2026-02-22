@@ -2202,7 +2202,7 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
                   <div className="text-xs font-semibold text-slate-600">{app.timeLabel}</div>
                   <Badge
                     status={((hasTokenByPhone[normalizePhoneCanonical(app.cleanPhone || app.phoneCanonical || app.phone)] ?? app.isSubscribed) ? 'confirmed' : 'missing')}
-                    text={(hasTokenByPhone[normalizePhoneCanonical(app.cleanPhone || app.phoneCanonical || app.phone)] ? 'Sem Token' : 'Autorizado')}
+                    text={(hasTokenByPhone[normalizePhoneCanonical(app.cleanPhone || app.phoneCanonical || app.phone)] ? 'Autorizado' : 'Sem Token')}
                   />
                 </div>
               </div>

@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Send,
   Layers,
+  Hash,
 } from 'lucide-react';
 import { Card } from '../DesignSystem';
 
@@ -118,6 +119,24 @@ function getCampaignKey(log) {
   return 'other';
 }
 
+
+function getBatchId(log) {
+  // batchId pode vir em diferentes lugares (defensivo)
+  return (
+    (log && typeof log.batchId === 'string' && log.batchId) ||
+    (log?.meta && typeof log.meta.batchId === 'string' && log.meta.batchId) ||
+    (log?.payload && typeof log.payload.batchId === 'string' && log.payload.batchId) ||
+    ''
+  );
+}
+
+function shortBatchId(id) {
+  const s = String(id || '').trim();
+  if (!s) return '';
+  // pega sufixo para caber em UI
+  return s.length > 10 ? `…${s.slice(-10)}` : s;
+}
+
 function isSendFailure(log) {
   const types = Array.isArray(log?.types) ? log.types.map(String) : [];
   const hasFailedType = types.some((t) => /failed/i.test(String(t)));
@@ -132,12 +151,13 @@ function isSendFailure(log) {
   return isReminderFail || isSummaryWithFails || hasFailedType || hasFailCount || hasErrorField || summaryMentionsFail;
 }
 
-export default function AdminHistoryTab({ historyLogs = [] }) {
+export default function AdminHistoryTab({ historyLogs = [], historyJump = null }) {
   const [range, setRange] = useState('30d'); // today | 7d | 30d | all
   const [category, setCategory] = useState('all'); // all | errors | sendFailures | reminders | attendance | appointments | patients | push
   const [q, setQ] = useState('');
   const [visible, setVisible] = useState(200);
   const [groupByCampaign, setGroupByCampaign] = useState(false);
+  const [batchFilter, setBatchFilter] = useState('');
   const [selected, setSelected] = useState(null);
   const [copied, setCopied] = useState('');
 
@@ -160,6 +180,25 @@ export default function AdminHistoryTab({ historyLogs = [] }) {
 
   const logs = useMemo(() => (Array.isArray(historyLogs) ? historyLogs : []), [historyLogs]);
 
+  // Jump externo (Dashboard → Histórico filtrado por batchId)
+  useEffect(() => {
+    const bid = String(historyJump?.batchId || '').trim();
+    if (!bid) return;
+    // Garantia: lote aparece mesmo que seja antigo
+    setRange('all');
+    setBatchFilter(bid);
+    setQ('');
+    setSelected(null);
+    setGroupByCampaign(false);
+    setVisible(400);
+    // Scroll para o topo para ver o resumo do lote
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (_) {
+      // ignore
+    }
+  }, [historyJump?.ts]);
+
   const rangeStartMs = useMemo(() => {
     const now = Date.now();
     if (range === 'today') {
@@ -172,8 +211,96 @@ export default function AdminHistoryTab({ historyLogs = [] }) {
     return 0;
   }, [range]);
 
+  const rangeLogs = useMemo(() => {
+    // Importante: filtra a lista base (`logs`) pelo período selecionado.
+    // (Bugfix) não pode referenciar `rangeLogs` aqui — isso causa ReferenceError.
+    return (Array.isArray(logs) ? logs : []).filter((log) => {
+      const at = Number(log?.__sortAt || 0);
+      if (rangeStartMs && at && at < rangeStartMs) return false;
+      return true;
+    });
+  }, [logs, rangeStartMs]);
+
+  const batchOptions = useMemo(() => {
+    const map = new Map();
+    for (const log of rangeLogs) {
+      const bid = getBatchId(log);
+      if (!bid) continue;
+      if (map.has(bid)) continue;
+
+      const types = Array.isArray(log?.types) ? log.types : [];
+      const primaryType = types.length ? String(types[0]) : String(log?.type || '');
+
+      const { date, time } = tsToParts(log.sentAt || log.createdAt);
+      const label = `${date} ${time} • ${typeToLabel(primaryType)} • ${shortBatchId(bid)}`;
+      map.set(bid, { id: bid, label, at: Number(log?.__sortAt || 0) });
+    }
+
+    return Array.from(map.values())
+      .sort((a, b) => (b.at || 0) - (a.at || 0))
+      .slice(0, 50);
+  }, [rangeLogs]);
+
+  const batchStats = useMemo(() => {
+    if (!batchFilter) return null;
+
+    const bid = String(batchFilter);
+    const list = rangeLogs.filter((log) => getBatchId(log) === bid);
+
+    let reminderSummary = { sent: 0, fails: 0, noToken: 0, inactive: 0, inactiveSub: 0 };
+    let followSummary = { sent: 0, fails: 0, blocked: 0, noToken: 0, inactive: 0 };
+
+    let hasReminderSummary = false;
+    let hasFollowSummary = false;
+
+    let indivReminderSent = 0;
+    let indivReminderFails = 0;
+    let indivFollowSent = 0;
+    let indivFollowFails = 0;
+
+    for (const log of list) {
+      const types = Array.isArray(log?.types) ? log.types.map(String) : [];
+
+      if (types.includes('push_reminder_send_summary')) {
+        hasReminderSummary = true;
+        reminderSummary.sent += Number(log?.sentCount || 0);
+        reminderSummary.fails += Number(log?.failCount || 0);
+        reminderSummary.noToken += Number(log?.blockedNoToken || log?.skippedNoToken || 0);
+        reminderSummary.inactive += Number(log?.blockedInactive || log?.skippedInactivePatient || 0);
+        reminderSummary.inactiveSub += Number(log?.blockedInactiveSubscriber || log?.skippedInactive || 0);
+      }
+
+      if (types.includes('attendance_followups_send_summary')) {
+        hasFollowSummary = true;
+        followSummary.sent += Number(log?.sentCount || log?.sent || 0);
+        followSummary.fails += Number(log?.failCount || log?.errors || 0);
+        followSummary.blocked += Number(log?.blockedAlreadySent || log?.blocked || 0);
+        followSummary.noToken += Number(log?.skippedNoToken || 0);
+        followSummary.inactive += Number(log?.skippedInactivePatient || 0);
+      }
+
+      // Fallback individual (quando não existe summary no lote)
+      if (types.includes('push_reminder_sent')) indivReminderSent += 1;
+      if (types.includes('push_reminder_failed')) indivReminderFails += 1;
+      if (types.includes('attendance_followup_sent')) indivFollowSent += 1;
+      if (types.some((t) => /attendance_followup_failed|followup_failed/i.test(t))) indivFollowFails += 1;
+    }
+
+    const sent = (hasReminderSummary ? reminderSummary.sent : indivReminderSent) + (hasFollowSummary ? followSummary.sent : indivFollowSent);
+    const fails = (hasReminderSummary ? reminderSummary.fails : indivReminderFails) + (hasFollowSummary ? followSummary.fails : indivFollowFails);
+
+    const noToken = (hasReminderSummary ? reminderSummary.noToken : 0) + (hasFollowSummary ? followSummary.noToken : 0);
+    const inactive = (hasReminderSummary ? reminderSummary.inactive : 0) + (hasFollowSummary ? followSummary.inactive : 0);
+    const inactiveSub = hasReminderSummary ? reminderSummary.inactiveSub : 0;
+    const blocked = hasFollowSummary ? followSummary.blocked : 0;
+
+    return { total: list.length, sent, fails, noToken, inactive, inactiveSub, blocked };
+  }, [batchFilter, rangeLogs]);
+
   const filtered = useMemo(() => {
     const needle = String(q || '').trim().toLowerCase();
+
+    const batchNeedle = String(batchFilter || '').trim();
 
     const matchCategory = (log) => {
       const types = Array.isArray(log?.types) ? log.types.map(String) : [];
@@ -196,13 +323,12 @@ export default function AdminHistoryTab({ historyLogs = [] }) {
       return true;
     };
 
-    return (Array.isArray(logs) ? logs : [])
-      .filter((log) => {
-        const at = Number(log?.__sortAt || 0);
-        if (rangeStartMs && at && at < rangeStartMs) return false;
-        return true;
-      })
+    return (Array.isArray(rangeLogs) ? rangeLogs : [])
       .filter(matchCategory)
+      .filter((log) => {
+        if (!batchNeedle) return true;
+        return getBatchId(log) === batchNeedle;
+      })
       .filter((log) => {
         if (!needle) return true;
         const types = Array.isArray(log?.types) ? log.types.map(String) : [];
@@ -211,6 +337,7 @@ export default function AdminHistoryTab({ historyLogs = [] }) {
           log?.phoneCanonical,
           log?.email,
           log?.patientId,
+          getBatchId(log),
           ...(Array.isArray(log?.appointmentIds) ? log.appointmentIds : []),
           ...types,
           ...types.map(typeToLabel),
@@ -220,12 +347,12 @@ export default function AdminHistoryTab({ historyLogs = [] }) {
           .toLowerCase();
         return hay.includes(needle);
       });
-  }, [logs, q, category, rangeStartMs]);
+    }, [rangeLogs, q, category, batchFilter]);
 
   useEffect(() => {
     // Quando muda filtro/busca/período, volta para um “page size” leve.
     setVisible(200);
-  }, [q, category, range]);
+    }, [q, category, range, batchFilter]);
 
   const visibleLogs = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
 
@@ -243,6 +370,7 @@ export default function AdminHistoryTab({ historyLogs = [] }) {
     setRange('30d');
     setCategory('all');
     setQ('');
+    setBatchFilter('');
   };
 
   const safeJson = (obj) => {
@@ -391,7 +519,7 @@ export default function AdminHistoryTab({ historyLogs = [] }) {
     );
   };
 
-  const showClear = q || category !== 'all' || range !== '30d';
+  const showClear = q || category !== 'all' || range !== '30d' || batchFilter;
 
   return (
     <Card
@@ -419,6 +547,51 @@ export default function AdminHistoryTab({ historyLogs = [] }) {
               Role para ver o histórico completo
             </div>
           </div>
+{batchFilter && batchStats ? (
+  <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500">
+    <span className="inline-flex items-center gap-1 bg-slate-50 text-slate-700 border border-slate-100 px-2.5 py-1 rounded-full">
+      <Hash size={12} className="text-slate-500" /> Lote {shortBatchId(batchFilter)}
+    </span>
+
+    <span className="bg-white text-slate-600 border border-slate-200 px-2.5 py-1 rounded-full">
+      Enviados: {batchStats.sent}
+    </span>
+
+    {batchStats.blocked ? (
+      <span className="bg-white text-slate-600 border border-slate-200 px-2.5 py-1 rounded-full">
+        Bloqueados: {batchStats.blocked}
+      </span>
+    ) : null}
+
+    {batchStats.noToken ? (
+      <span className="bg-white text-slate-600 border border-slate-200 px-2.5 py-1 rounded-full">
+        Sem token: {batchStats.noToken}
+      </span>
+    ) : null}
+
+    {batchStats.inactive || batchStats.inactiveSub ? (
+      <span className="bg-white text-slate-600 border border-slate-200 px-2.5 py-1 rounded-full">
+        Inativos: {batchStats.inactive + batchStats.inactiveSub}
+      </span>
+    ) : null}
+
+    {batchStats.fails ? (
+      <span className="bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-full">
+        Erros: {batchStats.fails}
+      </span>
+    ) : null}
+
+    <button
+      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+      onClick={() => copyText('BatchId', batchFilter)}
+      title="Copiar batchId"
+    >
+      <Copy size={12} /> {copied === 'BatchId' ? 'Copiado' : 'Copiar lote'}
+    </button>
+  </div>
+) : null}
+
+
 
           {/* Controles */}
           <div className="flex flex-col gap-2">
@@ -478,6 +651,26 @@ export default function AdminHistoryTab({ historyLogs = [] }) {
                   <Layers size={12} className="text-slate-500" /> Campanhas
                 </span>
               </button>
+
+              <div className="inline-flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-slate-400 inline-flex items-center gap-1">
+                  <Hash size={12} className="text-slate-400" /> Lote
+                </span>
+                <select
+                  value={batchFilter}
+                  onChange={(e) => setBatchFilter(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl text-[11px] font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  title="Filtrar por lote de envio (batchId)"
+                  disabled={!batchOptions.length}
+                >
+                  <option value="">Todos</option>
+                  {batchOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               {showClear && (
                 <button

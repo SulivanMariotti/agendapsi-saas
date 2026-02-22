@@ -37,6 +37,9 @@ export default function AdminDashboardTab({
 
   // Histórico (para saúde do sistema)
   historyLogs = [],
+
+  // Jump para Histórico filtrado por batchId
+  onGoToHistoryBatch = () => {},
 }) {
   const atRisk = useMemo(() => {
     const rows = Array.isArray(attendanceStats?.topAbsent) ? attendanceStats.topAbsent : [];
@@ -128,6 +131,81 @@ export default function AdminDashboardTab({
     return logs.find((l) => String(l?.type || '').trim() === 'appointments_sync_summary') || null;
   }, [historyLogs]);
 
+  const getBatchId = (log) => {
+    const direct = log && typeof log.batchId === 'string' ? log.batchId : '';
+    const meta = log?.meta && typeof log.meta.batchId === 'string' ? log.meta.batchId : '';
+    const payload = log?.payload && typeof log.payload.batchId === 'string' ? log.payload.batchId : '';
+    return String(direct || meta || payload || '').trim();
+  };
+
+  const readNum = (log, keys = []) => {
+    for (const k of keys) {
+      if (!k) continue;
+      const parts = String(k).split('.');
+      let cur = log;
+      for (const p of parts) {
+        cur = cur?.[p];
+      }
+      const n = Number(cur);
+      if (Number.isFinite(n)) return n;
+    }
+    return 0;
+  };
+
+  const lastBatches = useMemo(() => {
+    const logs = Array.isArray(historyLogs) ? historyLogs : [];
+    const map = new Map();
+
+    for (const l of logs) {
+      const bid = getBatchId(l);
+      if (!bid) continue;
+      const at = Number(l?.__sortAt || 0);
+      const type = String(l?.type || l?.action || '').trim();
+      const summary = String(l?.summary || '').trim();
+      const isSummary = /summary/i.test(type) || summary.toLowerCase().startsWith('resumo');
+
+      const prev = map.get(bid) || { batchId: bid, at: 0, best: null };
+      prev.at = Math.max(prev.at || 0, at || 0);
+
+      // Preferir logs de resumo (para números prontos)
+      if (isSummary) {
+        if (!prev.best || (at || 0) >= Number(prev.best?.__sortAt || 0)) {
+          prev.best = l;
+        }
+      } else if (!prev.best) {
+        prev.best = l;
+      }
+
+      map.set(bid, prev);
+    }
+
+    const rows = Array.from(map.values())
+      .sort((a, b) => (b.at || 0) - (a.at || 0))
+      .slice(0, 5)
+      .map((g) => {
+        const l = g.best || {};
+        const type = String(l?.type || l?.action || '').trim();
+        return {
+          batchId: g.batchId,
+          at: g.at,
+          type,
+          sent: readNum(l, ['sentCount', 'sent', 'meta.sentCount', 'meta.sent']),
+          fails: readNum(l, ['failCount', 'fails', 'meta.failCount', 'meta.fails']),
+          noToken: readNum(l, ['blockedNoToken', 'skippedNoToken', 'meta.blockedNoToken', 'meta.skippedNoToken']),
+          inactive: readNum(l, [
+            'blockedInactive',
+            'skippedInactivePatient',
+            'meta.blockedInactive',
+            'meta.skippedInactivePatient',
+          ]),
+          blocked: readNum(l, ['blocked', 'meta.blocked']),
+          summary: String(l?.summary || '').trim(),
+        };
+      });
+
+    return rows;
+  }, [historyLogs]);
+
   const pushFails24h = useMemo(() => {
     const logs = Array.isArray(historyLogs) ? historyLogs : [];
     const now = Date.now();
@@ -202,6 +280,62 @@ export default function AdminDashboardTab({
               </div>
             </div>
           </div>
+        </div>
+      </Card>
+
+      {/* Últimos lotes de envio (batchId) */}
+      <Card
+        title="Últimos lotes (batchId)"
+        className="animate-in fade-in slide-in-from-bottom-4 duration-500"
+      >
+        <div className="text-sm text-slate-500">
+          Use lotes para auditar: você abre o Histórico já filtrado e confere enviados, bloqueios (sem token / inativo) e falhas.
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white overflow-hidden">
+          {lastBatches.length === 0 ? (
+            <div className="p-4 text-sm text-slate-600">Ainda não há lote registrado com batchId no Histórico.</div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {lastBatches.map((r) => (
+                <div key={r.batchId} className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-900 truncate">{r.batchId}</div>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(r.batchId)}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        title="Copiar batchId"
+                      >
+                        <Copy size={14} /> Copiar
+                      </button>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {formatFromMillis(r.at)}{r.type ? ` • ${r.type}` : ''}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                      <span className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700">Enviados: {r.sent}</span>
+                      <span className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700">Sem token: {r.noToken}</span>
+                      <span className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700">Inativo: {r.inactive}</span>
+                      <span className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700">Falhas: {r.fails}</span>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0">
+                    <Button
+                      variant="secondary"
+                      onClick={() => onGoToHistoryBatch(r.batchId)}
+                      icon={ArrowRight}
+                      className="w-full md:w-auto"
+                    >
+                      Abrir no Histórico
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </Card>
 

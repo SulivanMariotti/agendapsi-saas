@@ -273,8 +273,13 @@ export async function readJsonObjectBody(req, opts = {}) {
     defaultValue = {},
     allowedKeys = null,
     label = null,
-    showKeys = true,
+    showKeys = undefined,
   } = opts;
+
+  // Em produção, preferimos mensagens de validação menos verbosas.
+  // (pode ser sobrescrito por rota com showKeys: true)
+  const showKeysResolved =
+    showKeys === undefined ? process.env.NODE_ENV !== "production" : !!showKeys;
 
   const bodyRes = await readJsonBody(req, { maxBytes, defaultValue });
   if (!bodyRes.ok) return bodyRes;
@@ -283,7 +288,10 @@ export async function readJsonObjectBody(req, opts = {}) {
   if (!plain.ok) return plain;
 
   if (Array.isArray(allowedKeys)) {
-    const keysOk = enforceAllowedKeys(plain.value, allowedKeys, { label, showKeys });
+    const keysOk = enforceAllowedKeys(plain.value, allowedKeys, {
+      label,
+      showKeys: showKeysResolved,
+    });
     if (!keysOk.ok) return keysOk;
   }
 

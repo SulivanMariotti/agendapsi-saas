@@ -35,6 +35,15 @@ export default function AdminPanelView({
 }) {
   const [adminTab, setAdminTab] = useState('dashboard');
 
+  // Jump para Histórico filtrado por batchId (evita caça manual no histórico)
+  const [historyJump, setHistoryJump] = useState(null);
+  const openHistoryBatch = (batchId) => {
+    const bid = String(batchId || '').trim();
+    if (!bid) return;
+    setHistoryJump({ batchId: bid, ts: Date.now() });
+    setAdminTab('history');
+  };
+
   // Manual de Uso: jump/atalho contextual (Agenda / Presença/Faltas)
   const [manualJump, setManualJump] = useState(null);
 
@@ -687,6 +696,7 @@ export default function AdminPanelView({
             attendanceStats={attendanceStats}
             patientNameByPhone={patientNameByPhone}
             historyLogs={historyLogs}
+            onGoToHistoryBatch={openHistoryBatch}
             onGoToAttendance={goToAttendance}
             onGoToAttendanceImport={goToAttendanceImport}
             onGoToAttendanceFollowups={goToAttendanceFollowups}
@@ -737,7 +747,7 @@ export default function AdminPanelView({
 
         {adminTab === 'users' && <AdminPatientsTab subscribers={subscribers} showToast={showToast} globalConfig={globalConfig} />}
 
-        {adminTab === 'history' && <AdminHistoryTab historyLogs={historyLogs} />}
+        {adminTab === 'history' && <AdminHistoryTab historyLogs={historyLogs} historyJump={historyJump} />}
 
         {adminTab === 'audit' && <AdminAuditTab showToast={showToast} />}
 

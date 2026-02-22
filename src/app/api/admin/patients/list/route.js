@@ -44,15 +44,19 @@ function parseBool(v) {
 }
 
 function parseFilters(input) {
-  const src = input?.filters ? input.filters : input;
+  // includeInactive pode vir no root do body, enquanto noPush/noContract/noCode vêm dentro de "filters".
+  // Unificamos para aceitar ambos sem quebrar compat.
+  const src = input?.filters ? { ...input, ...input.filters } : input;
   const noPush = Boolean(src?.noPush);
   const noContract = Boolean(src?.noContract);
   const noCode = Boolean(src?.noCode);
 
+  const includeInactive = Boolean(src?.includeInactive);
+
   const contractVersionRaw = src?.contractVersion ?? 1;
   const contractVersion = Math.max(1, Math.min(999, Number(contractVersionRaw) || 1));
 
-  return { noPush, noContract, noCode, contractVersion };
+  return { noPush, noContract, noCode, includeInactive, contractVersion };
 }
 
 
@@ -237,6 +241,15 @@ function dedupePatients(list) {
       map.set(key, p);
       continue;
     }
+
+    // Prefer ACTIVE over INACTIVE when duplicated (avoids "inativo vencendo")
+    const prevInactive = Boolean(prev?._inactive);
+    const curInactive = Boolean(p?._inactive);
+    if (prevInactive !== curInactive) {
+      map.set(key, prevInactive ? p : prev);
+      continue;
+    }
+
     const prevUpdated = Date.parse(prev.updatedAt || prev.createdAt || "") || 0;
     const curUpdated = Date.parse(p.updatedAt || p.createdAt || "") || 0;
     if (curUpdated >= prevUpdated) map.set(key, p);
@@ -282,13 +295,13 @@ function normalizePatient(doc) {
   };
 }
 
-function cleanAndFilterPatients(raw) {
+function cleanAndFilterPatients(raw, { includeInactive = false } = {}) {
   // Remove ghosts / incomplete / inactive
   const filtered = raw.filter((p) => {
     if (String(p?.role || "").toLowerCase() !== "patient") return false;
     if (!p.name) return false;
     if (!p.phoneCanonical && !p.phone) return false;
-    if (p._inactive) return false;
+    if (!includeInactive && p._inactive) return false;
     return true;
   });
 
@@ -369,7 +382,7 @@ async function listPatientsStable({ db, pageSize, includePush, cursor, filters }
     }
 
     const raw = pageDocs.map(normalizePatient);
-    let patients = cleanAndFilterPatients(raw);
+    let patients = cleanAndFilterPatients(raw, { includeInactive: Boolean(filters?.includeInactive) });
 
     if (effectiveIncludePush) {
       patients = await addHasPushToken(db, patients);
@@ -432,7 +445,7 @@ async function listPatientsStable({ db, pageSize, includePush, cursor, filters }
     nextCursor = hasMore ? encodeCursor(cur) : null;
 
     // normalize + clean
-    let batchPatients = cleanAndFilterPatients(scanDocs.map(normalizePatient));
+    let batchPatients = cleanAndFilterPatients(scanDocs.map(normalizePatient), { includeInactive: Boolean(filters?.includeInactive) });
 
     // filtros dependentes de push exigem enrich antes
     if (effectiveIncludePush) {
@@ -485,7 +498,7 @@ async function listPatientsScanFallback({ db, pageSize, includePush, cursor, fil
     const scanDocs = docs.slice(0, batchSize);
 
     const normalized = scanDocs.map(normalizePatient);
-    const patients = cleanAndFilterPatients(normalized).slice(0, pageSize);
+    const patients = cleanAndFilterPatients(normalized, { includeInactive: Boolean(filters?.includeInactive) }).slice(0, pageSize);
 
     // Cursor do último doc varrido (não do último paciente), para não ficar preso.
     const lastScanned = scanDocs.length ? scanDocs[scanDocs.length - 1] : null;
@@ -558,7 +571,7 @@ async function listPatientsScanFallback({ db, pageSize, includePush, cursor, fil
     cur = { updatedAtMillis, uid: lastScanned.id };
     nextCursor = hasMore ? encodeCursor(cur) : null;
 
-    let batchPatients = cleanAndFilterPatients(scanDocs.map(normalizePatient));
+    let batchPatients = cleanAndFilterPatients(scanDocs.map(normalizePatient), { includeInactive: Boolean(filters?.includeInactive) });
 
     if (effectiveIncludePush) {
       batchPatients = await addHasPushToken(db, batchPatients);
@@ -630,7 +643,7 @@ async function listPatientsExactSearch({ db, includePush, filters, search }) {
 
   const docs = Array.from(seen.values());
   const raw = docs.map(normalizePatient);
-  let patients = cleanAndFilterPatients(raw);
+  let patients = cleanAndFilterPatients(raw, { includeInactive: Boolean(filters?.includeInactive) });
 
   if (effectiveIncludePush) {
     patients = await addHasPushToken(db, patients);
@@ -674,7 +687,7 @@ async function readBody(req) {
   const res = await readJsonObjectBody(req, {
     maxBytes: 60_000,
     defaultValue: {},
-    allowedKeys: ["pageSize", "limit", "cursor", "includePush", "filters", "search", "q"],
+    allowedKeys: ["pageSize", "limit", "cursor", "includePush", "includeInactive", "filters", "search", "q"],
     label: "patients-list",
     showKeys: true,
   });
@@ -706,7 +719,7 @@ export async function POST(req) {
     const cursor = body?.cursor ?? null;
     const search = body?.search ?? body?.q ?? null;
 
-    const filters = parseFilters(body?.filters ?? body);
+    const filters = parseFilters(body);
 
     const out = await listPatientsPage({ pageSize, includePush, cursor, filters, search });
     return NextResponse.json({ ok: true, ...out }, { status: 200 });
@@ -733,6 +746,7 @@ export async function GET(req) {
       noPush: url.searchParams.get("noPush"),
       noContract: url.searchParams.get("noContract"),
       noCode: url.searchParams.get("noCode"),
+      includeInactive: url.searchParams.get("includeInactive"),
       contractVersion: url.searchParams.get("contractVersion"),
     });
 

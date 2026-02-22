@@ -21,6 +21,11 @@ function tsToMillis(ts) {
   return 0;
 }
 
+function toNumberSafe(v, fallback = 0) {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function normalizeHistoryLog(raw) {
   const payload = raw?.payload && typeof raw.payload === 'object' ? raw.payload : null;
 
@@ -52,12 +57,12 @@ function normalizeHistoryLog(raw) {
   if (!summary) {
     switch (type) {
       case 'push_reminder_send_summary': {
-        const sentCount = Number(raw?.sentCount || 0);
-        const failCount = Number(raw?.failCount || 0);
-        const blockedNoToken = Number(raw?.blockedNoToken || raw?.skippedNoToken || 0);
-        const blockedInactive = Number(raw?.blockedInactive || raw?.skippedInactivePatient || 0);
-        const blockedInactiveSubscriber = Number(raw?.blockedInactiveSubscriber || raw?.skippedInactive || 0);
-        summary = `Resumo disparo lembretes • enviados: ${sentCount} • falhas: ${failCount} • sem token: ${blockedNoToken} • paciente inativo: ${blockedInactive} • subscriber inativo: ${blockedInactiveSubscriber}`;
+        const sentCount = toNumberSafe(raw?.sentCount ?? 0);
+        const failCount = toNumberSafe(raw?.failCount ?? 0);
+        const blockedNoToken = toNumberSafe(raw?.blockedNoToken ?? raw?.skippedNoToken ?? 0);
+        const blockedInactive = toNumberSafe(raw?.blockedInactive ?? raw?.skippedInactivePatient ?? 0);
+        const blockedInactiveSubscriber = toNumberSafe(raw?.blockedInactiveSubscriber ?? raw?.skippedInactiveSubscriber ?? raw?.skippedInactive ?? 0);
+summary = `Resumo disparo lembretes • enviados: ${sentCount} • falhas: ${failCount} • sem token: ${blockedNoToken} • paciente inativo: ${blockedInactive} • subscriber inativo: ${blockedInactiveSubscriber}`;
         break;
       }
       case 'push_reminder_sent': {

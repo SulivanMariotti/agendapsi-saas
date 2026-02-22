@@ -1,4 +1,4 @@
-# Backlog (lista viva — atualizado em 2026-02-20)
+# Backlog (lista viva — atualizado em 2026-02-21)
 
 > Marque com [x] quando concluir.
 
@@ -15,6 +15,9 @@
 - [x] Copiar resumo do dia + registro diário + auditoria (14 dias)
 - [x] **Falha-segura** (detector + instrução objetiva)
 - [ ] Auditoria por **batchId** do envio (opcional): rastrear lote do dia (enviados/bloqueados) para auditoria “sem dúvida”.
+  - [x] `batchId` em Admin Send / Cron / Follow-ups + persistência em `history` e `audit_logs`
+  - [x] Histórico: filtro por `batchId` + resumo do lote
+  - [ ] Dashboard: card “Últimos lotes (batchId)” + link para Histórico filtrado (deixar para amanhã)
 
 ## 2) Admin — Manual de Uso
 - [x] Menu **Manual de Uso** (Agenda + Presença/Faltas)
@@ -45,7 +48,7 @@
   - insights de vínculo/constância (sem moralismo)
   - mensagens/trechos de psicoeducação por padrão (cards)
   - validação com dados reais (2ª planilha)
-- [ ] Processar **segunda planilha/relatório** (presença/faltas) para montar painel de constância e disparar notificações futuras (parabenizar presença e orientar em caso de falta).
+- [x] Processar **segunda planilha/relatório** (presença/faltas) para montar painel de constância e disparar follow-ups (presença/falta) com `dryRun` + idempotência.
 
 ## 5) Segurança / Acesso (v1 concluída)
 - [x] Desativar login paciente por e-mail sem verificação (padrão)
@@ -59,12 +62,18 @@
 - [x] Cron endpoints endurecidos (header-only + rotação) **(cron ainda não implantado)**
 - [x] Schema-lite (payload) em rotas críticas: `src/lib/server/payloadSchema.js` (allowedKeys + maxBytes)
 - [ ] Expandir schema-lite para todas as rotas com escrita + (futuro) schema forte (Zod)
+  - [x] Rotas “sem body”: seed/bootstrap/ping/delete note com allowedKeys: []
+  - [x] `showKeys` quiet em produção (menos vazamento de detalhes)
 - [ ] **Admin Auth forte (PENDÊNCIA ≥ 9/10):** migrar `ADMIN_PASSWORD` → Firebase Auth + MFA/TOTP obrigatório (ou magic link), com migração progressiva e desligamento do legado em produção.
 - [ ] **Futuro:** autenticação do paciente com menos fricção e segura (OTP/magic link) antes de PWA/App
 
 ## 6) Dados / Consistência (Firestore)
-- [ ] Documentar modelo NoSQL Firestore (sem joins), estratégia de denormalização e chave única (ex.: `patientId` + `phoneCanonical`)
+- [x] Documentar modelo NoSQL Firestore (sem joins), estratégia de denormalização e chave única (ex.: `patientId` + `phoneCanonical`) — ver docs/14_MODELO_NOSQL_FIRESTORE_CHAVE_UNICA.md
 - [ ] Deduplicar `users` por email/phoneCanonical; normalizar telefone no `users/{uid}`
+  - [x] Ferramenta Admin: normalizar `phoneCanonical`
+  - [x] Relatório Admin: duplicatas de `phoneCanonical` (por padrão ocultando desativados) + toggle
+  - [x] Reativação oficial no Admin (sem recadastro)
+  - [ ] Merge/dedup assistido (decidir “registro principal” e consolidar com segurança)
 
 ## 7) Futuro (pós “100% OK”): SaaS / Revenda
 - [ ] Multi-tenant por clínica (`tenantId` em tudo) + isolamento de dados

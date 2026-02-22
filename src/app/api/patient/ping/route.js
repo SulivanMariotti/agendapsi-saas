@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import admin from "@/lib/firebaseAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { requirePatient } from "@/lib/server/requirePatient";
+import { readJsonObjectBody } from "@/lib/server/payloadSchema";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,17 @@ export const runtime = "nodejs";
  * - rate limit
  */
 export async function POST(req) {
+  const bodyRes = await readJsonObjectBody(req, {
+    allowedKeys: [],
+    maxBytes: 2_000,
+    defaultValue: {},
+    label: "patient:ping",
+    showKeys: false,
+  });
+  if (!bodyRes.ok) {
+    return NextResponse.json({ ok: false, error: bodyRes.error }, { status: 400 });
+  }
+
   try {
     const rl = await rateLimit(req, {
       bucket: "patient:ping",
