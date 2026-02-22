@@ -8,6 +8,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
  * Motivo clínico (UX): elimina "permission-denied" e garante que o paciente
  * sempre visualize a agenda — reduzir fricção aumenta constância.
  */
+const PATIENT_WINDOW_DAYS = 32;
+
 export function usePatientAppointments({ db, user, effectivePhone, loadingProfile, onToast }) {
   const [appointmentsRaw, setAppointmentsRaw] = useState([]);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
@@ -65,8 +67,26 @@ export function usePatientAppointments({ db, user, effectivePhone, loadingProfil
   }, [db, user?.uid, loadingProfile, effectivePhone]);
 
   const appointments = useMemo(() => {
-    return (appointmentsRaw || []).filter((a) => String(a.status || "").toLowerCase() !== "cancelled");
-  }, [appointmentsRaw]);
+    const nowMs = Date.now();
+    const endMs = nowMs + PATIENT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
+    return (appointmentsRaw || []).filter((a) => {
+      const status = String(a?.status || "").toLowerCase();
+      if (status === "cancelled" || status === "done") return false;
+
+      const ms = Number(a?.startAt);
+      if (Number.isFinite(ms)) return ms >= nowMs - 2 * 60 * 60 * 1000 && ms <= endMs;
+
+      const iso = String(a?.isoDate || a?.date || "").trim();
+      const t = String(a?.time || "").trim();
+      if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+        const dt = new Date(`${iso}T${t ? `${t}:00` : "00:00:00"}`);
+        const p = dt?.getTime?.();
+        if (Number.isFinite(p)) return p >= nowMs - 2 * 60 * 60 * 1000 && p <= endMs;
+      }
+
+      return true;
+    });
+  }, [appointmentsRaw]);
   return { appointmentsRaw, appointments, loadingAppointments };
 }

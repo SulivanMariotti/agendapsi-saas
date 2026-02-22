@@ -5,6 +5,8 @@ import { requirePatient } from "@/lib/server/requirePatient";
 
 export const runtime = "nodejs";
 
+const PATIENT_WINDOW_DAYS = 32;
+
 /**
  * GET /api/patient/appointments
  *
@@ -47,6 +49,26 @@ function serializeFirestoreValue(v) {
   }
   return v;
 }
+
+function startAtMillisFromAppointment(a) {
+  const n = Number(a?.startAt);
+  if (Number.isFinite(n)) return n;
+
+  const iso = String(a?.isoDate || a?.date || "").trim();
+  const t = String(a?.time || "").trim();
+  if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) && t) {
+    const dt = new Date(`${iso}T${t}:00`);
+    const ms = dt?.getTime?.();
+    if (Number.isFinite(ms)) return ms;
+  }
+  if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const dt = new Date(`${iso}T00:00:00`);
+    const ms = dt?.getTime?.();
+    if (Number.isFinite(ms)) return ms;
+  }
+  return null;
+}
+
 
 export async function GET(req) {
   try {
@@ -101,7 +123,21 @@ export async function GET(req) {
       return { id: d.id, ...serializeFirestoreValue(data) };
     });
 
-    return NextResponse.json({ ok: true, appointments });
+        const nowMs = Date.now();
+    const windowEndMs = nowMs + PATIENT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const windowStartMs = nowMs - 2 * 60 * 60 * 1000; // pequena tolerância
+
+    const filtered = (appointments || []).filter((a) => {
+      const status = String(a?.status || "").toLowerCase();
+      if (status === "cancelled" || status === "done") return false;
+
+      const ms = startAtMillisFromAppointment(a);
+      if (!Number.isFinite(ms)) return true; // fallback: não bloquear se faltou startAt
+
+      return ms >= windowStartMs && ms <= windowEndMs;
+    });
+
+    return NextResponse.json({ ok: true, appointments: filtered });
   } catch (e) {
     console.error("[PATIENT_APPOINTMENTS] Error", e);
     return NextResponse.json({ ok: false, error: "Erro interno. Tente novamente." }, { status: 500 });

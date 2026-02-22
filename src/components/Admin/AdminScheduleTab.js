@@ -182,7 +182,9 @@ const computeUploadWindowEnd = (list) => {
 const cancelMissingFutureAppointments = async ({ list, currentIdsSet, uploadId, windowEnd }) => {
   try {
     const now = new Date();
-    const end = windowEnd || computeUploadWindowEnd(list) || new Date(now.getTime() + 32 * 24 * 60 * 60 * 1000);
+    const minEnd = new Date(now.getTime() + 32 * 24 * 60 * 60 * 1000);
+    const candidateEnd = windowEnd || computeUploadWindowEnd(list) || minEnd;
+    const end = candidateEnd && candidateEnd > minEnd ? candidateEnd : minEnd;
 
     let cancelled = 0;
     let scanned = 0;

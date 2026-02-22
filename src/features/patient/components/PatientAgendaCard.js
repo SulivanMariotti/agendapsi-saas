@@ -73,7 +73,6 @@ export default function PatientAgendaCard({
     const highlights = upcoming.slice(0, 3).map((x) => x.a);
 
     const weeksMap = new Map();
-    const monthsMap = new Map();
 
     for (const x of upcoming) {
       const dt = x.dt;
@@ -85,17 +84,15 @@ export default function PatientAgendaCard({
         if (!weeksMap.has(key)) weeksMap.set(key, { key, label, list: [] });
         weeksMap.get(key).list.push(x.a);
       } else {
-        const iso = x.a?.isoDate || x.a?.date || "";
-        const m = monthLabelFromIso(iso) || "Outros";
-        if (!monthsMap.has(m)) monthsMap.set(m, []);
-        monthsMap.get(m).push(x.a);
+        // Janela clínica (UX): o painel do paciente mostra apenas a agenda dos próximos 30 dias.
+        // Sessões fora da janela podem existir no histórico do sistema, mas não entram na visualização.
+        continue;
       }
     }
 
     const weeks = Array.from(weeksMap.values()).sort((a, b) => a.key.localeCompare(b.key));
-    const months = Array.from(monthsMap.entries()).map(([label, list]) => ({ label, list }));
 
-    return { highlights, weeks, months };
+    return { highlights, weeks, months: [] };
   }, [appointments]);
 
   // abre automaticamente o primeiro grupo no mobile (sem forçar no desktop)
