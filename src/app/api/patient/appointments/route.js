@@ -137,7 +137,17 @@ export async function GET(req) {
       return ms >= windowStartMs && ms <= windowEndMs;
     });
 
-    return NextResponse.json({ ok: true, appointments: filtered });
+    // Meta: última sincronização (para transparência no painel)
+    let lastSyncAt = null;
+    try {
+      const cfgSnap = await admin.firestore().collection("config").doc("global").get();
+      const cfg = cfgSnap.exists ? (cfgSnap.data() || {}) : {};
+      lastSyncAt = serializeFirestoreValue(cfg?.appointmentsLastSyncAt) ?? null;
+    } catch (_) {
+      // best-effort: não bloquear a agenda
+    }
+
+    return NextResponse.json({ ok: true, appointments: filtered, meta: { lastSyncAt } });
   } catch (e) {
     console.error("[PATIENT_APPOINTMENTS] Error", e);
     return NextResponse.json({ ok: false, error: "Erro interno. Tente novamente." }, { status: 500 });

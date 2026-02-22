@@ -83,6 +83,26 @@ export async function POST(req) {
       createdAt: now,
     });
 
+    // Fonte da verdade operacional: última sincronização da agenda
+    // (usado para transparência no painel do paciente: "Agenda atualizada em ...")
+    await db
+      .collection("config")
+      .doc("global")
+      .set(
+        {
+          appointmentsLastSyncAt: now,
+          appointmentsLastUploadId: uploadId,
+          appointmentsLastSyncMeta: {
+            totalAppointments,
+            uniquePatients,
+            fallbackServiceCount,
+            firstISO,
+            lastISO,
+          },
+        },
+        { merge: true }
+      );
+
     await logAdminAudit({
       req,
       actorUid: auth.uid,

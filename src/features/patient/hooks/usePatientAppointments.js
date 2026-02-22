@@ -12,6 +12,7 @@ const PATIENT_WINDOW_DAYS = 32;
 
 export function usePatientAppointments({ db, user, effectivePhone, loadingProfile, onToast }) {
   const [appointmentsRaw, setAppointmentsRaw] = useState([]);
+  const [meta, setMeta] = useState({ lastSyncAt: null });
   const [loadingAppointments, setLoadingAppointments] = useState(true);
 
   const toastRef = useRef(onToast);
@@ -45,15 +46,18 @@ export function usePatientAppointments({ db, user, effectivePhone, loadingProfil
 
         if (!res.ok || !data?.ok) {
           setAppointmentsRaw([]);
+          setMeta({ lastSyncAt: null });
           toastRef.current?.("Erro ao carregar agenda.", "error");
         } else {
           const list = Array.isArray(data.appointments) ? data.appointments : [];
           setAppointmentsRaw(list);
+          setMeta({ lastSyncAt: data?.meta?.lastSyncAt ?? null });
         }
       } catch (err) {
         console.error(err);
         if (!cancelled) {
           setAppointmentsRaw([]);
+          setMeta({ lastSyncAt: null });
           toastRef.current?.("Erro ao carregar agenda.", "error");
         }
       } finally {
@@ -88,5 +92,5 @@ export function usePatientAppointments({ db, user, effectivePhone, loadingProfil
       return true;
     });
   }, [appointmentsRaw]);
-  return { appointmentsRaw, appointments, loadingAppointments };
+  return { appointmentsRaw, appointments, loadingAppointments, meta };
 }

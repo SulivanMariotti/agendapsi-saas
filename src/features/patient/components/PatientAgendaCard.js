@@ -20,6 +20,7 @@ import { PT } from "../lib/uiTokens";
 export default function PatientAgendaCard({
   appointments = [],
   appointmentsRaw = [],
+  meta = null,
   loading = false,
   confirmedIds,
   error = null,
@@ -35,6 +36,11 @@ export default function PatientAgendaCard({
 
   // ✅ sutil: última atualização da agenda (data/hora apenas)
   const agendaLastUpdate = useMemo(() => {
+    const metaMs = Number(meta?.lastSyncAt);
+    if (Number.isFinite(metaMs) && metaMs > 0) {
+      return { label: formatDateTimeBR(metaMs) };
+    }
+
     let bestMs = null;
 
     for (const a of appointmentsRaw || []) {
@@ -52,7 +58,7 @@ export default function PatientAgendaCard({
     if (!bestMs) return null;
 
     return { label: formatDateTimeBR(bestMs) };
-  }, [appointmentsRaw]);
+  }, [meta, appointmentsRaw]);
 
 
   const agendaGroups = useMemo(() => {

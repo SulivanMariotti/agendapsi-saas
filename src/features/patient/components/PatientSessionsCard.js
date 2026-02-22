@@ -26,6 +26,7 @@ export default function PatientSessionsCard({
   appointmentsRaw,
   loading,
   confirmedIds,
+  agendaMeta,
 
   // UX
   showConsistencyHint = true,
@@ -57,6 +58,7 @@ export default function PatientSessionsCard({
       <PatientAgendaCard
         appointments={appointments}
         appointmentsRaw={appointmentsRaw}
+        meta={agendaMeta}
         loading={loading}
         confirmedIds={confirmedIds}
       />

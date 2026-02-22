@@ -22,7 +22,6 @@ import { makeIcsDataUrl, startDateTimeFromAppointment } from "../../features/pat
 
 import { prettyServiceLabel, getServiceTypeFromAppointment, getLocationFromAppointment, statusChipFor } from "../../features/patient/lib/appointments";
 
-import { useAppointmentsLastSync } from "../../features/patient/hooks/useAppointmentsLastSync";
 import { usePatientAppointments } from "../../features/patient/hooks/usePatientAppointments";
 import { usePatientNotes } from "../../features/patient/hooks/usePatientNotes";
 import { usePushStatus } from "../../features/patient/hooks/usePushStatus";
@@ -138,11 +137,10 @@ useEffect(() => {
 
   const patientName = profile?.name || user?.displayName || "Paciente";
 
-  // Step 9.2: hooks por domínio (agenda, notas, push, last-sync)
-  const { appointmentsLastSyncAt } = useAppointmentsLastSync({ user });
+  // Step 9.2: hooks por domínio (agenda, notas, push)
   const { notifHasToken, setNotifHasToken } = usePushStatus({ user, effectivePhone });
 
-  const { appointmentsRaw, appointments, loadingAppointments } = usePatientAppointments({
+  const { appointmentsRaw, appointments, loadingAppointments, meta: appointmentsMeta } = usePatientAppointments({
     db,
     user,
     effectivePhone,
@@ -468,6 +466,7 @@ useEffect(() => {
             onConfirmPresence={handleConfirmPresence}
             appointments={appointments}
             appointmentsRaw={appointmentsRaw}
+            agendaMeta={appointmentsMeta}
             loading={loadingAppointments}
             confirmedIds={confirmedIds}
           />
