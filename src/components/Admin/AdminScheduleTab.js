@@ -249,6 +249,9 @@ const cancelMissingFutureAppointments = async ({ list, currentIdsSet, uploadId, 
 
 export default function AdminScheduleTab({ subscribers, dbAppointments, showToast, globalConfig, localConfig }) {
   const STATUS_BATCH_URL = '/api/admin/push/status-batch';
+  const PRUNE_FUTURE_URL = '/api/admin/appointments/prune-future';
+  const TEST_TOOLS_ENABLED =
+    process.env.NEXT_PUBLIC_ENABLE_TEST_TOOLS === 'true' || process.env.NODE_ENV !== 'production';
 
   const fileInputRef = useRef(null);
 
@@ -292,6 +295,10 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
   const [auditViewOpen, setAuditViewOpen] = useState(false);
   const [auditViewLoading, setAuditViewLoading] = useState(false);
   const [auditViewLog, setAuditViewLog] = useState(null);
+
+  // Higienização (testes): cancelar sessões futuras fora da janela operacional
+  const [pruneFutureLoading, setPruneFutureLoading] = useState(false);
+  const [pruneFutureResult, setPruneFutureResult] = useState(null);
 
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -420,6 +427,48 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
     setSendMode('preview');
     setLastPreviewSignature(null);
     stalePreviewNotifiedRef.current = false;
+  };
+
+  const runPruneFuture = async ({ dryRun }) => {
+    try {
+      setPruneFutureLoading(true);
+
+      const res = await adminFetch(PRUNE_FUTURE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun, daysAhead: 32 }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        showToast(data?.error || 'Falha ao higienizar sessões futuras.', 'error');
+        return null;
+      }
+
+      setPruneFutureResult(data);
+      if (dryRun) {
+        showToast(
+          data?.matched
+            ? `Simulação: ${data.matched} sessão(ões) futura(s) fora da janela (seriam canceladas).`
+            : 'Simulação: nenhuma sessão futura fora da janela para cancelar.',
+          'info'
+        );
+      } else {
+        showToast(
+          data?.updated
+            ? `Higienização concluída: ${data.updated} sessão(ões) futura(s) cancelada(s).`
+            : 'Higienização concluída: nada a cancelar.',
+          'success'
+        );
+      }
+
+      return data;
+    } catch (e) {
+      showToast('Falha ao higienizar sessões futuras. Verifique sua sessão e tente novamente.', 'error');
+      return null;
+    } finally {
+      setPruneFutureLoading(false);
+    }
   };
 
   // Mapa rápido de subscribers por telefone (apenas para enriquecer email, etc.)
@@ -1735,6 +1784,79 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
               <div className="mt-2 text-[11px] text-slate-400">Nenhum disparo registrado ainda hoje.</div>
             )}
           </div>
+
+          {TEST_TOOLS_ENABLED ? (
+            <div className="rounded-xl border border-slate-100 bg-white p-3">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
+                <div>
+                  <div className="text-xs font-bold text-slate-700">Higienização (testes)</div>
+                  <div className="text-[11px] text-slate-500 mt-1">
+                    Cancela (não apaga) sessões futuras <b>além de 32 dias</b> — apenas registros <b>source: admin_sync</b>.
+                    Útil se você já gerou agenda por meses e quer voltar ao modelo “janela rolante”.
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => runPruneFuture({ dryRun: true })}
+                    variant="secondary"
+                    className="!py-1.5 !px-3 text-xs"
+                    disabled={pruneFutureLoading}
+                    title="Simula quantas sessões seriam canceladas (sem alterar dados)"
+                  >
+                    {pruneFutureLoading ? 'Simulando…' : 'Simular'}
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      if (!(pruneFutureResult?.matched > 0 && pruneFutureResult?.dryRun)) {
+                        showToast('Primeiro rode a Simulação para ver quantas sessões serão afetadas.', 'info');
+                        return;
+                      }
+                      const ok = confirm(
+                        `Higienizar agora?\n\nIsso vai CANCELAR ${pruneFutureResult.matched} sessão(ões) futura(s) além de 32 dias (source: admin_sync).\nNão apaga histórico.\n\nDeseja continuar?`
+                      );
+                      if (!ok) return;
+                      await runPruneFuture({ dryRun: false });
+                    }}
+                    variant="danger"
+                    className="!py-1.5 !px-3 text-xs"
+                    disabled={pruneFutureLoading}
+                    title="Executa a higienização (cancela sessões futuras fora da janela)"
+                  >
+                    {pruneFutureLoading ? 'Processando…' : 'Cancelar futuras'}
+                  </Button>
+                </div>
+              </div>
+
+              {pruneFutureResult ? (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-700">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    <span>
+                      <b>{pruneFutureResult.dryRun ? 'Simulação' : 'Execução'}:</b>{' '}
+                      {pruneFutureResult.dryRun ? 'sem alterações' : 'alterações aplicadas'}
+                    </span>
+                    <span>
+                      <b>Cutoff:</b> {new Date(pruneFutureResult.cutoffISO).toLocaleString('pt-BR')}
+                    </span>
+                    <span>
+                      <b>Varredura:</b> {pruneFutureResult.scanned}
+                    </span>
+                    <span>
+                      <b>Elegíveis:</b> {pruneFutureResult.matched}
+                    </span>
+                    {!pruneFutureResult.dryRun ? (
+                      <span>
+                        <b>Canceladas:</b> {pruneFutureResult.updated}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 text-slate-500">
+                    Observação: a janela do paciente é clínica (próximos 30 dias). Essa higienização é só para remover resíduos de testes/agenda muito longa.
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="text-[11px] text-slate-500">
             💜 Clinicamente, a regularidade sustenta o vínculo terapêutico: faltar interrompe um processo que precisa de continuidade.
