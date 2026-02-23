@@ -801,24 +801,53 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
         `Agenda sincronizada! (${syncedIds.length} registros) • Reconciliação aplicada (sessões futuras removidas do upload foram canceladas).`
       );
 
-      // Log resumo do upload no history (server-side)
+      // Log resumo do upload no history (server-side) + carimbo oficial de "última sincronização"
+      // Importante: chamar SEMPRE após sincronizar, mesmo que a etapa "Verificar" não tenha gerado summary completo,
+      // para o painel do paciente não ficar exibindo um lastSync antigo.
       try {
-        if (verificationSummary?.total) {
-          await adminFetch('/api/admin/appointments/sync-summary', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              uploadId,
-              totalAppointments: verificationSummary.total,
-              uniquePatients: verificationSummary.uniquePatients,
-              dateRange: {
-                firstISO: verificationSummary.firstISO || null,
-                lastISO: verificationSummary.lastISO || null,
-              },
-              fallbackServiceCount: verificationSummary.fallbackServiceCount || 0,
-            }),
-          }).catch(() => null);
+        const totalAppointments =
+          Number(verificationSummary?.total || 0) || Number(appointments?.length || 0);
+
+        // Fallback de uniquePatients: conta por phoneCanonical dentro do upload
+        let uniquePatients = Number(verificationSummary?.uniquePatients || 0);
+        if (!uniquePatients) {
+          const set = new Set();
+          (appointments || []).forEach((a) => {
+            const p = normalizePhoneCanonical(a.cleanPhone || a.phoneCanonical || a.phone || '');
+            if (p) set.add(p);
+          });
+          uniquePatients = set.size;
         }
+
+        // Fallback de range: min/max isoDate no upload
+        let firstISO = verificationSummary?.firstISO || null;
+        let lastISO = verificationSummary?.lastISO || null;
+        if (!firstISO || !lastISO) {
+          let minISO = null;
+          let maxISO = null;
+          (appointments || []).forEach((a) => {
+            const iso = a.isoDate || normalizeToISODate(a.data || a.date || '');
+            if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(String(iso))) return;
+            if (!minISO || iso < minISO) minISO = iso;
+            if (!maxISO || iso > maxISO) maxISO = iso;
+          });
+          firstISO = firstISO || minISO;
+          lastISO = lastISO || maxISO;
+        }
+
+        const fallbackServiceCount = Number(verificationSummary?.fallbackServiceCount || 0);
+
+        await adminFetch('/api/admin/appointments/sync-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uploadId,
+            totalAppointments,
+            uniquePatients,
+            dateRange: { firstISO: firstISO || null, lastISO: lastISO || null },
+            fallbackServiceCount,
+          }),
+        }).catch(() => null);
       } catch (_) {}
 
       setHasSynced(true);

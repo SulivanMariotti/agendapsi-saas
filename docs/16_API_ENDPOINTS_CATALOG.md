@@ -18,6 +18,14 @@
 Agenda do paciente (server-side).  
 **Auth:** patient.
 
+**Comportamento (janela rolante)**
+- Retorna apenas sessões dentro da **janela clínica** (≈ próximos **30 dias**, com tolerância de ~32 dias no servidor).
+- Exclui `cancelled` e `done`.
+
+**Resposta (resumo)**
+- `items`: sessões (ordenadas por data)
+- `meta.lastSyncAt`: carimbo oficial do último sync (derivado de `config/global.appointmentsLastSyncAt`)
+
 ### `POST /api/patient/contract/accept`
 Aceite do contrato/compromisso terapêutico (server-side).  
 **Auth:** patient.
@@ -53,7 +61,7 @@ Status de confirmação.
 
 ### `POST /api/admin/patients/list`
 Lista/filtra pacientes (paginado).  
-**Auth:** admin.  
+**Auth:** admin.
 
 **Body (chaves aceitas)**
 - `pageSize`, `pageCursor`
@@ -62,7 +70,7 @@ Lista/filtra pacientes (paginado).
 
 ### `POST /api/admin/patient/access`
 Suspende/libera acesso ao painel do paciente por **segurança/privacidade** (não é ferramenta clínica para faltas).  
-**Auth:** admin.  
+**Auth:** admin.
 
 **Body**
 - `uid` (string) — user id
@@ -94,6 +102,30 @@ Sumário de constância terapêutica.
 - `trend`: `prevRate`, `recentRate`, `delta`, `label`
 - `filtersApplied`, `cohort`, `range`, `computedAt`
 - compat: `topMisses`, `startIsoDate`, `endIsoDate`
+
+### `POST /api/admin/appointments/sync-summary`
+Persiste metadados do último sync de agenda.  
+**Auth:** admin.
+
+**Efeito (alto nível)**
+- Atualiza em `config/global`:
+  - `appointmentsLastSyncAt`
+  - `appointmentsLastUploadId`
+  - `appointmentsLastSyncMeta` (resumo do lote)
+
+**Obs:** o Admin deve chamar esta rota **sempre após Sincronizar**, mesmo que o “Verificar” não tenha gerado summary perfeito.
+
+### `POST /api/admin/appointments/prune-future` (ferramenta de testes)
+Cancela (não apaga) sessões **futuras** geradas por sync antigo fora da janela (útil para limpar dados de teste).  
+**Auth:** admin.
+
+**Gating obrigatório**
+- Em produção, por padrão retorna `403 test_tools_disabled`.
+- Para habilitar explicitamente: `ENABLE_TEST_TOOLS=true` (backend) e `NEXT_PUBLIC_ENABLE_TEST_TOOLS=true` (UI).
+
+**Body (resumo)**
+- `dryRun` (boolean): simula e retorna contagem
+- parâmetros de janela conforme implementação
 
 ---
 

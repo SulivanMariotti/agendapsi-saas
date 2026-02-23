@@ -183,8 +183,20 @@ export default function PatientAgendaCard({
         </div>
       ) : (appointments || []).length === 0 ? (
         <EmptyState
-          title="Nenhum agendamento encontrado"
-          description="Assim que sua agenda estiver disponível, ela aparecerá aqui. Seu horário é um espaço sagrado de cuidado."
+          title="Sem sessões nos próximos 30 dias"
+          description={
+            <div className="space-y-2">
+              <p className="text-slate-600">
+                No momento, não há sessões exibidas para os próximos 30 dias.
+              </p>
+              <p className="text-slate-700 font-semibold">
+                Seu horário é um espaço sagrado de cuidado. A constância sustenta o seu processo.
+              </p>
+              <p className="text-slate-600">
+                Enquanto isso, use o Diário para anotar o que você quer levar para a próxima sessão.
+              </p>
+            </div>
+          }
           Icon={Calendar}
         />
       ) : (
