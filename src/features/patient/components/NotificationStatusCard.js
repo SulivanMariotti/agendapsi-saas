@@ -30,10 +30,14 @@ export default function NotificationStatusCard({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    setNotifPermission(Notification?.permission || "default");
-    setNotifSupported("Notification" in window && "serviceWorker" in navigator);
+    // iOS Safari (e alguns contextos) podem NÃO expor o identificador global `Notification`.
+    // Referenciar `Notification?.permission` pode lançar ReferenceError.
+    // Sempre acesse via window/globalThis para evitar crash no load.
+    const Notif = window.Notification;
+    setNotifPermission(Notif?.permission || "default");
+    setNotifSupported(Boolean(Notif) && "serviceWorker" in navigator);
 
-    const onChange = () => setNotifPermission(Notification?.permission || "default");
+    const onChange = () => setNotifPermission(window.Notification?.permission || "default");
     document?.addEventListener?.("visibilitychange", onChange);
     return () => document?.removeEventListener?.("visibilitychange", onChange);
   }, []);
@@ -41,13 +45,14 @@ export default function NotificationStatusCard({
   async function enableNotificationsAndSaveToken() {
     try {
       if (typeof window === "undefined") return;
-      if (!("Notification" in window)) return;
+      const Notif = window.Notification;
+      if (!Notif) return;
 
       setNotifBusy(true);
 
       // pede permissão se necessário
-      if (Notification.permission === "default") {
-        const perm = await Notification.requestPermission();
+      if (Notif.permission === "default") {
+        const perm = await Notif.requestPermission();
         setNotifPermission(perm || "default");
         if (perm !== "granted") {
           showToast?.("Permissão de notificação não concedida.", "error");
@@ -55,7 +60,7 @@ export default function NotificationStatusCard({
         }
       }
 
-      if (Notification.permission !== "granted") {
+      if (Notif.permission !== "granted") {
         showToast?.("Notificações bloqueadas no navegador.", "error");
         return;
       }
