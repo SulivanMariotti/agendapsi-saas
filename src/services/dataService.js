@@ -257,7 +257,7 @@ export const parseCSV = (inputText, subscribers, msgConfig = {}) => {
     if (["id", "codigo", "cod", "externalid", "idexterno", "idsessao"].includes(k)) return "externalId";
     if (["nome", "paciente", "cliente"].includes(k)) return "nome";
     if (["telefone", "celular", "whatsapp", "fone", "phone"].includes(k)) return "tel";
-    if ([\"email\", \"mail\"].includes(k)) return \"email\";
+    if (["email", "mail"].includes(k)) return "email";
     if (["data", "date", "dia"].includes(k)) return "dataStr";
     if (["hora", "horario", "time"].includes(k)) return "hora";
     if (["profissional", "terapeuta", "psicologo", "fono", "nutri", "medico"].includes(k)) return "profissional";
