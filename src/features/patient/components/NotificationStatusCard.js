@@ -25,19 +25,35 @@ export default function NotificationStatusCard({
   const [notifPermission, setNotifPermission] = useState("default");
   const [notifBusy, setNotifBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [env, setEnv] = useState({
+    isIOS: false,
+    isAndroid: false,
+    isInAppBrowser: false,
+    isStandalone: false,
+  });
 
   // status básico do navegador (sem depender de Firestore)
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // iOS Safari (e alguns contextos) podem NÃO expor o identificador global `Notification`.
-    // Referenciar `Notification?.permission` pode lançar ReferenceError.
-    // Sempre acesse via window/globalThis para evitar crash no load.
-    const Notif = window.Notification;
-    setNotifPermission(Notif?.permission || "default");
-    setNotifSupported(Boolean(Notif) && "serviceWorker" in navigator);
+    const ua = navigator?.userAgent || "";
+    const isIOS =
+      /iPad|iPhone|iPod/i.test(ua) ||
+      // iPadOS: reporta como Mac, mas tem touch
+      (navigator?.platform === "MacIntel" && Number(navigator?.maxTouchPoints || 0) > 1);
+    const isAndroid = /Android/i.test(ua);
+    const isInAppBrowser = /(Instagram|FBAN|FBAV|Messenger|WhatsApp|TikTok|Snapchat|Line)/i.test(ua);
+    const isStandalone =
+      Boolean(window?.matchMedia?.("(display-mode: standalone)")?.matches) ||
+      // iOS Safari legacy
+      Boolean(window?.navigator?.standalone);
+    setEnv({ isIOS, isAndroid, isInAppBrowser, isStandalone });
 
-    const onChange = () => setNotifPermission(window.Notification?.permission || "default");
+    const NotificationAPI = window?.Notification;
+    setNotifPermission(NotificationAPI?.permission || "default");
+    setNotifSupported(Boolean(NotificationAPI) && "serviceWorker" in navigator);
+
+    const onChange = () => setNotifPermission(window?.Notification?.permission || "default");
     document?.addEventListener?.("visibilitychange", onChange);
     return () => document?.removeEventListener?.("visibilitychange", onChange);
   }, []);
@@ -45,14 +61,14 @@ export default function NotificationStatusCard({
   async function enableNotificationsAndSaveToken() {
     try {
       if (typeof window === "undefined") return;
-      const Notif = window.Notification;
-      if (!Notif) return;
+      const NotificationAPI = window?.Notification;
+      if (!NotificationAPI) return;
 
       setNotifBusy(true);
 
       // pede permissão se necessário
-      if (Notif.permission === "default") {
-        const perm = await Notif.requestPermission();
+      if (NotificationAPI.permission === "default") {
+        const perm = await NotificationAPI.requestPermission();
         setNotifPermission(perm || "default");
         if (perm !== "granted") {
           showToast?.("Permissão de notificação não concedida.", "error");
@@ -60,7 +76,7 @@ export default function NotificationStatusCard({
         }
       }
 
-      if (Notif.permission !== "granted") {
+      if (NotificationAPI.permission !== "granted") {
         showToast?.("Notificações bloqueadas no navegador.", "error");
         return;
       }
@@ -155,7 +171,37 @@ export default function NotificationStatusCard({
 
         {status.key === "unsupported" && (
           <div className="mt-3 text-slate-600 text-sm">
-            <b>Dica:</b> se possível, use Chrome (Android) ou Safari (iPhone) para receber lembretes.
+            {env.isInAppBrowser ? (
+              <>
+                <b>Como resolver:</b>
+                <div className="mt-1">
+                  Você está em um navegador dentro de um app (ex.: WhatsApp/Instagram). Nesses casos, as notificações
+                  podem não funcionar.
+                </div>
+                <ul className="list-disc pl-5 mt-2 space-y-1">
+                  <li>Abra o menu do app (⋯ / compartilhar).</li>
+                  <li>Toque em <b>Abrir no Safari</b> (iPhone) ou <b>Abrir no Chrome</b> (Android).</li>
+                </ul>
+              </>
+            ) : env.isIOS && !env.isStandalone ? (
+              <>
+                <b>iPhone:</b>
+                <div className="mt-1">
+                  Para receber lembretes no iPhone, é necessário adicionar o Lembrete Psi à <b>Tela de Início</b> e abrir
+                  pelo ícone (PWA).
+                </div>
+                <ul className="list-disc pl-5 mt-2 space-y-1">
+                  <li>No Safari, toque em <b>Compartilhar</b> (⬆︎).</li>
+                  <li>Toque em <b>Adicionar à Tela de Início</b>.</li>
+                  <li>Abra pelo ícone e volte aqui para ativar.</li>
+                </ul>
+              </>
+            ) : (
+              <>
+                <b>Dica:</b> use Chrome (Android). No iPhone, use Safari e — se precisar de lembretes — adicione à Tela
+                de Início.
+              </>
+            )}
           </div>
         )}
       </div>
@@ -172,13 +218,31 @@ export default function NotificationStatusCard({
     }
 
     if (!notifSupported) {
+      const UnsupportedDetail = () => {
+        if (env.isInAppBrowser) {
+          return (
+            <div className="text-xs text-slate-500 mt-1">
+              Você está em um navegador dentro de um app. Abra no Safari (iPhone) ou Chrome (Android).
+            </div>
+          );
+        }
+        if (env.isIOS && !env.isStandalone) {
+          return (
+            <div className="text-xs text-slate-500 mt-1">
+              No iPhone, lembretes funcionam melhor quando o Lembrete Psi está na Tela de Início (abrir pelo ícone).
+            </div>
+          );
+        }
+        return <div className="text-xs text-slate-500 mt-1">Se possível, use Chrome (Android) ou Safari.</div>;
+      };
+
       return (
         <div>
           <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700 flex gap-2 shadow-sm">
             <AlertTriangle size={16} className="mt-0.5 text-slate-500" />
             <div>
               Este navegador pode não suportar notificações.
-              <div className="text-xs text-slate-500 mt-1">Se possível, use Chrome/Safari para receber lembretes.</div>
+              <UnsupportedDetail />
             </div>
           </div>
           <div className="mt-2">
@@ -288,7 +352,7 @@ export default function NotificationStatusCard({
         {showHelp && <Help />}
       </div>
     );
-  }, [notifSupported, notifHasToken, notifPermission, notifBusy, showHelp]);
+  }, [notifSupported, notifHasToken, notifPermission, notifBusy, showHelp, env]);
 
   return (
     <div className="space-y-2">
