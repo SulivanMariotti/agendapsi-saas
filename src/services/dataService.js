@@ -257,6 +257,7 @@ export const parseCSV = (inputText, subscribers, msgConfig = {}) => {
     if (["id", "codigo", "cod", "externalid", "idexterno", "idsessao"].includes(k)) return "externalId";
     if (["nome", "paciente", "cliente"].includes(k)) return "nome";
     if (["telefone", "celular", "whatsapp", "fone", "phone"].includes(k)) return "tel";
+    if ([\"email\", \"mail\"].includes(k)) return \"email\";
     if (["data", "date", "dia"].includes(k)) return "dataStr";
     if (["hora", "horario", "time"].includes(k)) return "hora";
     if (["profissional", "terapeuta", "psicologo", "fono", "nutri", "medico"].includes(k)) return "profissional";
@@ -284,11 +285,21 @@ export const parseCSV = (inputText, subscribers, msgConfig = {}) => {
   }
 
   const getBy = (parts, field, fallbackIndex) => {
-    if (headerMap && headerMap[field] !== undefined) {
-      return parts[headerMap[field]] ?? "";
-    }
-    return parts[fallbackIndex] ?? "";
+    if (headerMap && headerMap[field] !== undefined) return parts[headerMap[field]] ?? "";
+    if (typeof fallbackIndex === "number") return parts[fallbackIndex] ?? "";
+    return "";
   };
+
+  // Índices rápidos de subscribers (evita mismatch entre phone/phoneCanonical/docId)
+  const subscriberByPhone = new Map();
+  const subscriberByEmail = new Map();
+  (subscribers || []).forEach((s) => {
+    const p = normalizePhoneBR(s?.phoneCanonical || s?.phone || s?.id || "");
+    if (p && !subscriberByPhone.has(p)) subscriberByPhone.set(p, s);
+    const e = String(s?.email || "").toLowerCase().trim();
+    if (e && !subscriberByEmail.has(e)) subscriberByEmail.set(e, s);
+  });
+
 
   return lines
     .slice(dataStartIndex)
@@ -327,14 +338,12 @@ export const parseCSV = (inputText, subscribers, msgConfig = {}) => {
 
       const cleanPhone = normalizePhoneBR(tel);
 
-      // Matching por telefone (padrão)
-      let subscriber = subscribers.find((s) => s.phone === cleanPhone);
+      // Matching por telefone (padrão) — aceita docId, phoneCanonical ou phone
+      let subscriber = subscriberByPhone.get(cleanPhone);
 
-      // Fallback por email no CSV (se existir no row) — mantém compatível sem quebrar
-      const maybeEmail = String(getBy(parts, "email", "") || "").toLowerCase().trim();
-      if (!subscriber && maybeEmail) {
-        subscriber = subscribers.find((s) => String(s.email || "").toLowerCase().trim() === maybeEmail);
-      }
+      // Fallback por email no CSV (se existir no row)
+      const maybeEmail = String(getBy(parts, "email", -1) || "").toLowerCase().trim();
+      if (!subscriber && maybeEmail) subscriber = subscriberByEmail.get(maybeEmail);
 
       const nomeProfissional = profissional ? profissional.trim() : "Profissional";
       const isoDate = normalizeISODate(dataStr);
