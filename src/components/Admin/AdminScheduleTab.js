@@ -658,7 +658,7 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
     const pendingSends = parsed.filter((a) => a.isSubscribed && a.reminderType).length;
 
     showToast(
-      `Planilha verificada: ${total} linhas • ${authorized} autorizados • ${notAuthorized} não autorizados • ${pendingSends} disparos pendentes.`
+      `Planilha verificada: ${total} linhas • ${authorized} na base • ${notAuthorized} fora da base • ${pendingSends} disparos pendentes.`
     );
   };
 
@@ -1361,7 +1361,7 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
 
     const pushInfo = `Push: únicos ${opMetrics.phonesUnique} | com push ${opMetrics.pushWithToken} | sem push ${opMetrics.pushWithoutToken} | CHECK ${opMetrics.pushUnknown}`;
 
-    const planilha = `Planilha: linhas ${opMetrics.total} | autorizados ${opMetrics.authorized} | não autorizados ${opMetrics.notAuthorized}`;
+    const planilha = `Planilha: linhas ${opMetrics.total} | na base ${opMetrics.authorized} | fora da base ${opMetrics.notAuthorized}`;
     const selecao = `Seleção: disparos ${opMetrics.selectionCount} | prontos (estim.) ${opMetrics.ready} | bloqueios: inativo ${opMetrics.blockedInactive} | sem push ${opMetrics.blockedNoPush} | sem telefone ${opMetrics.blockedMissingPhone}`;
 
     const checkedAt = pushStatusLastCheckedAtISO
@@ -1738,10 +1738,10 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
                   <b>Linhas:</b> {opMetrics.total}
                 </div>
                 <div>
-                  <b>Autorizados:</b> {opMetrics.authorized}
+                  <b>Na base:</b> {opMetrics.authorized}
                 </div>
                 <div>
-                  <b>Não autorizados:</b> {opMetrics.notAuthorized}
+                  <b>Fora da base:</b> {opMetrics.notAuthorized}
                 </div>
               </div>
             </div>
@@ -2331,35 +2331,41 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-slate-200">
-            {filteredAppointments.map((app) => (
-              <div
-                key={app.id}
-                className={`p-4 border rounded-xl flex justify-between items-center transition-all hover:shadow-sm ${
-                  app.reminderType ? 'bg-violet-50 border-violet-100' : 'bg-white border-slate-100 opacity-70'
-                }`}
-              >
-                <div>
-                  <span className="font-bold text-slate-700 block text-sm mb-0.5">{app.nome}</span>
-                  <span className="text-xs text-slate-400 flex items-center gap-1">
-                    <User size={12} /> {app.cleanPhone}
-                  </span>
-                  <span className="text-xs text-slate-400 flex items-center gap-1 mt-1">
-                    <CalendarCheck size={12} /> {app.data} • {app.hora}
-                  </span>
-                  {app.profissional ? (
-                    <span className="text-[11px] text-slate-400 mt-1 block">Prof.: {app.profissional}</span>
-                  ) : null}
-                </div>
+            {filteredAppointments.map((app) => {
+              const phoneKey = normalizePhoneCanonical(app.cleanPhone || app.phoneCanonical || app.phone);
+              const hasPush = Boolean(hasTokenByPhone[phoneKey]);
+              const inBase = Boolean(app.isSubscribed);
 
-                <div className="text-right">
-                  <div className="text-xs font-semibold text-slate-600">{app.timeLabel}</div>
-                  <Badge
-                    status={((hasTokenByPhone[normalizePhoneCanonical(app.cleanPhone || app.phoneCanonical || app.phone)] ?? app.isSubscribed) ? 'confirmed' : 'missing')}
-                    text={(hasTokenByPhone[normalizePhoneCanonical(app.cleanPhone || app.phoneCanonical || app.phone)] ? 'Autorizado' : 'Sem Token')}
-                  />
+              const badgeStatus = inBase && hasPush ? 'confirmed' : 'missing';
+              const badgeText = !inBase ? 'Fora da base' : hasPush ? 'Push OK' : 'Sem Push';
+
+              return (
+                <div
+                  key={app.id}
+                  className={`p-4 border rounded-xl flex justify-between items-center transition-all hover:shadow-sm ${
+                    app.reminderType ? 'bg-violet-50 border-violet-100' : 'bg-white border-slate-100 opacity-70'
+                  }`}
+                >
+                  <div>
+                    <span className="font-bold text-slate-700 block text-sm mb-0.5">{app.nome}</span>
+                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                      <User size={12} /> {app.cleanPhone}
+                    </span>
+                    <span className="text-xs text-slate-400 flex items-center gap-1 mt-1">
+                      <CalendarCheck size={12} /> {app.data} • {app.hora}
+                    </span>
+                    {app.profissional ? (
+                      <span className="text-[11px] text-slate-400 mt-1 block">Prof.: {app.profissional}</span>
+                    ) : null}
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-xs font-semibold text-slate-600">{app.timeLabel}</div>
+                    <Badge status={badgeStatus} text={badgeText} />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
