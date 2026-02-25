@@ -1,4 +1,4 @@
-# Onde paramos — Lembrete Psi (2026-02-22)
+# Onde paramos — Lembrete Psi (2026-02-24)
 
 ## Objetivo do sistema (norte clínico)
 O Lembrete Psi não é “agenda com disparo”. É ferramenta clínica para **sustentar vínculo e constância**.
@@ -85,6 +85,36 @@ Para refletir alterações de agenda (dia/hora/quantidade) no painel do paciente
 - Upload de agenda deve representar a **agenda completa da janela** (não um recorte), pois a reconciliação cancela itens que sumiram do upload dentro da janela.
 
 ---
+---
+
+## Últimas entregas (2026-02-24)
+
+### iPhone / iOS (Push)
+- No iPhone, **Push Web só fica “Disponível” quando o site está instalado na Tela de Início (PWA)** (Safari → Compartilhar → **Adicionar à Tela de Início**).
+- Navegadores dentro de apps (WhatsApp/Instagram/Facebook) podem bloquear Service Worker/Push → orientar o paciente a abrir no Safari e instalar.
+- Card de notificações do paciente ganhou diagnóstico mais seguro (evita crash em iOS por `Notification` não existir).
+
+### Importar Agenda (Admin) — clareza operacional
+- “Autorizados / Não autorizados” foi renomeado mentalmente para **Na base / Fora da base** (subscriber encontrado vs não encontrado).
+- Badge de push separado: **Push OK / Sem Push** (token presente vs ausente).
+- Tela ganhou **Legenda rápida** (1 olhar e pronto) para reduzir confusão.
+
+### CSV ↔ subscribers (fix do “não autorizado” falso)
+- Matching foi corrigido para casar `subscribers` por **`phoneCanonical` e/ou `docId`**, evitando marcar paciente como “não autorizado” mesmo com token.
+
+### Lembretes (API) — copy clínica default
+- Endpoint de envio passou a ter **templates default** (48h/24h/manhã) alinhados ao norte clínico (vínculo/constância, sem CTA de cancelar/remarcar).
+- Títulos default foram neutralizados para **“💜 Lembrete Psi — …”** (sem “Permittá” hardcoded).
+
+---
+
+## Checklist rápido — Push no iPhone (PWA)
+1. Abrir no **Safari** (evitar navegador dentro do WhatsApp/Instagram).
+2. Compartilhar → **Adicionar à Tela de Início**.
+3. Abrir pelo **ícone** (PWA).
+4. Ajustes do iPhone → Notificações → **Lembrete Psi** → Permitir notificações.
+5. No Admin, confirmar **Na base + Push OK** antes de disparar.
+
 
 ## Pendências (próxima sessão)
 - Fase 2 do painel de constância (insights clínicos, sem moralismo).

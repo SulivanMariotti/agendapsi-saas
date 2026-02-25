@@ -63,6 +63,15 @@ function safeDateParts(startISO, dateBR, timeBR) {
   return { date, time };
 }
 
+function buildWhenText(date, time) {
+  const d = String(date || "").trim();
+  const t = String(time || "").trim();
+  if (d && t) return `para ${d} às ${t}`;
+  if (d) return `para ${d}`;
+  if (t) return `às ${t}`;
+  return "no horário combinado";
+}
+
 function escapeRegExp(str) {
   return String(str || "").replace(/[.*+?^${}()|[\[\]\\]/g, "\\$&");
 }
@@ -73,6 +82,7 @@ function applyTemplate(tpl, vars) {
 
   const nameFull = String(vars.nameFull || vars.nomeCompleto || vars.name || vars.nome || "").trim();
   const firstName = nameFull ? nameFull.split(" ")[0] : "";
+  const whenText = String(vars.whenText || vars.quando || vars.when || "").trim();
 
   const map = {
     // nomes
@@ -86,6 +96,9 @@ function applyTemplate(tpl, vars) {
     date: String(vars.date || vars.data || ""),
     hora: String(vars.time || vars.hora || ""),
     time: String(vars.time || vars.hora || ""),
+    // quando (frase pronta)
+    quando: whenText,
+    when: whenText,
 
     // profissional
     profissional: String(vars.professional || vars.profissional || ""),
@@ -114,16 +127,34 @@ function applyTemplate(tpl, vars) {
 
 function pickTemplate(cfg, reminderType) {
   const rt = String(reminderType || "").toLowerCase().trim();
+  const slot = normalizeReminderSlot(rt) || "";
 
-  if (rt === "slot1" || rt.includes("slot1") || rt === "1") return cfg?.msg1 || "";
-  if (rt === "slot2" || rt.includes("slot2") || rt === "2") return cfg?.msg2 || "";
-  if (rt === "slot3" || rt.includes("slot3") || rt === "3") return cfg?.msg3 || "";
+  const pick = (...vals) => {
+    for (const v of vals) {
+      const s = v != null ? String(v).trim() : "";
+      if (s) return s;
+    }
+    return "";
+  };
 
-  if (rt.includes("48")) return cfg?.msg48h || cfg?.msg1 || "";
-  if (rt.includes("24")) return cfg?.msg24h || cfg?.msg2 || "";
-  if (rt.includes("12")) return cfg?.msg12h || cfg?.msg3 || "";
+  const defaults = {
+    slot1: "Olá, {nome}. Seu horário de cuidado está reservado {quando}. A constância sustenta o processo — estaremos à sua espera.",
+    slot2: "Olá, {nome}. Você tem sessão {quando}. Manter a constância é parte do seu compromisso com você.",
+    slot3: "Olá, {nome}. Hoje sua sessão acontece {quando}. Venha como você estiver; a continuidade fortalece o processo.",
+    fallback: "Olá, {nome}. Seu horário de cuidado está reservado {quando}.",
+  };
 
-  return cfg?.msg2 || cfg?.msg1 || cfg?.msg3 || cfg?.msg24h || cfg?.msg48h || cfg?.msg12h || "";
+  if (slot === "slot1" || rt.includes("48") || rt.includes("slot1") || rt === "1") {
+    return pick(cfg?.msg48h, cfg?.msg1) || defaults.slot1;
+  }
+  if (slot === "slot2" || rt.includes("24") || rt.includes("slot2") || rt === "2") {
+    return pick(cfg?.msg24h, cfg?.msg2) || defaults.slot2;
+  }
+  if (slot === "slot3" || rt.includes("12") || rt.includes("slot3") || rt === "3") {
+    return pick(cfg?.msg12h, cfg?.msg3) || defaults.slot3;
+  }
+
+  return pick(cfg?.msg2, cfg?.msg1, cfg?.msg3, cfg?.msg24h, cfg?.msg48h, cfg?.msg12h) || defaults.fallback;
 }
 
 function normalizeReminderSlot(reminderType) {
@@ -147,11 +178,11 @@ function joinTitle(prefix, suffix) {
 
 function resolveReminderTitle(cfg, slotKey) {
   const defaultsFull = {
-    slot1: "💜 Permittá • Lembrete Psi — Seu espaço em 48h",
-    slot2: "💜 Permittá • Lembrete Psi — Amanhã: seu horário",
-    slot3: "💜 Permittá • Lembrete Psi — Hoje: sessão no seu horário",
-    multi: "💜 Permittá • Lembrete Psi — Seus lembretes",
-    fallback: "💜 Permittá • Lembrete Psi — Seu espaço de cuidado",
+    slot1: "💜 Lembrete Psi — Seu espaço em 48h",
+    slot2: "💜 Lembrete Psi — Amanhã: seu horário",
+    slot3: "💜 Lembrete Psi — Hoje: sessão no seu horário",
+    multi: "💜 Lembrete Psi — Seus lembretes",
+    fallback: "💜 Lembrete Psi — Seu espaço de cuidado",
   };
 
   const suffixDefaults = {
@@ -175,7 +206,11 @@ function resolveReminderTitle(cfg, slotKey) {
   const prefix = cfg && cfg.reminderTitlePrefix != null ? String(cfg.reminderTitlePrefix).trim() : "";
 
   if (raw) {
-    if (prefix && !raw.includes("Permittá") && !raw.includes("Lembrete Psi")) return joinTitle(prefix, raw);
+    if (prefix) {
+      const rawLower = raw.toLowerCase();
+      const prefixLower = prefix.toLowerCase();
+      if (!rawLower.includes(prefixLower)) return joinTitle(prefix, raw);
+    }
     return raw;
   }
 
@@ -416,6 +451,7 @@ export async function POST(req) {
 
       const first = items[0];
       const { date, time } = safeDateParts(first.startISO, first.dateBR, first.time);
+      const whenText = buildWhenText(date, time);
 
       // 1) Preferência: messageBody (já preenchido pelo parseCSV)
       let bodyText = String(first.messageBody || "").trim();
@@ -431,6 +467,7 @@ export async function POST(req) {
               time,
               serviceType: first.serviceType,
               location: first.location,
+              whenText,
             })
           : "";
       }
@@ -438,9 +475,7 @@ export async function POST(req) {
       // 3) Fallback final: mensagem segura com data/hora se disponíveis
       if (!bodyText) {
         const firstName = first.patientName ? first.patientName.split(" ")[0] : "";
-        bodyText = `Olá${firstName ? ", " + firstName : ""}. Seu horário de cuidado está reservado para ${date || "a data agendada"} às ${
-          time || "hora agendada"
-        }.`;
+        bodyText = `Olá${firstName ? ", " + firstName : ""}. Seu horário de cuidado está reservado ${whenText}.`;
       }
 
       // Garantia: placeholders {nome}/{profissional}/{data}/{hora} (PT/EN e {{ }}) sempre processados no server.
@@ -452,6 +487,7 @@ export async function POST(req) {
         time,
         serviceType: first.serviceType,
         location: first.location,
+        whenText,
       });
 
       const extraCount = items.length - 1;

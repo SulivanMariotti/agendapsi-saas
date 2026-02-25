@@ -7,17 +7,17 @@ Este documento registra o padrão final para diagnosticar **pushToken** e o badg
 
 ---
 
-## 1) Definição correta dos badges
+## 1) Conceitos (2 dimensões)
 
-### Autorizado
-- Existe documento em `subscribers/{phoneCanonical}` **e**
-- Campo `pushToken` está preenchido (truthy)
+### A) Na base / Fora da base
+- **Na base**: subscriber encontrado (existe doc em `subscribers/{phoneCanonical}` ou match por `docId`).
+- **Fora da base**: não foi possível casar subscriber com o telefone canônico.
 
-### Sem token
-- Não existe doc em `subscribers/{phoneCanonical}` **ou**
-- Existe, mas `pushToken` está vazio/nulo
+### B) Push OK / Sem Push
+- **Push OK**: subscriber existe **e** `pushToken` está preenchido.
+- **Sem Push**: subscriber existe, mas token está vazio/nulo/ausente (ou o diagnóstico server-side retornou false).
 
-> Nota: o campo legado `phone` no doc **não** deve ser usado para autorizar envios.
+> Importante: “Na base” não significa automaticamente “Push OK”. São dimensões diferentes.
 
 ---
 
@@ -38,8 +38,8 @@ Resposta:
 ```
 
 O badge é calculado por:
-- `byPhone[phoneCanonical] === true` => **Autorizado**
-- caso contrário => **Sem token**
+- `byPhone[phoneCanonical] === true` => **Push OK**
+- caso contrário => **Sem Push**
 
 ---
 
@@ -77,7 +77,7 @@ Em produção (sem `?dev=1`), o endpoint exige:
 ## 5) Regras de UX para o Admin
 
 - O badge não pode travar o fluxo de “Preview”.
-- Mesmo quando **Sem token**, o **Preview** deve rodar e mostrar:
+- Mesmo quando **Sem Push**, o **Preview** deve rodar e mostrar:
   - `blockedNoToken`
   - `blockedReason: "noToken"`
   - amostras interpoladas (sem dados sensíveis)
@@ -94,7 +94,16 @@ Assim o Admin entende o motivo do bloqueio sem perder tempo.
    - “Verificar” dispara `status-batch`
    - Response contém `byPhone[phoneCanonical] === true`
 3. Badge:
-   - aparece **Autorizado** para quem tem token
+   - aparece **Push OK** para quem tem token
 4. Preview:
    - habilita e retorna contagens coerentes
 
+
+
+---
+
+## 6) Regra de ouro (UX)
+- Na tela de Importar Agenda, manter uma **Legenda rápida** fixa explicando:
+  - Na base / Fora da base
+  - Push OK / Sem Push
+  - CHECK (quando o estado de push ainda não foi confirmado para a seleção atual)

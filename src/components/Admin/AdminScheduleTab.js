@@ -1787,6 +1787,20 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
             </div>
           </div>
 
+
+          <div className="rounded-xl border border-slate-100 bg-white p-3">
+            <div className="text-[11px] text-slate-600">
+              <span className="font-bold text-slate-700">Legenda rápida:</span>
+              <div className="mt-1 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+                <div><b>Na base</b> = cadastro encontrado (subscribers)</div>
+                <div><b>Fora da base</b> = não entra na fila</div>
+                <div><b>Push OK</b> = token válido para notificação</div>
+                <div><b>Sem Push</b> = entra na lista, mas não dispara push</div>
+              </div>
+              <div className="mt-1 text-slate-400"><b>CHECK</b> = status de push ainda não consultado (gere Preview)</div>
+            </div>
+          </div>
+
           {needsPushCheck ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800">
               <b>⚠️ CHECK ativo:</b> há {opMetrics.pushUnknown} paciente(s) com diagnóstico de push ainda não confirmado.
@@ -2331,41 +2345,55 @@ export default function AdminScheduleTab({ subscribers, dbAppointments, showToas
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-slate-200">
-            {filteredAppointments.map((app) => {
-              const phoneKey = normalizePhoneCanonical(app.cleanPhone || app.phoneCanonical || app.phone);
-              const hasPush = Boolean(hasTokenByPhone[phoneKey]);
-              const inBase = Boolean(app.isSubscribed);
-
-              const badgeStatus = inBase && hasPush ? 'confirmed' : 'missing';
-              const badgeText = !inBase ? 'Fora da base' : hasPush ? 'Push OK' : 'Sem Push';
-
-              return (
-                <div
-                  key={app.id}
-                  className={`p-4 border rounded-xl flex justify-between items-center transition-all hover:shadow-sm ${
-                    app.reminderType ? 'bg-violet-50 border-violet-100' : 'bg-white border-slate-100 opacity-70'
-                  }`}
-                >
-                  <div>
-                    <span className="font-bold text-slate-700 block text-sm mb-0.5">{app.nome}</span>
-                    <span className="text-xs text-slate-400 flex items-center gap-1">
-                      <User size={12} /> {app.cleanPhone}
-                    </span>
-                    <span className="text-xs text-slate-400 flex items-center gap-1 mt-1">
-                      <CalendarCheck size={12} /> {app.data} • {app.hora}
-                    </span>
-                    {app.profissional ? (
-                      <span className="text-[11px] text-slate-400 mt-1 block">Prof.: {app.profissional}</span>
-                    ) : null}
-                  </div>
-
-                  <div className="text-right">
-                    <div className="text-xs font-semibold text-slate-600">{app.timeLabel}</div>
-                    <Badge status={badgeStatus} text={badgeText} />
-                  </div>
+            {filteredAppointments.map((app) => (
+              <div
+                key={app.id}
+                className={`p-4 border rounded-xl flex justify-between items-center transition-all hover:shadow-sm ${
+                  app.reminderType ? 'bg-violet-50 border-violet-100' : 'bg-white border-slate-100 opacity-70'
+                }`}
+              >
+                <div>
+                  <span className="font-bold text-slate-700 block text-sm mb-0.5">{app.nome}</span>
+                  <span className="text-xs text-slate-400 flex items-center gap-1">
+                    <User size={12} /> {app.cleanPhone}
+                  </span>
+                  <span className="text-xs text-slate-400 flex items-center gap-1 mt-1">
+                    <CalendarCheck size={12} /> {app.data} • {app.hora}
+                  </span>
+                  {app.profissional ? (
+                    <span className="text-[11px] text-slate-400 mt-1 block">Prof.: {app.profissional}</span>
+                  ) : null}
                 </div>
-              );
-            })}
+
+                <div className="text-right">
+                  <div className="text-xs font-semibold text-slate-600">{app.timeLabel}</div>
+                  
+{(() => {
+  const phoneKey = normalizePhoneCanonical(app.cleanPhone || app.phoneCanonical || app.phone);
+  const inBase = !!app.isSubscribed;
+  const hasInfo = !!phoneKey && Object.prototype.hasOwnProperty.call(hasTokenByPhone, phoneKey);
+  const hasPush = hasInfo && !!hasTokenByPhone[phoneKey];
+
+  let badgeText = 'CHECK';
+  let badgeStatus = 'pending';
+
+  if (!inBase) {
+    badgeText = 'Fora da base';
+    badgeStatus = 'missing';
+  } else if (hasPush) {
+    badgeText = 'Push OK';
+    badgeStatus = 'confirmed';
+  } else if (hasInfo) {
+    badgeText = 'Sem Push';
+    badgeStatus = 'unsigned';
+  }
+
+  return <Badge status={badgeStatus} text={badgeText} />;
+})()}
+
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Card>

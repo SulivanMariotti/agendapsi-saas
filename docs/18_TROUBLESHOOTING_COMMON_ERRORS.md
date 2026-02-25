@@ -1,4 +1,4 @@
-# 18_TROUBLESHOOTING_COMMON_ERRORS (atualizado em 2026-02-17)
+# 18_TROUBLESHOOTING_COMMON_ERRORS (atualizado em 2026-02-24)
 
 Este documento reúne erros recorrentes do **Lembrete Psi** e o caminho de diagnóstico.  
 Objetivo: reduzir regressões que quebram lembretes (e quebrar lembretes aumenta risco de falta — falta interrompe evolução).
@@ -102,3 +102,51 @@ Objetivo: reduzir regressões que quebram lembretes (e quebrar lembretes aumenta
 - Não “inventar join”: defina e persista `phoneCanonical` como chave de relacionamento.
 - Logs/auditoria: registrar ações críticas sem dados sensíveis.
 - Sempre que um erro impactar lembretes, trate como risco clínico: menos lembrete → mais chance de falta.
+
+
+---
+
+## iPhone: “Indisponível” no card de Notificações (Push)
+
+**Sintoma**
+- No iPhone, o painel do paciente mostra “Indisponível” para notificações.
+
+**Causa**
+- No iOS, Push Web normalmente só está disponível quando o site está instalado na **Tela de Início (PWA)** (iOS 16.4+).
+- Navegadores dentro de apps (WhatsApp/Instagram/Facebook) podem bloquear Push/Service Worker.
+
+**Correção (passo a passo)**
+1. Abrir o site no **Safari**.
+2. Compartilhar → **Adicionar à Tela de Início**.
+3. Abrir pelo **ícone** (PWA).
+4. Ajustes do iPhone → Notificações → Lembrete Psi → **Permitir notificações**.
+
+---
+
+## iOS/Safari: `ReferenceError: Notification is not defined`
+
+**Sintoma**
+- Tela de erro em iPhone ao carregar o painel do paciente.
+
+**Causa**
+- Em alguns ambientes iOS, o identificador global `Notification` não existe.
+- `Notification?.permission` pode quebrar por “variável inexistente”.
+
+**Correção**
+- Ler sempre via `window.Notification` / `globalThis.Notification`, depois acessar `.permission`.
+
+---
+
+## Importar Agenda (Admin): “não autorizado” mesmo com token
+
+**Sintoma**
+- Toast do “Verificar” mostrava “não autorizado” para paciente que tem pushToken.
+
+**Causa**
+- Matching incorreto do subscriber (ex.: procurar `s.phone` ao invés de `phoneCanonical`/`docId`).
+
+**Correção**
+- Matching deve usar `phoneCanonical` e/ou `docId` do doc em `subscribers/{phoneCanonical}`.
+- Se voltar a acontecer, validar:
+  - telefone canônico (somente dígitos, sem 55)
+  - existência do doc `subscribers/{phoneCanonical}`

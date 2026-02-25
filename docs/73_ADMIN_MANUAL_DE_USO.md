@@ -1,4 +1,4 @@
-# 73 — Manual de Uso (Painel Admin) — Agenda e Presença/Faltas (2026-02-17)
+# 73 — Manual de Uso (Painel Admin) — Agenda e Presença/Faltas (2026-02-24)
 
 Este manual existe para **reduzir falhas operacionais** que viram falhas de cuidado ativo.  
 Quando o lembrete falha, a sessão “some” da semana — e a constância (que é parte do tratamento) perde força.
@@ -31,11 +31,19 @@ Quando o lembrete falha, a sessão “some” da semana — e a constância (que
 1. Clique **Gerar Preview do Disparo** (dryRun)
 2. Confira:
    - enviáveis (sendable)
-   - bloqueados por motivo: `SEM_PUSH`, `INATIVO`, `SEM_TELEFONE`, `ALREADY_SENT`
+   - bloqueados por motivo: `SEM_PUSH` (UI: **Sem Push**), `INATIVO`, `SEM_TELEFONE`, `ALREADY_SENT`
 3. Confira a amostra (placeholders preenchidos)
 4. Clique **Enviar lembrete**
 
 **Regra de segurança:** se houver **CHECK** (push não confirmado), o sistema bloqueia o envio até você gerar preview/diagnóstico coerente.
+
+### Legenda rápida (1 olhar e pronto)
+- **Na base**: subscriber encontrado (cadastro técnico ok).
+- **Fora da base**: não casou subscriber → não entra na fila.
+- **Push OK**: token presente → pode enviar notificação.
+- **Sem Push**: sem token → entra para diagnóstico, mas não dispara push.
+- **CHECK**: o push ainda não foi confirmado para a seleção atual (gere Preview/diagnóstico).
+
 
 ---
 
