@@ -1,4 +1,4 @@
-# Onde paramos — Lembrete Psi (2026-02-24)
+# Onde paramos — Lembrete Psi (2026-02-25)
 
 ## Objetivo do sistema (norte clínico)
 O Lembrete Psi não é “agenda com disparo”. É ferramenta clínica para **sustentar vínculo e constância**.
@@ -115,6 +115,23 @@ Para refletir alterações de agenda (dia/hora/quantidade) no painel do paciente
 4. Ajustes do iPhone → Notificações → **Lembrete Psi** → Permitir notificações.
 5. No Admin, confirmar **Na base + Push OK** antes de disparar.
 
+
+---
+
+
+## Últimas entregas (2026-02-25)
+
+### Presença/Faltas — rastreabilidade por lote (batchId)
+- Import (`/api/admin/attendance/import`) passou a gerar/retornar `batchId` (tanto `dryRun` quanto commit).
+- Follow-ups (`/api/admin/attendance/send-followups`) persistem `batchId` e deixam rastro em **Histórico**.
+- UI Admin: após importar/disparar, botões **“Abrir lote no Histórico”** levam direto ao filtro por `batchId`.
+
+### Hotfixes (Admin)
+- Build error: correção de JSX inválido em `AdminAttendanceImportCard.js`.
+- Histórico: correção do erro `Cannot access 'rangeLogs' before initialization` (TDZ de `const`).
+
+### Observação importante
+- Hardening “anti-envio errado + higiene de PII” do módulo Presença/Faltas (confirmação explícita para envio real e sanitização de payloads) deve ser **revalidado no código** no próximo chat (garantir que envio real exige confirmação/flag e que logs não carregam linhas cruas/telefones completos).
 
 ## Pendências (próxima sessão)
 - Fase 2 do painel de constância (insights clínicos, sem moralismo).

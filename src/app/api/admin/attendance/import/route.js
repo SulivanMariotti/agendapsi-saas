@@ -6,6 +6,7 @@ import { rateLimit } from "@/lib/server/rateLimit";
 import { logAdminAudit } from "@/lib/server/auditLog";
 import { adminError } from "@/lib/server/adminError";
 import { writeHistory } from "@/lib/server/historyLog";
+import { makeBatchId } from "@/lib/server/batchId";
 
 export const runtime = "nodejs";
 
@@ -281,6 +282,29 @@ function maskPhoneCanonical(pc) {
   return `${"*".repeat(Math.max(0, s.length - 4))}${s.slice(-4)}`;
 }
 
+function maskDigitsTailText(raw, keep = 4) {
+  const s = String(raw || "");
+  if (!s) return "";
+  return s.replace(/\d{6,}/g, (m) => `***${m.slice(-Math.max(0, keep))}`);
+}
+
+function sanitizeCsvLinePreview(line, max = 220) {
+  let s = String(line || "");
+  if (!s) return null;
+
+  // mask emails (keep first char + domain)
+  s = s.replace(/([A-Z0-9._%+-]+)@([A-Z0-9.-]+\.[A-Z]{2,})/gi, (m, u, d) => {
+    const head = u && u.length ? u[0] : "*";
+    return `${head}***@${d}`;
+  });
+
+  // mask long digit sequences (phones/IDs)
+  s = maskDigitsTailText(s, 4);
+
+  if (s.length > max) s = s.slice(0, max) + "…";
+  return s;
+}
+
 async function findUserByPatientId(db, patientId) {
   const pid = String(patientId || "").trim();
   if (!pid) return null;
@@ -355,6 +379,7 @@ export async function POST(req) {
 
     const source = String(body.source || "attendance_import").trim();
     const dryRun = Boolean(body.dryRun);
+    const batchId = makeBatchId("attendance_import", dryRun ? "dry" : "commit");
     const defaultStatus = normalizeDefaultStatus(body.defaultStatus);
 
     const reportMode = String(body.reportMode || "auto").trim();
@@ -364,6 +389,9 @@ export async function POST(req) {
       .split(/\r?\n/)
       .map((l) => String(l ?? ""))
       .filter((l) => l.trim().length > 0);
+
+    if (rawLines.length > 25000)
+      return NextResponse.json({ ok: false, error: "CSV grande demais (limite 25.000 linhas). Divida o arquivo e importe em partes." }, { status: 400 });
 
     if (rawLines.length < 2)
       return NextResponse.json({ ok: false, error: "CSV sem dados" }, { status: 400 });
@@ -561,7 +589,7 @@ export async function POST(req) {
         location: location || null,
         statusRaw: String(statusRaw || "").trim() || null,
         status,
-        rawLine: rawLine || null,
+        rawLinePreview: sanitizeCsvLinePreview(rawLine),
       };
 
       const pushError = (code, field, message, value = "") => {
@@ -768,7 +796,7 @@ export async function POST(req) {
           "invalid_phone",
           "TELEFONE",
           "TELEFONE inválido no CSV (esperado DDD+numero com 10 ou 11 dígitos).",
-          rawPhone
+          maskDigitsTailText(rawPhone)
         );
       }
 
@@ -835,6 +863,7 @@ export async function POST(req) {
     if (!dryRun) {
       await writeHistory(db, {
         type: "attendance_import_summary",
+        batchId,
         createdAt: nowTs,
         count: imported,
         skipped,
@@ -849,6 +878,7 @@ export async function POST(req) {
       actorEmail: auth.decoded?.email || null,
       action: dryRun ? "attendance_import_preview" : "attendance_import_commit",
       meta: {
+        batchId,
         source,
         dryRun,
         candidates,
@@ -867,6 +897,7 @@ export async function POST(req) {
         {
           ok: true,
           dryRun: true,
+          batchId,
           candidates,
           wouldImport: imported,
           skipped,
@@ -887,6 +918,7 @@ export async function POST(req) {
       {
         ok: true,
         imported,
+        batchId,
         skipped,
         skippedDuplicateInFile,
         warned,

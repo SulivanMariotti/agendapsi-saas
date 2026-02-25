@@ -35,6 +35,39 @@ function canonicalPhone(raw) {
   return d;
 }
 
+function clampDays(val) {
+  const n = Number(val);
+  return [7, 30, 90].includes(n) ? n : 30;
+}
+
+function isoTodayUTC() {
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return d.toISOString().slice(0, 10);
+}
+
+function diffDaysInclusive(fromIso, toIso) {
+  try {
+    const a = Date.parse(`${fromIso}T00:00:00.000Z`);
+    const b = Date.parse(`${toIso}T00:00:00.000Z`);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    return Math.round((b - a) / 86400000) + 1;
+  } catch (_) {
+    return null;
+  }
+}
+
+function maskPhoneCanonical(pc) {
+  const d = canonicalPhone(pc);
+  if (!d) return "";
+  return `***${d.slice(-4)}`;
+}
+
+function phoneTail(pc) {
+  const d = canonicalPhone(pc);
+  return d ? d.slice(-4) : "";
+}
+
 function getServiceAccount() {
   const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
   if (b64) {
@@ -94,10 +127,10 @@ async function loadTemplates(db) {
 
   // defaults
   const tpl = {
-    presentTitle: "💜 Permittá • Lembrete Psi — Parabéns pela presença",
+    presentTitle: "💜 Lembrete Psi — Parabéns pela presença",
     presentBody:
       "Olá {nome}. Sua presença em {data} às {hora} é um passo de cuidado. A continuidade fortalece o processo.",
-    absentTitle: "💜 Permittá • Lembrete Psi — Senti sua falta hoje",
+    absentTitle: "💜 Lembrete Psi — Senti sua falta hoje",
     absentBody:
       "Olá {nome}. Registramos sua ausência em {data} às {hora}. A terapia acontece na continuidade — quando você retorna, o processo segue.",
   };
@@ -115,7 +148,7 @@ async function loadTemplates(db) {
 }
 
 function parseBodyRange(body) {
-  const days = Number(body?.days || 30);
+  const days = clampDays(body?.days ?? 30);
   const fromIsoDate = body?.fromIsoDate ? String(body.fromIsoDate) : null;
   const toIsoDate = body?.toIsoDate ? String(body.toIsoDate) : null;
 
@@ -179,7 +212,7 @@ export async function POST(req) {
     const bodyRes = await readJsonObjectBody(req, {
       maxBytes: 15000,
       defaultValue: {},
-      allowedKeys: ["days", "limit", "fromIsoDate", "toIsoDate", "dryRun"],
+      allowedKeys: ["days", "limit", "fromIsoDate", "toIsoDate", "dryRun", "confirm"],
       label: "attendance-followups",
       showKeys: true,
     });
@@ -192,6 +225,35 @@ export async function POST(req) {
     const batchId = makeBatchId("attendance_followups", dryRun ? "dry" : "send");
 
     const { fromIsoDate, toIsoDate, days } = parseBodyRange(body);
+
+    // Segurança (anti-envio errado): follow-up real exige confirmação explícita
+    const confirm = String(body?.confirm || "").trim();
+    if (!dryRun && confirm !== "SEND_FOLLOWUPS") {
+      return NextResponse.json(
+        { ok: false, error: "Confirmação ausente. Para disparar, envie confirm=SEND_FOLLOWUPS (prévia não exige)." },
+        { status: 400 }
+      );
+    }
+
+    // Range guard: follow-up só para datas até hoje (UTC) e com janela máxima de 93 dias
+    const todayIso = isoTodayUTC();
+    if (String(toIsoDate) > todayIso) {
+      return NextResponse.json(
+        { ok: false, error: `toIsoDate no futuro (${toIsoDate}). Use no máximo ${todayIso}.` },
+        { status: 400 }
+      );
+    }
+    const rangeDays = diffDaysInclusive(fromIsoDate, toIsoDate);
+    if (rangeDays == null || rangeDays <= 0) {
+      return NextResponse.json({ ok: false, error: "Range inválido (fromIsoDate/toIsoDate)." }, { status: 400 });
+    }
+    if (rangeDays > 93) {
+      return NextResponse.json(
+        { ok: false, error: `Range muito grande (${rangeDays} dias). Limite: 93 dias.` },
+        { status: 400 }
+      );
+    }
+
     const limit = Math.min(1000, Math.max(1, Number(body?.limit || 200)));
 
     const tpl = await loadTemplates(db);
@@ -419,7 +481,7 @@ export async function POST(req) {
       if (dryRun && out.sample.length < maxSample) {
         out.sample.push({
           status,
-          phoneCanonical: phone,
+          phoneTail: phoneTail(phone),
           name: vars.nome,
           title: finalTitle,
           body: finalBody,
@@ -476,7 +538,7 @@ export async function POST(req) {
         data: {
           kind: "attendance_followup",
           status,
-          phoneCanonical: phone,
+          phoneTail: phoneTail(phone),
           isoDate: String(current.isoDate || ""),
           logId: logId || "",
           batchId: String(batchId),

@@ -42,7 +42,7 @@ function pickMessage(item) {
 }
 
 
-const BRAND_DEFAULT_PREFIX = "💜 Permittá • Lembrete Psi";
+const BRAND_DEFAULT_PREFIX = "💜 Lembrete Psi";
 
 function normalizeReminderSlot(reminderType) {
   const rt = String(reminderType || "").toLowerCase().trim();
@@ -65,10 +65,10 @@ function joinTitle(prefix, suffix) {
 function resolveReminderTitle(cfg, reminderType) {
   const slot = normalizeReminderSlot(reminderType);
   const defaultsFull = {
-    slot1: "💜 Permittá • Lembrete Psi — Seu espaço em 48h",
-    slot2: "💜 Permittá • Lembrete Psi — Amanhã: seu horário",
-    slot3: "💜 Permittá • Lembrete Psi — Hoje: sessão no seu horário",
-    fallback: "💜 Permittá • Lembrete Psi — Seu espaço de cuidado",
+    slot1: "💜 Lembrete Psi — Seu espaço em 48h",
+    slot2: "💜 Lembrete Psi — Amanhã: seu horário",
+    slot3: "💜 Lembrete Psi — Hoje: sessão no seu horário",
+    fallback: "💜 Lembrete Psi — Seu espaço de cuidado",
   };
   const suffixDefaults = {
     slot1: "Seu espaço em 48h",
@@ -81,7 +81,7 @@ function resolveReminderTitle(cfg, reminderType) {
   const raw = cfg && cfg[k] != null ? String(cfg[k]).trim() : "";
   const prefix = cfg && cfg.reminderTitlePrefix != null ? String(cfg.reminderTitlePrefix).trim() : "";
   if (raw) {
-    if (prefix && !raw.includes("Permittá") && !raw.includes("Lembrete Psi")) return joinTitle(prefix, raw);
+    if (prefix && !raw.includes("Lembrete Psi") && !raw.includes("💜")) return joinTitle(prefix, raw);
     return raw;
   }
   if (prefix) return joinTitle(prefix, suffixDefaults[slot] || suffixDefaults.fallback);

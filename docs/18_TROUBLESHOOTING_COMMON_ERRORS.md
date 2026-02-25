@@ -80,6 +80,26 @@ Objetivo: reduzir regressões que quebram lembretes (e quebrar lembretes aumenta
 
 ---
 
+## 5) Admin / Histórico: `Cannot access 'rangeLogs' before initialization`
+
+**Sintoma**
+- Ao abrir a aba **Histórico** no Admin, o app quebra com erro no console:
+  - `Cannot access 'rangeLogs' before initialization`
+
+**Causa**
+- Regressão em `AdminHistoryTab.js`: o `const rangeLogs = useMemo(...)` foi escrito
+  referenciando `rangeLogs` dentro do próprio initializer (ex.: `rangeLogs.filter(...)`).
+- Como `const` usa *temporal dead zone*, isso gera ReferenceError.
+
+**Correção**
+1. Em `src/components/Admin/AdminHistoryTab.js`, garanta que o `rangeLogs` é derivado sempre
+   de uma lista base (ex.: `logs`) e nunca do próprio `rangeLogs`.
+2. Exemplo correto:
+   - `const base = Array.isArray(logs) ? logs : []`
+   - `return rangeStartMs ? base.filter(...) : base`
+
+---
+
 ## 5) Import da agenda: “limpar” e reprocessar mantém preview antigo
 
 **Sintoma**

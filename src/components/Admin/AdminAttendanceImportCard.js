@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CheckCircle, X, Upload, FileText, AlertTriangle } from 'lucide-react';
+import { CheckCircle, X, Upload, FileText, AlertTriangle, ExternalLink } from 'lucide-react';
 import { Button, Card } from '../DesignSystem';
 
 /**
@@ -27,6 +27,7 @@ export default function AdminAttendanceImportCard({
   handleAttendanceImportValidate,
   handleAttendanceImportCommit,
   handleAttendanceImportClear,
+  onGoToHistoryBatch,
 }) {
   const fileRef = useRef(null);
   const [fileName, setFileName] = useState('');
@@ -295,6 +296,12 @@ export default function AdminAttendanceImportCard({
   const hasCsv = Boolean(String(attendanceImportText || '').trim());
   const isValidated = Boolean(attendanceImportDryRunResult?.ok && attendanceImportValidatedHash && attendanceImportValidatedHash === attendanceImportCurrentHash);
   const canImport = isValidated && Number(attendanceImportDryRunResult?.wouldImport || 0) > 0;
+  const openHistoryForBatch = (batchId) => {
+    const bid = String(batchId || '').trim();
+    if (!bid) return;
+    onGoToHistoryBatch?.(bid);
+  };
+
   const hasIssues = (Number(attendanceImportDryRunResult?.errors?.length || 0) + Number(attendanceImportDryRunResult?.warnings?.length || 0)) > 0;
 
   return (
@@ -778,6 +785,17 @@ export default function AdminAttendanceImportCard({
               <span>
                 Importado: <b>{attendanceImportResult.imported}</b> • Ignorados: <b>{attendanceImportResult.skipped}</b>
               </span>
+              {attendanceImportResult.batchId ? (
+                <Button
+                  variant="secondary"
+                  type="button"
+                  onClick={() => openHistoryForBatch(attendanceImportResult.batchId)}
+                  className="ml-2"
+                  icon={ExternalLink}
+                >
+                  Abrir lote no Histórico
+                </Button>
+              ) : null}
             </div>
           ) : (
             <div className="flex items-center gap-2 text-red-600">

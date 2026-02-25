@@ -37,6 +37,7 @@ export default function AdminAttendanceTab({
   handleAttendanceImportCommit,
   handleAttendanceImportClear,
   showToast,
+  onGoToHistoryBatch,
 }) {
   const [draftFilters, setDraftFilters] = useState({
     professional: '',
@@ -664,6 +665,7 @@ export default function AdminAttendanceTab({
       {/* STEP44: Importar Presença/Faltas */}
       <div id="attendance-import" className="scroll-mt-24">
       <AdminAttendanceImportCard
+        onGoToHistoryBatch={onGoToHistoryBatch}
         attendanceImportSource={attendanceImportSource}
         setAttendanceImportSource={setAttendanceImportSource}
         attendanceImportDefaultStatus={attendanceImportDefaultStatus}
@@ -688,7 +690,7 @@ export default function AdminAttendanceTab({
 
       {/* STEP45: Disparos por constância */}
       <div id="attendance-followups" className="scroll-mt-24">
-        <AdminAttendanceFollowupsCard showToast={showToast} />
+        <AdminAttendanceFollowupsCard showToast={showToast} onGoToHistoryBatch={onGoToHistoryBatch} />
       </div>
     </>
   );

@@ -100,11 +100,11 @@ function joinTitle(prefix, suffix) {
 
 function resolveReminderTitle(cfg, slotKey) {
   const defaultsFull = {
-    slot1: "💜 Permittá • Lembrete Psi — Seu espaço em 48h",
-    slot2: "💜 Permittá • Lembrete Psi — Amanhã: seu horário",
-    slot3: "💜 Permittá • Lembrete Psi — Hoje: sessão no seu horário",
-    multi: "💜 Permittá • Lembrete Psi — Seus lembretes",
-    fallback: "💜 Permittá • Lembrete Psi — Seu espaço de cuidado",
+    slot1: "💜 Lembrete Psi — Seu espaço em 48h",
+    slot2: "💜 Lembrete Psi — Amanhã: seu horário",
+    slot3: "💜 Lembrete Psi — Hoje: sessão no seu horário",
+    multi: "💜 Lembrete Psi — Seus lembretes",
+    fallback: "💜 Lembrete Psi — Seu espaço de cuidado",
   };
 
   const suffixDefaults = {
@@ -128,7 +128,7 @@ function resolveReminderTitle(cfg, slotKey) {
   const prefixSafe = cfg && cfg.reminderTitlePrefix != null ? String(cfg.reminderTitlePrefix).trim() : "";
 
   if (raw) {
-    if (prefixSafe && !raw.includes("Permittá") && !raw.includes("Lembrete Psi")) return joinTitle(prefixSafe, raw);
+    if (prefixSafe && !raw.includes("Lembrete Psi") && !raw.includes("💜")) return joinTitle(prefixSafe, raw);
     return raw;
   }
 

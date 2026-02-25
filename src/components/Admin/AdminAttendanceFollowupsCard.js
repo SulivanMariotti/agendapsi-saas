@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Bell, Send } from 'lucide-react';
+import { Bell, Send, ExternalLink } from 'lucide-react';
 import { Button, Card } from '../DesignSystem';
 import { adminFetch } from '../../services/adminApi';
 
@@ -9,7 +9,7 @@ import { adminFetch } from '../../services/adminApi';
  * - Prévia (dryRun) -> habilita Disparar
  * - Não cria qualquer funcionalidade de cancelar/reagendar pelo paciente.
  */
-export default function AdminAttendanceFollowupsCard({ showToast }) {
+export default function AdminAttendanceFollowupsCard({ showToast, onGoToHistoryBatch }) {
   const [followupDays, setFollowupDays] = useState(30);
   const [followupLimit, setFollowupLimit] = useState(200);
 
@@ -27,6 +27,12 @@ export default function AdminAttendanceFollowupsCard({ showToast }) {
     () => `${Number(followupDays) || 30}:${Number(followupLimit) || 200}`,
     [followupDays, followupLimit]
   );
+
+  const openHistoryForBatch = (batchId) => {
+    const bid = String(batchId || '').trim();
+    if (!bid) return;
+    onGoToHistoryBatch?.(bid);
+  };
 
   const followupBusy = followupPreviewLoading || followupSendLoading;
 
@@ -51,6 +57,10 @@ export default function AdminAttendanceFollowupsCard({ showToast }) {
 
   const callFollowups = async ({ dryRun }) => {
     if (followupBusy) return; // evita duplo clique / concorrência
+    if (!dryRun) {
+      const ok = window.confirm('Você está prestes a DISPARAR follow-ups (Presença/Falta).\n\nConfirme que a PRÉVIA está OK e que este lote deve ser enviado agora.');
+      if (!ok) return;
+    }
     if (dryRun) setFollowupPreviewLoading(true);
     else setFollowupSendLoading(true);
 
@@ -63,7 +73,7 @@ export default function AdminAttendanceFollowupsCard({ showToast }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ days, limit, dryRun }),
+        body: JSON.stringify(dryRun ? { days, limit, dryRun } : { days, limit, dryRun, confirm: 'SEND_FOLLOWUPS' }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -313,10 +323,23 @@ export default function AdminAttendanceFollowupsCard({ showToast }) {
                     <span className="ml-2 text-xs font-normal text-slate-500">• última prévia em {new Date(lastPreviewAt).toLocaleString()}</span>
                   )}
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                  {previewResult?.batchId ? (
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      onClick={() => openHistoryForBatch(previewResult.batchId)}
+                      icon={ExternalLink}
+                      className="px-3 py-1.5 text-xs"
+                    >
+                      Abrir no Histórico
+                    </Button>
+                  ) : null}
+                  <div className="text-xs text-slate-500">
                   {previewResult?.fromIsoDate && previewResult?.toIsoDate
                     ? `${previewResult.fromIsoDate} → ${previewResult.toIsoDate}`
                     : `últimos ${Number(followupDays) || 30} dias`}
+                </div>
                 </div>
               </div>
 
@@ -337,10 +360,23 @@ export default function AdminAttendanceFollowupsCard({ showToast }) {
                     <span className="ml-2 text-xs font-normal text-slate-500">• enviado em {new Date(lastSendAt).toLocaleString()}</span>
                   )}
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                  {sendResult?.batchId ? (
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      onClick={() => openHistoryForBatch(sendResult.batchId)}
+                      icon={ExternalLink}
+                      className="px-3 py-1.5 text-xs"
+                    >
+                      Abrir no Histórico
+                    </Button>
+                  ) : null}
+                  <div className="text-xs text-slate-500">
                   {sendResult?.fromIsoDate && sendResult?.toIsoDate
                     ? `${sendResult.fromIsoDate} → ${sendResult.toIsoDate}`
                     : `últimos ${Number(followupDays) || 30} dias`}
+                </div>
                 </div>
               </div>
 

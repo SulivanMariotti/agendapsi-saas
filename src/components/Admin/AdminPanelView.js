@@ -159,22 +159,22 @@ export default function AdminPanelView({
     msg12h: '',
 
     // Títulos dos lembretes (push)
-    reminderTitlePrefix: '💜 Permittá • Lembrete Psi — ',
+    reminderTitlePrefix: '💜 Lembrete Psi — ',
     reminderTitle1: 'Seu espaço em 48h',
     reminderTitle2: 'Amanhã: seu horário',
     reminderTitle3: 'Hoje: sessão no seu horário',
     reminderTitleDefault: 'Seu espaço de cuidado',
-    reminderTitleMulti: '💜 Permittá • Lembrete Psi — Seus lembretes',
+    reminderTitleMulti: '💜 Lembrete Psi — Seus lembretes',
 
     whatsapp: '',
     contractText: '',
     contractVersion: 1,
 
     // Presença / Falta (push)
-    attendanceFollowupPresentTitle: '💜 Permittá • Lembrete Psi — Parabéns pela presença',
+    attendanceFollowupPresentTitle: '💜 Lembrete Psi — Parabéns pela presença',
     attendanceFollowupPresentBody:
       'Parabéns por ter comparecido. A continuidade é o que sustenta o processo e fortalece o cuidado consigo.',
-    attendanceFollowupAbsentTitle: '💜 Permittá • Lembrete Psi — Senti sua falta hoje',
+    attendanceFollowupAbsentTitle: '💜 Lembrete Psi — Senti sua falta hoje',
     attendanceFollowupAbsentBody:
       'Hoje você faltou. Faltar não é apenas perder uma hora; é interromper um processo de evolução. Se precisar, fale com a clínica para apoiar seu retorno.',
 });
@@ -383,6 +383,7 @@ export default function AdminPanelView({
         ok: true,
         imported: data.imported,
         skipped: data.skipped,
+        batchId: data.batchId || null,
         errors: data.errors || [],
       });
 
@@ -742,6 +743,7 @@ export default function AdminPanelView({
             handleAttendanceImportCommit={handleAttendanceImportCommit}
             handleAttendanceImportClear={handleAttendanceImportClear}
             showToast={showToast}
+            onGoToHistoryBatch={openHistoryBatch}
           />
         )}
 

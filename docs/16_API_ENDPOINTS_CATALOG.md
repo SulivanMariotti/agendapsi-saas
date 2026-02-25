@@ -85,7 +85,7 @@ Sumário de constância terapêutica.
 **Auth:** admin.
 
 **Query**
-- `days`: `7|30|60|90` (ou outro suportado)
+- `days`: `7|30|90`
 - filtros opcionais:
   - `pro` / `professional` (contains, case-insensitive)
   - `service` (contains)
@@ -102,6 +102,47 @@ Sumário de constância terapêutica.
 - `trend`: `prevRate`, `recentRate`, `delta`, `label`
 - `filtersApplied`, `cohort`, `range`, `computedAt`
 - compat: `topMisses`, `startIsoDate`, `endIsoDate`
+
+### `POST /api/admin/attendance/import`
+Importa CSV de **Presença/Faltas** para a coleção `attendance_logs` (server-side via Admin SDK).  
+**Auth:** admin.
+
+**Body (JSON)**
+- `csvText` (string, obrigatório)
+- `source` (string, opcional)
+- `defaultStatus` (`present|absent`, opcional)
+- `dryRun` (boolean, opcional)
+- `reportMode` (`auto|mapped`, opcional)
+- `columnMap` (objeto, opcional; usado quando `reportMode=mapped`)
+
+**Retorno (alto nível)**
+- `dryRun=true`: retorna `wouldImport`, `skipped`, `errors`, `warnings`, `sample`, `normalizedRows`.
+- `dryRun=false`: persiste e registra em `history` como `attendance_import_summary`.
+
+### `POST /api/admin/attendance/send-followups`
+Dispara mensagens de reforço (presença) e psicoeducação (falta) com base em `attendance_logs`.  
+**Auth:** admin.
+
+**Body (JSON)**
+- `days` (number, default 30; permitido: `7|30|90`)
+- `limit` (number, default 200; max 1000)
+- `dryRun` (boolean)
+- `confirm` (string) — **obrigatório quando `dryRun=false`**: `SEND_FOLLOWUPS`
+
+**Guards (anti-envio errado)**
+- Range não pode ir para o futuro (`toIsoDate` <= hoje em UTC)
+- Janela máxima: **93 dias**
+- Prévia (`dryRun=true`) não exige `confirm`
+
+
+**Idempotência**
+- Reenvio é bloqueado quando `attendance_logs/{id}.followup.sentAt` já existe.
+
+**Bloqueios de segurança (principais)**
+- `unlinked_patient`: log sem vínculo com `users` (evita enviar para pessoa errada)
+- `ambiguous_phone`: telefone aparece em +1 cadastro
+- `phone_mismatch`: conflito entre telefone do log e do perfil
+- `no_token`: subscriber sem `pushToken`
 
 ### `POST /api/admin/appointments/sync-summary`
 Persiste metadados do último sync de agenda.  

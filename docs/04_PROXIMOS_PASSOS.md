@@ -1,28 +1,34 @@
-# Próximos passos — checklist rápido (atualizado em 2026-02-21)
+# Próximos passos — checklist rápido (atualizado em 2026-02-25)
 
 ## A) Produção (essencial) ✅
-- [x] Confirmar `config/global` com mensagens (msg1/msg2/msg3) e títulos (incluindo follow-ups presença/falta).
-- [x] Confirmar Firestore rules publicadas (principalmente `users`, `audit_logs`, `subscribers`, `library_*`, `patient_notes`).
-- [x] Confirmar **TTL ativo**: `history.expireAt`, `audit_logs.expireAt` e `_rate_limits.expireAt`.
-- [x] Validar Web Push (desregistrar SW e recarregar).
+- [x] `config/global` com mensagens e títulos (48h/24h/manhã + follow-ups).
+- [x] Firestore rules publicadas (incluindo TTL).
+- [x] Hardening v1 (headers/CSP/originGuard/rate-limit/logs TTL).
+- [x] Web Push validado (inclui troubleshooting iOS/PWA).
 
-## B) Prioridade clínica (próximas entregas)
-- [x] **Painel do paciente (mobile)**: “1 olhar e pronto” (Top AppBar fixa + bottom nav premium + paleta cinza + tokens).
-- [ ] **Presença/Faltas — fase 2 (clínico):** insights de vínculo/constância (sem moralismo) + cards padrão.
-- [ ] **Admin Auth forte (deixar por último):** migrar login Admin legado (`ADMIN_PASSWORD`) → Firebase Auth + MFA/TOTP obrigatório (ou magic link), com migração progressiva e desligamento do legado em produção.
+## B) Presença/Faltas (Admin-only — prioridade clínica agora)
+- [x] Modelo de dados documentado (`attendance_logs`) + regras admin-only.
+- [x] Import + Summary + Follow-ups com **`batchId`** e links para **Histórico**.
+- [ ] **Hardening anti-envio + higiene de PII**: confirmar/implementar:
+  - envio real exigir confirmação/flag explícita;
+  - bloquear ranges inválidos (futuro/janela grande);
+  - logs sem linha crua/telefone completo.
+- [ ] **Painel de constância (7/30/90)**: insights clínicos (sem moralismo), cards e segmentações.
+- [ ] Notificações de constância:
+  - **presença**: reforço positivo;
+  - **falta**: orientação e convite à regularidade;
+  - sem CTA de cancelar/remarcar; sem WhatsApp como atalho de ausência.
+- [ ] Manter invisível no paciente por enquanto (feature flag / rota não exposta).
 
-## C) Auditoria (batchId)
-- [x] Gerar `batchId` por execução (Admin Send / Cron / Follow-ups) e persistir em `history` + `audit_logs`.
-- [x] Histórico com filtro por `batchId` + resumo do lote.
-- [ ] **F3 (amanhã):** Dashboard com card “Últimos lotes (batchId)” + link para Histórico já filtrado.
+## C) Correções/qualidade (Admin)
+- [x] Hotfix Histórico: `Cannot access 'rangeLogs' before initialization`.
+- [x] Hotfix build: JSX inválido em `AdminAttendanceImportCard`.
 
-## D) Hardening contínuo (pós-v1)
-- [x] Schema-lite “body vazio” em rotas sem payload + `showKeys` quiet em produção.
-- [ ] Expandir schema-lite para **todas** as rotas com escrita (+ futuro schema forte/Zod).
-- [ ] CSP: plano para reduzir/retirar `unsafe-inline` (nonce/hashes).
+## D) Segurança (pós-v1 / roadmap)
+- [ ] Revisão de “gaps” de schema validation nos endpoints críticos (catálogo + validação leve por rota).
+- [ ] Higiene de logs (PII) e padronização de mensagens de erro.
+- [ ] **Admin Auth forte** (deixar por último): migrar `ADMIN_PASSWORD` → Firebase Auth + MFA/TOTP (ou magic link), com migração progressiva e desligamento do legado em produção.
 
-## E) Dados / Consistência (Firestore)
-- [x] Documentar modelo NoSQL (sem joins), denormalização e **chave única**.
-- [x] Ferramentas: normalização `phoneCanonical` + relatório de duplicatas (com toggle ativo/desativado) + reativação oficial.
-- [ ] Deduplicação/merge assistido (resolver duplicatas com segurança, sem risco de envio para pessoa errada).
-
+## E) Produto (futuro, só depois de tudo OK)
+- [ ] OTP/magic link do paciente antes de PWA/App (Capacitor).
+- [ ] Multi-tenant SaaS (tenantId por clínica, isolamento, billing, onboarding).

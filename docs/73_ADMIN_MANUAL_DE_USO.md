@@ -69,14 +69,31 @@ No topo da Agenda existe o card **Operação do Dia** para reduzir risco humano:
 ---
 
 ## 5) Presença/Faltas — passo a passo
-1. Admin → **Presença/Faltas** → importar a planilha/relatório (quando aplicável)
-2. Conferir métricas (30/60/90 dias)
-3. Rodar follow-ups primeiro em **dryRun**
-4. Enviar follow-ups reais
+1. Admin → **Presença/Faltas**
+2. No card **Importar Presença/Faltas**:
+   - cole o CSV (ou faça upload)
+   - selecione a **Fonte** (ex.: nome do relatório)
+   - escolha o **Status padrão** (se o relatório não trouxer status confiável)
+   - se o relatório tiver cabeçalhos diferentes, use **Modo: mapeado** e ajuste o mapa
+3. Clique **Verificar** (dryRun)
+   - se houver inconsistências, use os botões de download:
+     - **Baixar inconsistências (.csv)**
+     - **Baixar preview normalizado (.csv)**
+4. Com a validação OK, clique **Importar**
+   - Dica: após importar, use **Abrir lote no Histórico** para auditar o resumo do lote (batchId) e guardar rastreabilidade.
+5. Volte ao topo do painel e confira o termômetro (7/30/90 dias)
+6. Se for disparar mensagens, use o card **Disparos por Constância**:
+   - rode **Prévia (dryRun)**
+   - revise amostra + bloqueios
+   - clique em **Disparar** (o sistema pede um **popup de confirmação** para evitar envio errado)
+   - depois use **Abrir no Histórico** para ver o resumo do lote (batchId) e os bloqueios consolidados
 
 ### Idempotência (anti-spam)
 - O follow-up não reenviará se:
   - `attendance_logs/{id}.followup.sentAt` já existir
+
+### Referência técnica
+- Modelo de dados: `docs/44_ATTENDANCE_DATA_MODEL.md`
 
 ---
 

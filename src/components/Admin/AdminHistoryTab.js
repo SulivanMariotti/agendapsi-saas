@@ -213,10 +213,16 @@ export default function AdminHistoryTab({ historyLogs = [], historyJump = null }
 
   const rangeLogs = useMemo(() => {
     // Importante: filtra a lista base (`logs`) pelo período selecionado.
-    // (Bugfix) não pode referenciar `rangeLogs` aqui — isso causa ReferenceError.
-    return (Array.isArray(logs) ? logs : []).filter((log) => {
+    // Bug conhecido (regressão): se alguém usar `rangeLogs` aqui dentro do initializer
+    // (ex.: `rangeLogs.filter(...)`) o React/Next vai estourar:
+    //   "Cannot access 'rangeLogs' before initialization"
+    // Mantemos a derivação SEMPRE a partir de `logs`.
+    const base = Array.isArray(logs) ? logs : [];
+    if (!rangeStartMs) return base;
+
+    return base.filter((log) => {
       const at = Number(log?.__sortAt || 0);
-      if (rangeStartMs && at && at < rangeStartMs) return false;
+      if (at && at < rangeStartMs) return false;
       return true;
     });
   }, [logs, rangeStartMs]);

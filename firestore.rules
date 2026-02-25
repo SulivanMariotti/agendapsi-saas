@@ -92,6 +92,13 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ========= ATTENDANCE LOGS (Presença/Faltas) =========
+    // Importados via Admin SDK (API server-side). Mantemos explícito aqui para clareza,
+    // embora o fallback final já bloqueie tudo por padrão.
+    match /attendance_logs/{id} {
+      allow read, write: if isAdmin();
+    }
+
     // ========= ADMINS =========
     match /admins/{id} {
       allow read: if isAdmin();

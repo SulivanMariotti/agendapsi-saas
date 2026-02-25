@@ -39,7 +39,7 @@ export default function AdminConfigTab({
                     attendanceFollowupPresentTitle: e.target.value,
                   }))
                 }
-                placeholder="💜 Permittá • Lembrete Psi — Parabéns pela presença"
+                placeholder="💜 Lembrete Psi — Parabéns pela presença"
               />
             </div>
 
@@ -73,7 +73,7 @@ export default function AdminConfigTab({
                     attendanceFollowupAbsentTitle: e.target.value,
                   }))
                 }
-                placeholder="💜 Permittá • Lembrete Psi — Senti sua falta hoje"
+                placeholder="💜 Lembrete Psi — Senti sua falta hoje"
               />
             </div>
 
@@ -185,18 +185,18 @@ export default function AdminConfigTab({
                 onClick={() =>
                   setLocalConfig((prev) => ({
                     ...prev,
-                    reminderTitlePrefix: '💜 Permittá • Lembrete Psi — ',
+                    reminderTitlePrefix: '💜 Lembrete Psi — ',
                     reminderTitle1: 'Seu espaço em 48h',
                     reminderTitle2: 'Amanhã: seu horário',
                     reminderTitle3: 'Hoje: sessão no seu horário',
                     reminderTitleDefault: 'Seu espaço de cuidado',
-                    reminderTitleMulti: '💜 Permittá • Lembrete Psi — Seus lembretes',
-                    attendanceFollowupPresentTitle: '💜 Permittá • Lembrete Psi — Parabéns pela presença',
-                    attendanceFollowupAbsentTitle: '💜 Permittá • Lembrete Psi — Senti sua falta hoje',
+                    reminderTitleMulti: '💜 Lembrete Psi — Seus lembretes',
+                    attendanceFollowupPresentTitle: '💜 Lembrete Psi — Parabéns pela presença',
+                    attendanceFollowupAbsentTitle: '💜 Lembrete Psi — Senti sua falta hoje',
                   }))
                 }
               >
-                Aplicar padrão Permittá 💜
+                Aplicar padrão Lembrete Psi 💜
               </Button>
             </div>
 
@@ -213,7 +213,7 @@ export default function AdminConfigTab({
                     reminderTitlePrefix: e.target.value,
                   }))
                 }
-                placeholder="💜 Permittá • Lembrete Psi — "
+                placeholder="💜 Lembrete Psi — "
               />
               <p className="text-[11px] text-slate-400">
                 Se deixar vazio, usamos o padrão do sistema.
@@ -302,7 +302,7 @@ export default function AdminConfigTab({
                       reminderTitleMulti: e.target.value,
                     }))
                   }
-                  placeholder="💜 Permittá • Lembrete Psi — Seus lembretes"
+                  placeholder="💜 Lembrete Psi — Seus lembretes"
                 />
                 <p className="text-[11px] text-slate-400">
                   Usado quando o envio agrupa mais de um tipo (ex.: 48h + 24h juntos).
