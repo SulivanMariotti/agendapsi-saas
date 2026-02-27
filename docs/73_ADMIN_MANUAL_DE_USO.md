@@ -69,31 +69,14 @@ No topo da Agenda existe o card **Operação do Dia** para reduzir risco humano:
 ---
 
 ## 5) Presença/Faltas — passo a passo
-1. Admin → **Presença/Faltas**
-2. No card **Importar Presença/Faltas**:
-   - cole o CSV (ou faça upload)
-   - selecione a **Fonte** (ex.: nome do relatório)
-   - escolha o **Status padrão** (se o relatório não trouxer status confiável)
-   - se o relatório tiver cabeçalhos diferentes, use **Modo: mapeado** e ajuste o mapa
-3. Clique **Verificar** (dryRun)
-   - se houver inconsistências, use os botões de download:
-     - **Baixar inconsistências (.csv)**
-     - **Baixar preview normalizado (.csv)**
-4. Com a validação OK, clique **Importar**
-   - Dica: após importar, use **Abrir lote no Histórico** para auditar o resumo do lote (batchId) e guardar rastreabilidade.
-5. Volte ao topo do painel e confira o termômetro (7/30/90 dias)
-6. Se for disparar mensagens, use o card **Disparos por Constância**:
-   - rode **Prévia (dryRun)**
-   - revise amostra + bloqueios
-   - clique em **Disparar** (o sistema pede um **popup de confirmação** para evitar envio errado)
-   - depois use **Abrir no Histórico** para ver o resumo do lote (batchId) e os bloqueios consolidados
+1. Admin → **Presença/Faltas** → importar a planilha/relatório (quando aplicável)
+2. Conferir métricas (30/60/90 dias)
+3. Rodar follow-ups primeiro em **dryRun**
+4. Enviar follow-ups reais
 
 ### Idempotência (anti-spam)
 - O follow-up não reenviará se:
   - `attendance_logs/{id}.followup.sentAt` já existir
-
-### Referência técnica
-- Modelo de dados: `docs/44_ATTENDANCE_DATA_MODEL.md`
 
 ---
 
@@ -109,46 +92,41 @@ Se algo bloquear o lembrete, trate como risco de constância:
 
 ---
 
-## 7) ANÁLISE FAT — XML de NFS-e (faturamento/tributos)
-Finalidade: auditoria administrativa mensal (não aparece no paciente).
-
-### 7.1 Passo a passo
-1. Acesse diretamente: **`/admin/fat`** (menu não aparece no `/admin` por decisão de UX).
-2. Clique **Selecionar XML**
-   - pode enviar **1 arquivo** com várias notas do mês
-   - ou **vários arquivos** (um por nota)
-3. Clique **Analisar**
-4. No topo, escolha a **Competência (YYYY-MM)**
-5. Confira os cards:
-   - **Valor faturado (bruto)**
-   - **Valor líquido**
-   - **ISS, PIS, COFINS, IRRF, CSLL, Total retido**
-6. Controle do tomador (para quem a nota foi emitida):
-   - coluna **Tomador** + **CNPJ/CPF**
-   - card lateral **Top Tomadores**
-7. Se precisar, clique **Baixar CSV**
-
-### 7.2 Exclusão de NFS-e (por número)
-Se uma nota foi importada indevidamente (ex.: teste/duplicidade), é possível excluir pelo **número da NFS-e**.
-
-1. Acesse `/admin/fat`
-2. Na seção **Excluir NFS-e (por número)**:
-   - informe o **número da NFS-e**
-   - (opcional) preencha **Competência (YYYY-MM)** para restringir o alvo
-3. Clique **Verificar** para listar as correspondências
-4. Digite **EXCLUIR** no campo de confirmação
-5. Clique **Excluir**
-
-> Ação irreversível. Use apenas para correções administrativas.
-
-### 7.3 Observação importante
-Este módulo lê o layout **NFS-e** (SPED NFS-e namespace). NF-e (modelo 55) é outro XML/layout.
-
----
-
-## 8) Links úteis
+## 7) Links úteis
 - Runbook operacional: `docs/27_OPERATIONS_RUNBOOK.md`
 - Checklist 1 página: `docs/27A_DAILY_CHECKLIST_ONEPAGER.md`
 - Template de registro: `docs/27B_DAILY_LOG_TEMPLATE.md`
 - Troubleshooting: `docs/18_TROUBLESHOOTING_COMMON_ERRORS.md`
 - Catálogo de endpoints: `docs/16_API_ENDPOINTS_CATALOG.md`
+
+---
+
+
+## ANÁLISE FAT (XML de NFS-e) — Admin-only
+
+**Acesso:** `https://SEU_DOMINIO/admin/fat`  
+> Não aparece no menu do `/admin` (acesso direto por URL).
+
+### Para que serve
+Fechamento mensal e BI operacional (interno) com:
+- faturado (bruto), líquido
+- tributos separados (ISS/PIS/COFINS/IRRF/CSLL/total retido)
+- Tomador (CNPJ/CPF + Nome)
+
+### Fluxo recomendado
+1) Abra `/admin/fat`
+2) **Importar**
+   - Selecione o XML do mês (pode conter várias notas)
+   - Clique **Analisar** (prévia)
+   - Clique **Importar e salvar** (persistência + dedup)
+3) **Consultar**
+   - Preencha **apenas 1 filtro** (ex.: Tomador OU Emissão de/até OU Competência YYYY-MM)
+   - Clique **Buscar**
+4) **Excluir** (avançado)
+   - Digite o número da NFS-e
+   - Clique **Verificar**
+   - Para excluir: digite **EXCLUIR** e confirme
+
+### Observações importantes
+- O campo “Competência (YYYY-MM)” é usado para facilitar fechamento por **Emissão** (mês).  
+  `dCompet` pode vir inconsistente em algumas emissões de NFS-e; por isso o fechamento é por emissão.

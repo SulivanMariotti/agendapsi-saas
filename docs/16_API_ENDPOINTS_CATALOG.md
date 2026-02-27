@@ -85,7 +85,7 @@ Sumário de constância terapêutica.
 **Auth:** admin.
 
 **Query**
-- `days`: `7|30|90`
+- `days`: `7|30|60|90` (ou outro suportado)
 - filtros opcionais:
   - `pro` / `professional` (contains, case-insensitive)
   - `service` (contains)
@@ -102,47 +102,6 @@ Sumário de constância terapêutica.
 - `trend`: `prevRate`, `recentRate`, `delta`, `label`
 - `filtersApplied`, `cohort`, `range`, `computedAt`
 - compat: `topMisses`, `startIsoDate`, `endIsoDate`
-
-### `POST /api/admin/attendance/import`
-Importa CSV de **Presença/Faltas** para a coleção `attendance_logs` (server-side via Admin SDK).  
-**Auth:** admin.
-
-**Body (JSON)**
-- `csvText` (string, obrigatório)
-- `source` (string, opcional)
-- `defaultStatus` (`present|absent`, opcional)
-- `dryRun` (boolean, opcional)
-- `reportMode` (`auto|mapped`, opcional)
-- `columnMap` (objeto, opcional; usado quando `reportMode=mapped`)
-
-**Retorno (alto nível)**
-- `dryRun=true`: retorna `wouldImport`, `skipped`, `errors`, `warnings`, `sample`, `normalizedRows`.
-- `dryRun=false`: persiste e registra em `history` como `attendance_import_summary`.
-
-### `POST /api/admin/attendance/send-followups`
-Dispara mensagens de reforço (presença) e psicoeducação (falta) com base em `attendance_logs`.  
-**Auth:** admin.
-
-**Body (JSON)**
-- `days` (number, default 30; permitido: `7|30|90`)
-- `limit` (number, default 200; max 1000)
-- `dryRun` (boolean)
-- `confirm` (string) — **obrigatório quando `dryRun=false`**: `SEND_FOLLOWUPS`
-
-**Guards (anti-envio errado)**
-- Range não pode ir para o futuro (`toIsoDate` <= hoje em UTC)
-- Janela máxima: **93 dias**
-- Prévia (`dryRun=true`) não exige `confirm`
-
-
-**Idempotência**
-- Reenvio é bloqueado quando `attendance_logs/{id}.followup.sentAt` já existe.
-
-**Bloqueios de segurança (principais)**
-- `unlinked_patient`: log sem vínculo com `users` (evita enviar para pessoa errada)
-- `ambiguous_phone`: telefone aparece em +1 cadastro
-- `phone_mismatch`: conflito entre telefone do log e do perfil
-- `no_token`: subscriber sem `pushToken`
 
 ### `POST /api/admin/appointments/sync-summary`
 Persiste metadados do último sync de agenda.  
@@ -170,48 +129,40 @@ Cancela (não apaga) sessões **futuras** geradas por sync antigo fora da janela
 
 ---
 
-### `POST /api/admin/fat-analysis/parse`
-Analisa **XML de NFS-e** (SPED NFS-e namespace) para gerar resumo por competência (mês):
-- **Valor faturado (bruto)**
-- **Valor líquido**
-- **Tributos separados** (ISS, PIS, COFINS, IRRF retido, CSLL retida, Total retido)
-- **Controle do Tomador**: CNPJ/CPF + Nome
-
-**Auth:** admin.
-
-**Entrada (multipart/form-data)**
-- Campo: `files` (1 ou mais arquivos `.xml`)
-- Aceita: 1 XML com várias notas **ou** vários XMLs.
-
-**Guards**
-- Máx. arquivos: 15
-- Máx. por arquivo: 15MB
-- Máx. total: 40MB
-
-**Resposta (alto nível)**
-- `months`: lista de competências `YYYY-MM`
-- `summaryByMonth[YYYY-MM]`: totais do mês
-- `byTomador[YYYY-MM]`: ranking por tomador (doc + nome + gross + net)
-- `notes`: lista de notas com campos normalizados
-
----
-
-### `POST /api/admin/fat-analysis/delete`
-Exclui NFS-e armazenadas no Firestore pelo **número da NFS-e** (`nNFSe`).
-
-**Auth:** admin.
-
-**Body (JSON)**
-- `number` (string): número da NFS-e (pode vir com caracteres; o backend normaliza para dígitos)
-- `competenceMonth` (string, opcional): `YYYY-MM` para restringir a exclusão
-- `dryRun` (boolean): quando `true`, apenas lista correspondências
-- `confirm` (string): obrigatório quando `dryRun=false` → deve ser `EXCLUIR`
-
-**Resposta (alto nível)**
-- `dryRun=true`: retorna `matches[]` com um resumo das notas encontradas
-- `dryRun=false`: retorna `deleted` (quantidade excluída)
-
----
-
 ## Cron (desabilitado por decisão atual)
 - Rotas `/api/cron/*` existem para futuro e estão endurecidas (header-only + rotação de secrets).
+
+---
+
+
+## ANÁLISE FAT (NFS-e) — endpoints (Admin-only)
+
+> Base: `/api/admin/fat-analysis/*`
+
+### POST `/api/admin/fat-analysis/parse`
+Parse de XML NFS-e (prévia).  
+**Body:** `FormData` com `files[]` (1+ XML).  
+**Response:** lista de notas normalizadas + resumo do período.
+
+### POST `/api/admin/fat-analysis/import`
+Importa e **salva** notas (persistência + dedup).  
+**Body:** `FormData` com `files[]`.  
+**Response:** `{ batchId, imported, duplicated, errors, summary }`
+
+### POST `/api/admin/fat-analysis/query`
+Consulta histórico armazenado.  
+**Body (JSON)** — filtros opcionais (**mínimo 1**):
+- `fromDate` (YYYY-MM-DD) e `toDate` (YYYY-MM-DD) — quando usar data, enviar ambos
+- `tomadorDoc` (string) — CNPJ/CPF (somente dígitos recomendado)
+- `competenceMonth` (YYYY-MM) — normalmente o client mapeia para intervalo de emissão do mês
+
+**Response:** `{ rows, summary, total }`
+
+### POST `/api/admin/fat-analysis/delete`
+Exclusão por número (com dry-run).  
+**Body (JSON):**
+- `nfNumber` (string|number) — obrigatório
+- `dryRun` (boolean) — default `true`
+- `confirm` (string) — para excluir: `EXCLUIR`
+
+**Response:** `{ dryRun, matched, deleted, rows }`

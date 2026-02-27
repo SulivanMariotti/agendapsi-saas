@@ -1,4 +1,4 @@
-# Onde paramos — Lembrete Psi (2026-02-25)
+# Onde paramos — Lembrete Psi (2026-02-26)
 
 ## Objetivo do sistema (norte clínico)
 O Lembrete Psi não é “agenda com disparo”. É ferramenta clínica para **sustentar vínculo e constância**.
@@ -116,24 +116,31 @@ Para refletir alterações de agenda (dia/hora/quantidade) no painel do paciente
 5. No Admin, confirmar **Na base + Push OK** antes de disparar.
 
 
----
-
-
-## Últimas entregas (2026-02-25)
-
-### Presença/Faltas — rastreabilidade por lote (batchId)
-- Import (`/api/admin/attendance/import`) passou a gerar/retornar `batchId` (tanto `dryRun` quanto commit).
-- Follow-ups (`/api/admin/attendance/send-followups`) persistem `batchId` e deixam rastro em **Histórico**.
-- UI Admin: após importar/disparar, botões **“Abrir lote no Histórico”** levam direto ao filtro por `batchId`.
-
-### Hotfixes (Admin)
-- Build error: correção de JSX inválido em `AdminAttendanceImportCard.js`.
-- Histórico: correção do erro `Cannot access 'rangeLogs' before initialization` (TDZ de `const`).
-
-### Observação importante
-- Hardening “anti-envio errado + higiene de PII” do módulo Presença/Faltas (confirmação explícita para envio real e sanitização de payloads) deve ser **revalidado no código** no próximo chat (garantir que envio real exige confirmação/flag e que logs não carregam linhas cruas/telefones completos).
-
 ## Pendências (próxima sessão)
 - Fase 2 do painel de constância (insights clínicos, sem moralismo).
 - Deduplicação/merge “assistido” (resolver duplicatas com segurança, sem risco de enviar para pessoa errada).
 - **Item B por último**: migrar `ADMIN_PASSWORD` → Firebase Auth + MFA/TOTP (ou magic link) com migração progressiva e desligamento do legado.
+
+---
+
+
+## Módulo novo: ANÁLISE FAT (NFS-e) — Admin-only ✅ (2026-02-26)
+BI operacional para fechamento mensal via XML de NFS-e.
+
+- Acesso: **`/admin/fat`** (não aparece no menu do `/admin`).
+- Importa XML (1 arquivo com múltiplas notas e/ou múltiplos XMLs).
+- Armazena em Firestore:
+  - `fat_nfse_invoices` (dedup por `invoiceId`)
+  - `fat_nfse_import_batches` (histórico por lote)
+- Consulta por:
+  - **Emissão** (de/até) ✅
+  - **Tomador (CNPJ/CPF)** ✅
+  - **Competência (YYYY-MM)** → mapeada para intervalo de **Emissão** do mês (para facilitar fechamento).
+- Resumo do período:
+  - faturado (bruto), líquido, tributos separados (ISS/PIS/COFINS/IRRF/CSLL/total retido)
+  - listagem por nota com **Tomador (Nome + CNPJ/CPF)**
+- Ações avançadas:
+  - **Excluir NFS-e por número** (com Verificar + confirmação “EXCLUIR”).
+- UX: seções Importar/Consultar/Excluir **sem “troca” de botões no topo**.
+
+Docs: ver `docs/46_ANALISE_FAT_NFSE.md`.
