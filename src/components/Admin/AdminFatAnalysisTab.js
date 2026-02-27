@@ -63,7 +63,7 @@ function monthToRange(ym) {
 }
 
 export default function AdminFatAnalysisTab({ showToast }) {
-  const [view, setView] = useState('import'); // import | history
+  const [view, setView] = useState('import'); // import | history | delete
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -77,6 +77,12 @@ export default function AdminFatAnalysisTab({ showToast }) {
   const [qFrom, setQFrom] = useState('');
   const [qTo, setQTo] = useState('');
   const [qTomadorDoc, setQTomadorDoc] = useState('');
+
+  // Delete (by NFS-e number)
+  const [delNumber, setDelNumber] = useState('');
+  const [delCompetenceMonth, setDelCompetenceMonth] = useState('');
+  const [delConfirm, setDelConfirm] = useState('');
+  const [delMatches, setDelMatches] = useState([]);
 
   const months = useMemo(() => {
     const m = result?.months || [];
@@ -108,6 +114,7 @@ export default function AdminFatAnalysisTab({ showToast }) {
     setResult(null);
     setSelectedMonth('');
     setImportMeta(null);
+    setDelMatches([]);
   };
 
   const runParse = async () => {
@@ -228,6 +235,111 @@ export default function AdminFatAnalysisTab({ showToast }) {
     }
   };
 
+  const runDeleteDryRun = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setDelMatches([]);
+
+      const number = String(delNumber || '').trim();
+      if (!number) {
+        setError('Informe o número da NFS-e para verificar/excluir.');
+        return;
+      }
+
+      const res = await adminFetch('/api/admin/fat-analysis/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          number,
+          competenceMonth: String(delCompetenceMonth || '').trim(),
+          dryRun: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) throw new Error(data?.error || 'Falha ao verificar exclusão.');
+
+      setDelMatches(Array.isArray(data?.matches) ? data.matches : []);
+      showToast?.('Verificação concluída ✅');
+    } catch (e) {
+      setError(e?.message || 'Falha ao verificar exclusão.');
+      showToast?.(e?.message || 'Falha ao verificar exclusão.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runDeleteCommit = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const number = String(delNumber || '').trim();
+      if (!number) {
+        setError('Informe o número da NFS-e para excluir.');
+        return;
+      }
+      if (String(delConfirm || '').trim() !== 'EXCLUIR') {
+        setError('Confirmação inválida. Para excluir, digite EXCLUIR.');
+        return;
+      }
+
+      const res = await adminFetch('/api/admin/fat-analysis/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          number,
+          competenceMonth: String(delCompetenceMonth || '').trim(),
+          dryRun: false,
+          confirm: 'EXCLUIR',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) throw new Error(data?.error || 'Falha ao excluir NFS-e.');
+
+      // Atualiza a lista local (se estiver mostrando um resultado de consulta/importação)
+      if (result?.notes && Array.isArray(result.notes)) {
+        const idsToRemove = new Set((delMatches || []).map((m) => String(m?.id || '')).filter(Boolean));
+        if (idsToRemove.size) {
+          const nextNotes = result.notes.filter((n) => !idsToRemove.has(String(n?.id || '')));
+          const byMonthMap = {};
+          nextNotes.forEach((n) => {
+            const m = String(n?.competenceMonth || 'unknown');
+            if (!byMonthMap[m]) byMonthMap[m] = [];
+            byMonthMap[m].push(n);
+          });
+          const nextMonths = Object.keys(byMonthMap).sort();
+          const nextSummaryByMonth = {};
+          const nextByTomador = { all: groupByTomador(nextNotes) };
+          nextMonths.forEach((m) => {
+            nextSummaryByMonth[m] = sum(byMonthMap[m]);
+            nextByTomador[m] = groupByTomador(byMonthMap[m]);
+          });
+          setResult({
+            ...result,
+            notes: nextNotes,
+            months: nextMonths,
+            summaryByMonth: nextSummaryByMonth,
+            byTomador: nextByTomador,
+            meta: { ...(result?.meta || {}), countNotes: nextNotes.length },
+          });
+          if (selectedMonth && !nextMonths.includes(selectedMonth)) {
+            setSelectedMonth(nextMonths[0] || '');
+          }
+        }
+      }
+
+      setDelConfirm('');
+      setDelMatches([]);
+      showToast?.(`Excluídas: ${Number(data?.deleted || 0)} ✅`);
+    } catch (e) {
+      setError(e?.message || 'Falha ao excluir NFS-e.');
+      showToast?.(e?.message || 'Falha ao excluir NFS-e.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const exportCSV = () => {
     const rows = filteredNotes.map((n) => ({
       emissao: n.emissionDate || '',
@@ -294,27 +406,50 @@ export default function AdminFatAnalysisTab({ showToast }) {
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-              <button
-                onClick={() => setView('import')}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  view === 'import' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Importar
-              </button>
-              <button
-                onClick={() => setView('history')}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  view === 'history' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Consultar
-              </button>
+          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <button
+              onClick={() => setView('import')}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                view === 'import' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Importar
+            </button>
+            <button
+              onClick={() => setView('history')}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                view === 'history' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Consultar
+            </button>
+            <button
+              onClick={() => setView('delete')}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                view === 'delete' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Excluir
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 text-xs text-slate-500">
+          <b>Dica:</b> use <b>Emissão</b> para fechamento mensal. Competência pode vir inconsistente dependendo do emissor.
+        </div>
+      </div>
+
+      {view === 'import' ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="text-sm font-extrabold text-slate-900">Importar XML</div>
+              <div className="text-xs text-slate-600 mt-1">
+                Selecione 1 ou mais XMLs. Você pode <b>analisar sem salvar</b> ou <b>importar e salvar</b> no histórico.
+              </div>
             </div>
 
-            {view === 'import' ? (
+            <div className="flex items-center gap-2 flex-wrap">
               <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-semibold hover:bg-slate-100 cursor-pointer">
                 <Upload size={16} className="text-violet-700" /> Selecionar XML
                 <input
@@ -325,51 +460,76 @@ export default function AdminFatAnalysisTab({ showToast }) {
                   onChange={onPickFiles}
                 />
               </label>
-            ) : null}
 
-            {view === 'import' ? (
-              <>
-                <button
-                  onClick={runParse}
-                  disabled={loading || !files || files.length === 0}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    loading || !files || files.length === 0
-                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                      : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <FileText size={16} className="text-violet-700" /> {loading ? 'Analisando…' : 'Analisar (sem salvar)'}
-                </button>
-
-                <button
-                  onClick={runImport}
-                  disabled={loading || !files || files.length === 0}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    loading || !files || files.length === 0
-                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                      : 'bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-200'
-                  }`}
-                >
-                  <FileText size={16} /> {loading ? 'Importando…' : 'Importar e salvar'}
-                </button>
-              </>
-            ) : (
               <button
-                onClick={runQuery}
-                disabled={loading}
+                onClick={runParse}
+                disabled={loading || !files || files.length === 0}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                  loading
+                  loading || !files || files.length === 0
+                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                    : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <FileText size={16} className="text-violet-700" /> {loading ? 'Analisando…' : 'Analisar (sem salvar)'}
+              </button>
+
+              <button
+                onClick={runImport}
+                disabled={loading || !files || files.length === 0}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                  loading || !files || files.length === 0
                     ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
                     : 'bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-200'
                 }`}
               >
-                <FileText size={16} /> {loading ? 'Buscando…' : 'Buscar'}
+                <FileText size={16} /> {loading ? 'Importando…' : 'Importar e salvar'}
               </button>
+            </div>
+          </div>
+
+          <div className="mt-3 text-xs text-slate-500">
+            {files?.length ? (
+              <span>
+                Selecionados: <b>{files.length}</b> arquivo(s)
+              </span>
+            ) : (
+              <span>Nenhum arquivo selecionado.</span>
             )}
           </div>
-        </div>
 
-        {view === 'history' ? (
+          {importMeta?.batchId ? (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              <div className="font-extrabold">Lote salvo</div>
+              <div className="text-xs mt-1">
+                BatchId: <b>{importMeta.batchId}</b> • Importadas: <b>{importMeta.imported}</b> • Duplicadas: <b>{importMeta.duplicated}</b> •
+                Únicas no upload: <b>{importMeta.unique}</b>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {view === 'history' ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="text-sm font-extrabold text-slate-900">Consultar histórico</div>
+              <div className="text-xs text-slate-600 mt-1">Use pelo menos um filtro (Competência ou Emissão ou Tomador).</div>
+            </div>
+
+            <button
+              onClick={runQuery}
+              disabled={loading}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                loading
+                  ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                  : 'bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-200'
+              }`}
+            >
+              <FileText size={16} /> {loading ? 'Buscando…' : 'Buscar'}
+            </button>
+          </div>
+
           <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="text-xs font-bold text-slate-700">Competência</div>
@@ -408,37 +568,133 @@ export default function AdminFatAnalysisTab({ showToast }) {
               />
             </div>
           </div>
-        ) : null}
+        </div>
+      ) : null}
 
-        {view === 'import' ? (
-          <div className="mt-4 text-xs text-slate-500">
-            {files?.length ? (
-              <span>
-                Selecionados: <b>{files.length}</b> arquivo(s)
-              </span>
-            ) : (
-              <span>Nenhum arquivo selecionado.</span>
-            )}
-          </div>
-        ) : null}
+      {view === 'delete' ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="text-sm font-extrabold text-slate-900">Excluir NFS-e (por número)</div>
+              <div className="text-xs text-slate-600 mt-1">
+                Use <b>Verificar</b> para listar as notas encontradas. Para excluir, digite <b>EXCLUIR</b>.
+              </div>
+            </div>
 
-        {importMeta?.batchId ? (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-            <div className="font-extrabold">Lote salvo</div>
-            <div className="text-xs mt-1">
-              BatchId: <b>{importMeta.batchId}</b> • Importadas: <b>{importMeta.imported}</b> • Duplicadas: <b>{importMeta.duplicated}</b> •
-              Únicas no upload: <b>{importMeta.unique}</b>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={runDeleteDryRun}
+                disabled={loading}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                  loading
+                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                    : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <AlertTriangle size={16} className="text-amber-600" /> {loading ? 'Verificando…' : 'Verificar'}
+              </button>
+
+              <button
+                onClick={runDeleteCommit}
+                disabled={loading}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                  loading
+                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                    : 'bg-rose-600 text-white hover:bg-rose-700 shadow-lg shadow-rose-200'
+                }`}
+              >
+                <AlertTriangle size={16} /> {loading ? 'Excluindo…' : 'Excluir'}
+              </button>
             </div>
           </div>
-        ) : null}
 
-        {error ? (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex gap-2 items-start">
-            <AlertTriangle className="w-4 h-4 mt-0.5" />
-            <div className="min-w-0">{safeText(error, 400)}</div>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-bold text-slate-700">Número da NFS-e</div>
+              <input
+                value={delNumber}
+                onChange={(e) => setDelNumber(e.target.value)}
+                placeholder="ex.: 47632"
+                className="mt-1 w-full text-sm rounded-xl border border-slate-200 bg-white px-3 py-2"
+              />
+              <div className="text-[11px] text-slate-500 mt-1">Pode colar com caracteres; o sistema normaliza.</div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-bold text-slate-700">Competência (opcional)</div>
+              <input
+                value={delCompetenceMonth}
+                onChange={(e) => setDelCompetenceMonth(e.target.value)}
+                placeholder="YYYY-MM"
+                className="mt-1 w-full text-sm rounded-xl border border-slate-200 bg-white px-3 py-2"
+              />
+              <div className="text-[11px] text-slate-500 mt-1">Use se houver risco de número repetir em outro mês.</div>
+            </div>
+
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+              <div className="text-xs font-bold text-rose-800">Confirmação (obrigatória)</div>
+              <input
+                value={delConfirm}
+                onChange={(e) => setDelConfirm(e.target.value)}
+                placeholder="Digite EXCLUIR"
+                className="mt-1 w-full text-sm rounded-xl border border-rose-200 bg-white px-3 py-2"
+              />
+              <div className="text-[11px] text-rose-700 mt-1">
+                Excluir é irreversível. Sempre clique <b>Verificar</b> antes.
+              </div>
+            </div>
           </div>
-        ) : null}
-      </div>
+
+          <div className="mt-5">
+            {Array.isArray(delMatches) && delMatches.length ? (
+              <div className="space-y-2">
+                <div className="text-xs text-slate-600">
+                  Encontradas: <b>{delMatches.length}</b>
+                </div>
+
+                <div className="overflow-auto">
+                  <table className="min-w-[820px] w-full text-sm">
+                    <thead>
+                      <tr className="text-xs text-slate-600 border-b border-slate-200">
+                        <th className="text-left py-2 pr-3">NFS-e</th>
+                        <th className="text-left py-2 pr-3">Competência</th>
+                        <th className="text-left py-2 pr-3">Emissão</th>
+                        <th className="text-left py-2 pr-3">Tomador</th>
+                        <th className="text-left py-2 pr-3">CNPJ/CPF</th>
+                        <th className="text-right py-2 pl-3">Bruto</th>
+                        <th className="text-right py-2 pl-3">Líquido</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {delMatches.map((m, idx) => (
+                        <tr key={m.id || idx} className="border-b border-slate-100">
+                          <td className="py-2 pr-3 font-semibold text-slate-900">{m.nNFSe || '-'}</td>
+                          <td className="py-2 pr-3 text-slate-700">{m.competenceMonth || '-'}</td>
+                          <td className="py-2 pr-3 text-slate-700">{m.issueAt || '-'}</td>
+                          <td className="py-2 pr-3 text-slate-700">{safeText(m.tomadorName || '-', 60)}</td>
+                          <td className="py-2 pr-3 text-slate-700">{m.tomadorDoc || '-'}</td>
+                          <td className="py-2 pl-3 text-right text-slate-900">{moneyBRL(m.gross || 0)}</td>
+                          <td className="py-2 pl-3 text-right text-slate-900">{moneyBRL(m.net || 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-slate-500">Nenhuma nota listada. Informe o número e clique em Verificar.</div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex gap-2 items-start">
+          <AlertTriangle className="w-4 h-4 mt-0.5" />
+          <div className="min-w-0">{safeText(error, 400)}</div>
+        </div>
+      ) : null}
+
 
       {result ? (
         <>
