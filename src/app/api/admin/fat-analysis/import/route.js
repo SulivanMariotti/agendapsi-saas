@@ -82,6 +82,8 @@ function mapNoteToDoc(n, batchId) {
     csll: Number(n?.csll || 0),
     totalRet: Number(n?.totalRet || 0),
 
+    calcV: 2,
+
     totTribFed: Number(n?.totTribFed || 0),
     totTribEst: Number(n?.totTribEst || 0),
     totTribMun: Number(n?.totTribMun || 0),

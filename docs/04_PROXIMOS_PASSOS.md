@@ -1,4 +1,4 @@
-# Próximos passos — checklist rápido (atualizado em 2026-02-26)
+# Próximos passos — checklist rápido (atualizado em 2026-02-27)
 
 ## A) Produção (essencial) ✅
 - [x] Confirmar `config/global` com mensagens (msg1/msg2/msg3) e títulos (incluindo follow-ups presença/falta).
@@ -14,7 +14,7 @@
 ## C) Auditoria (batchId)
 - [x] Gerar `batchId` por execução (Admin Send / Cron / Follow-ups) e persistir em `history` + `audit_logs`.
 - [x] Histórico com filtro por `batchId` + resumo do lote.
-- [ ] **F3 (amanhã):** Dashboard com card “Últimos lotes (batchId)” + link para Histórico já filtrado.
+- [x] **F3:** Dashboard com card “Últimos lotes (batchId)” + link para Histórico já filtrado.
 
 ## D) Hardening contínuo (pós-v1)
 - [x] Schema-lite “body vazio” em rotas sem payload + `showKeys` quiet em produção.
@@ -33,7 +33,9 @@
 - [x] Persistência + dedup:
   - `fat_nfse_invoices`
   - `fat_nfse_import_batches`
-- [x] Consulta por Emissão (de/até) e Tomador; “Competência (YYYY-MM)” mapeada para Emissão do mês.
+- [x] Consulta por Emissão (de/até), Tomador, **Número**; “Competência (YYYY-MM)” mapeada para Emissão do mês.
+- [x] Export **XLS** do resultado + botão **Limpar filtros**.
+- [x] Regra Itaqua: PIS/COFINS entram no retido e abatimento do líquido (compat na consulta + `calcV=2` nos novos imports).
 - [x] Exclusão por número (Verificar + confirmação “EXCLUIR”).
 - [ ] Melhorias futuras (quando estabilizar):
   - Paginação na consulta + ranking por Tomador (top N) no histórico.

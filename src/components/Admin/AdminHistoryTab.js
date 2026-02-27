@@ -197,6 +197,16 @@ export default function AdminHistoryTab({ historyLogs = [], historyJump = null }
     } catch (_) {
       // ignore
     }
+
+    // Foco no filtro de lote para tornar a auditoria mais “1 olhar e pronto”
+    try {
+      setTimeout(() => {
+        const el = document.getElementById('history-batch-filter');
+        if (el && typeof el.focus === 'function') el.focus();
+      }, 50);
+    } catch (_) {
+      // ignore
+    }
   }, [historyJump?.ts]);
 
   const rangeStartMs = useMemo(() => {
@@ -663,6 +673,7 @@ export default function AdminHistoryTab({ historyLogs = [], historyJump = null }
                   <Hash size={12} className="text-slate-400" /> Lote
                 </span>
                 <select
+                  id="history-batch-filter"
                   value={batchFilter}
                   onChange={(e) => setBatchFilter(e.target.value)}
                   className="px-3 py-1.5 rounded-xl text-[11px] font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"

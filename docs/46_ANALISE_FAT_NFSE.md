@@ -1,4 +1,4 @@
-# ANÁLISE FAT (XML de NFS-e) — Admin-only (2026-02-26)
+# ANÁLISE FAT (XML de NFS-e) — Admin-only (2026-02-27)
 
 ## Propósito
 Módulo interno (BI operacional) para **importar, armazenar e analisar NFS-e** por período, com foco em fechamento mensal.
@@ -20,13 +20,28 @@ Campos principais (varia por provedor, então há fallbacks):
 - **Tomador**: `infDPS/toma/(CNPJ|CPF)` e `infDPS/toma/xNome`
 - **Valores**:
   - **Bruto (faturado)**: `.../vServPrest/vServ` (quando existir) ou fallback `infNFSe/valores/vBC`
-  - **Líquido**: `infNFSe/valores/vLiq`
-  - **Retenções**: `infNFSe/valores/vTotalRet`
+  - **Líquido (fechamento)**: `infNFSe/valores/vLiq` *(ajustado: deduz PIS/COFINS quando aplicável)*
+  - **Retenções (fechamento)**: `infNFSe/valores/vTotalRet` *(ajustado: soma PIS/COFINS)*
 - **Tributos (separados)** (quando presentes):
   - **ISS**: `infNFSe/valores/vISSQN`
   - **PIS/COFINS**: `.../tribFed/piscofins/(vPis|vCofins)`
   - **IRRF/CSLL**: `.../(vRetIRRF|vRetCSLL)`
   - Totais: `.../totTrib/vTotTrib/(vTotTribFed|vTotTribEst|vTotTribMun)`
+
+
+## Regra Itaquaquecetuba — PIS/COFINS entram no “retido” e abatimento do líquido
+Para **fechamento** em Itaquaquecetuba, consideramos **PIS e COFINS como valores a deduzir do líquido**, mesmo quando o XML **não marca** esses campos como “retidos”.
+
+O sistema aplica (quando `vPis`/`vCofins` existirem):
+- `totalRet_fechamento = vTotalRet + vPis + vCofins`
+- `liquido_fechamento = vLiq - vPis - vCofins`
+
+> Proteção anti “abatimento duplo”: se o provedor já trouxer `vLiq` com PIS/COFINS abatidos, o parser **não** abate novamente.
+
+Compatibilidade:
+- Notas importadas **antes** desta regra podem estar salvas com `liquido/totalRet` antigos. A consulta aplica a regra **em memória** quando `calcV` estiver ausente/antigo.
+- Para persistir o novo cálculo no histórico, reimporte a NF (dedup impedirá duplicar) ou implemente um recalculador por `batchId` no futuro.
+
 
 ## Persistência (Firestore)
 Collections (admin-only):
@@ -38,6 +53,7 @@ Collections (admin-only):
     - `tomador`: `{ doc, name, type }`
     - `emitente`: `{ doc, name }`
     - `values`: `{ bruto, liquido, iss, pis, cofins, irrf, csll, totalRet }`
+    - `calcV`: versão do cálculo de fechamento (ex.: `2` para regra Itaqua com PIS/COFINS abatidos).
     - `source`: `{ fileName, importedAt, batchId }`
 - `fat_nfse_import_batches/{batchId}`
   - Metadados do upload: período, contagens, duplicadas, erros, usuário admin, timestamps.
@@ -61,6 +77,12 @@ Filtros opcionais:
 - **Competência (YYYY-MM)** → mapeado internamente para intervalo de **Emissão** do mês (do dia 01 ao último dia)
 - **Emissão (de/até)** (ambos necessários quando usar este filtro)
 - **Tomador (CNPJ/CPF)**
+- **Número da NFS-e**
+
+Ações:
+- **Buscar**
+- **Limpar filtros**
+- **Baixar XLS** (exporta exatamente o resultado exibido na tela)
 
 > Regra: **basta 1 filtro**. Se tudo estiver em branco, a consulta é bloqueada (evita varrer o banco).
 

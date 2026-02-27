@@ -151,9 +151,18 @@ function parseNFSe(nfseXml, idx = 0) {
 
   const gross = toNumber(vServ || vBC);
 
-  const net = infValores ? toNumber(pickFirst(infValores, /<vLiq>([^<]+)<\/vLiq>/i)) : 0;
+  // Valores base (como vieram no XML)
+  const vLiqStr = infValores ? pickFirst(infValores, /<vLiq>([^<]+)<\/vLiq>/i) : '';
+  const totalRetRaw = infValores ? toNumber(pickFirst(infValores, /<vTotalRet>([^<]+)<\/vTotalRet>/i)) : 0;
+
+  // Se vLiq não existir, faz fallback para gross - vTotalRet
+  const netXml = vLiqStr ? toNumber(vLiqStr) : (gross ? gross - totalRetRaw : 0);
+
   const iss = infValores ? toNumber(pickFirst(infValores, /<vISSQN>([^<]+)<\/vISSQN>/i)) : 0;
-  const totalRet = infValores ? toNumber(pickFirst(infValores, /<vTotalRet>([^<]+)<\/vTotalRet>/i)) : 0;
+
+  // net/totalRet podem ser ajustados após leitura de PIS/COFINS (regra Itaquaquecetuba)
+  let net = netXml;
+  let totalRet = totalRetRaw;
 
   // Totais de tributos (quando presentes)
   const totTribBlock = pickFirst(xml, /<totTrib>[\s\S]*?<vTotTrib>([\s\S]*?)<\/vTotTrib>/i);
@@ -170,6 +179,27 @@ function parseNFSe(nfseXml, idx = 0) {
 
   const irrf = tribFedBlock ? toNumber(pickFirst(tribFedBlock, /<vRetIRRF>([^<]+)<\/vRetIRRF>/i)) : 0;
   const csll = tribFedBlock ? toNumber(pickFirst(tribFedBlock, /<vRetCSLL>([^<]+)<\/vRetCSLL>/i)) : 0;
+
+  // --- Regra (Itaquaquecetuba): considerar PIS/COFINS como retidos no fechamento ---
+  // Mesmo que o XML não marque como "retido", o município orienta abater do líquido.
+  // Ajustes:
+  // - totalRet := vTotalRet + (vPis + vCofins)
+  // - net := netXml - (vPis + vCofins) *apenas se o provedor não tiver abatido isso no vLiq*
+  const pisCofins = Number(pis || 0) + Number(cofins || 0);
+  if (pisCofins > 0) {
+    const tol = 0.02; // tolerância de centavos para comparar gross - net
+    const diff = gross ? (gross - netXml) : 0;
+
+    totalRet = totalRetRaw + pisCofins;
+
+    // Se gross - netXml ainda não cobre o novo totalRet, então vLiq não abateu PIS/COFINS.
+    if (!gross || diff + tol < totalRet) {
+      net = netXml - pisCofins;
+      if (net < 0) net = 0;
+    } else {
+      net = netXml;
+    }
+  }
 
   const { competenceDate, competenceMonth } = competenceFromAny(xml);
   const { emissionIso, emissionDate, emissionMonth } = emissionFromAny(xml);

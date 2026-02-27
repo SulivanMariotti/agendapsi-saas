@@ -1,4 +1,4 @@
-# Prompt para iniciar novo chat — Lembrete Psi (2026-02-26)
+# Prompt para iniciar novo chat — Lembrete Psi (2026-02-27)
 
 Você é um dev master full stack + olhar clínico para o projeto **Lembrete Psi** (Next.js App Router + Firebase).
 
@@ -26,11 +26,11 @@ B) Admin Auth forte (≥9/10) **deixar por último**
 C) Presença/Faltas ✅ ingestão 2ª planilha + métricas + follow-ups ok; fase 2 clínica ainda pendente
 D) Hardening ✅ (schema-lite body vazio + showKeys quiet em prod); ainda falta expandir para “todas as rotas” se houver gaps
 E) Dados ✅ documentação + ferramentas; ainda falta merge/dedup assistido
-F) Auditoria batchId ✅ parcial (F1/F2 ok) — **F3 ficou para amanhã**
+F) Auditoria batchId ✅ concluído (F1/F2/F3 ok)
 G) Futuro: multi-tenant/OTP paciente etc (só depois)
 
 ## Próximo passo recomendado (começar por aqui no novo chat)
-**Item F — Passo F3**: adicionar no Dashboard o card “Últimos lotes (batchId)” + link que abre Histórico já filtrado por `batchId`.
+**Próximo passo recomendado**: Presença/Faltas — **fase 2 (clínico)** (insights de vínculo/constância, sem moralismo) OU Dedup/Merge assistido (segurança de envio).
 
 
 ## ANÁLISE FAT (NFS-e) — Admin-only (BI operacional)
@@ -42,8 +42,10 @@ G) Futuro: multi-tenant/OTP paciente etc (só depois)
   - `fat_nfse_invoices` (1 doc por NF; evita duplicar import)
   - `fat_nfse_import_batches` (histórico do upload)
 - Consulta:
-  - por **Emissão (de/até)** e **Tomador**
+  - por **Emissão (de/até)**, **Tomador** e **Número da NFS-e**
   - campo **Competência (YYYY-MM)** mapeia para intervalo de **Emissão** do mês (fechamento).
+  - botão **Baixar XLS** do resultado + **Limpar filtros**.
+- Regra Itaqua: **PIS/COFINS entram no retido e são abatidos do líquido** (compat na consulta; imports novos salvam `calcV=2`).
 - Exclusão:
   - Excluir NFS-e por **número**, com **Verificar** + confirmação “EXCLUIR”.
 

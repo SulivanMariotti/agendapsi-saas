@@ -46,6 +46,78 @@ function toCSV(rows, headers) {
   return head + '\n' + body + (body ? '\n' : '');
 }
 
+function toTSV(rows, headers) {
+  const clean = (v) => String(v ?? '').replace(/[\t\n\r]+/g, ' ').trim();
+  const head = headers.map((h) => clean(h.label)).join('\t');
+  const body = rows
+    .map((r) => headers.map((h) => clean(r[h.key])).join('\t'))
+    .join('\n');
+  return head + '\n' + body + (body ? '\n' : '');
+}
+
+function toSpreadsheetML(rows, headers, sheetName = 'Notas') {
+  const xmlEsc = (v) =>
+    String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+
+  // Colunas numéricas (para o Excel abrir como número, não texto)
+  const NUM_KEYS = new Set([
+    'bruto',
+    'liquido',
+    'iss',
+    'pis',
+    'cofins',
+    'irrf',
+    'csll',
+    'totalRet',
+    'totTribFed',
+    'totTribEst',
+    'totTribMun',
+  ]);
+
+  const cell = (key, value) => {
+    if (NUM_KEYS.has(key)) {
+      const n = Number(String(value ?? '').replace(',', '.'));
+      const out = Number.isFinite(n) ? String(n) : '0';
+      return `<Cell><Data ss:Type="Number">${out}</Data></Cell>`;
+    }
+    return `<Cell><Data ss:Type="String">${xmlEsc(value)}</Data></Cell>`;
+  };
+
+  const headerRow =
+    '<Row>' +
+    headers.map((h) => `<Cell><Data ss:Type="String">${xmlEsc(h.label)}</Data></Cell>`).join('') +
+    '</Row>';
+
+  const rowsXml = rows
+    .map((r) => '<Row>' + headers.map((h) => cell(h.key, r[h.key])).join('') + '</Row>')
+    .join('');
+
+  // Excel limita o nome da planilha a 31 caracteres
+  const safeName = String(sheetName || 'Notas').slice(0, 31);
+
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<?mso-application progid="Excel.Sheet"?>\n` +
+    `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n` +
+    ` xmlns:o="urn:schemas-microsoft-com:office:office"\n` +
+    ` xmlns:x="urn:schemas-microsoft-com:office:excel"\n` +
+    ` xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\n` +
+    ` xmlns:html="http://www.w3.org/TR/REC-html40">\n` +
+    `<Worksheet ss:Name="${xmlEsc(safeName)}">\n` +
+    `<Table>\n` +
+    headerRow +
+    `\n` +
+    rowsXml +
+    `\n</Table>\n</Worksheet>\n</Workbook>\n`
+  );
+}
+
+
 function monthToRange(ym) {
   // ym: YYYY-MM
   const s = String(ym || '').trim();
@@ -77,6 +149,7 @@ export default function AdminFatAnalysisTab({ showToast }) {
   const [qFrom, setQFrom] = useState('');
   const [qTo, setQTo] = useState('');
   const [qTomadorDoc, setQTomadorDoc] = useState('');
+  const [qNumber, setQNumber] = useState('');
 
   // Delete (by NFS-e number)
   const [delNumber, setDelNumber] = useState('');
@@ -216,6 +289,7 @@ export default function AdminFatAnalysisTab({ showToast }) {
       if (from) qs.set('from', from);
       if (to) qs.set('to', to);
       if (qTomadorDoc) qs.set('tomadorDoc', qTomadorDoc);
+      if (qNumber) qs.set('number', qNumber);
       qs.set('limit', '2500');
 
       const res = await adminFetch(`/api/admin/fat-analysis/query?${qs.toString()}`, { method: 'GET' });
@@ -234,6 +308,16 @@ export default function AdminFatAnalysisTab({ showToast }) {
       setLoading(false);
     }
   };
+
+  const clearQueryFilters = () => {
+    setQCompetenceMonth('');
+    setQFrom('');
+    setQTo('');
+    setQTomadorDoc('');
+    setQNumber('');
+    setError(null);
+  };
+
 
   const runDeleteDryRun = async () => {
     try {
@@ -394,6 +478,63 @@ export default function AdminFatAnalysisTab({ showToast }) {
     downloadTextFile(`analise_fat${suffix}.csv`, csv, 'text/csv;charset=utf-8');
   };
 
+  const exportXLS = () => {
+    // XLS real (SpreadsheetML 2003). Evita abrir “tudo em 1 coluna” no Excel.
+    const rows = filteredNotes.map((n) => ({
+      emissao: n.emissionDate || '',
+      competencia: n.competenceMonth || '',
+      competenciaData: n.competenceDate || '',
+      nNFSe: n.nNFSe || '',
+      serie: n.serie || '',
+      nDPS: n.nDPS || '',
+      emitCNPJ: n.emitCNPJ || '',
+      emitNome: n.emitName || '',
+      tomadorNome: n.tomadorName || '',
+      tomadorDoc: n.tomadorDoc || '',
+      bruto: Number(n.gross || 0).toFixed(2),
+      liquido: Number(n.net || 0).toFixed(2),
+      iss: Number(n.iss || 0).toFixed(2),
+      pis: Number(n.pis || 0).toFixed(2),
+      cofins: Number(n.cofins || 0).toFixed(2),
+      irrf: Number(n.irrf || 0).toFixed(2),
+      csll: Number(n.csll || 0).toFixed(2),
+      totalRet: Number(n.totalRet || 0).toFixed(2),
+      totTribFed: Number(n.totTribFed || 0).toFixed(2),
+      totTribEst: Number(n.totTribEst || 0).toFixed(2),
+      totTribMun: Number(n.totTribMun || 0).toFixed(2),
+    }));
+
+    const headers = [
+      { key: 'emissao', label: 'Emissão (YYYY-MM-DD)' },
+      { key: 'competencia', label: 'Competência (YYYY-MM)' },
+      { key: 'competenciaData', label: 'Competência (data)' },
+      { key: 'nNFSe', label: 'Nº NFS-e' },
+      { key: 'serie', label: 'Série (DPS)' },
+      { key: 'nDPS', label: 'Nº DPS' },
+      { key: 'emitCNPJ', label: 'Emitente (CNPJ)' },
+      { key: 'emitNome', label: 'Emitente (Nome)' },
+      { key: 'tomadorNome', label: 'Tomador (Nome)' },
+      { key: 'tomadorDoc', label: 'Tomador (CNPJ/CPF)' },
+      { key: 'bruto', label: 'Valor Faturado (Bruto)' },
+      { key: 'liquido', label: 'Valor Líquido' },
+      { key: 'iss', label: 'ISS' },
+      { key: 'pis', label: 'PIS' },
+      { key: 'cofins', label: 'COFINS' },
+      { key: 'irrf', label: 'IRRF' },
+      { key: 'csll', label: 'CSLL' },
+      { key: 'totalRet', label: 'Total Retido' },
+      { key: 'totTribFed', label: 'Tributos Federais (Total)' },
+      { key: 'totTribEst', label: 'Tributos Estaduais (Total)' },
+      { key: 'totTribMun', label: 'Tributos Municipais (Total)' },
+    ];
+
+    const sheetName = selectedMonth ? `FAT ${selectedMonth}` : 'FAT';
+    const xml = toSpreadsheetML(rows, headers, sheetName);
+    const suffix = selectedMonth ? `_${selectedMonth}` : '';
+    // BOM ajuda Excel a reconhecer UTF-8 (acentos)
+    downloadTextFile(`analise_fat${suffix}.xls`, '\ufeff' + xml, 'application/vnd.ms-excel;charset=utf-8');
+  };
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -518,6 +659,14 @@ export default function AdminFatAnalysisTab({ showToast }) {
             </div>
 
             <button
+              onClick={clearQueryFilters}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
+            >
+              Limpar filtros
+            </button>
+
+            <button
               onClick={runQuery}
               disabled={loading}
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
@@ -530,7 +679,7 @@ export default function AdminFatAnalysisTab({ showToast }) {
             </button>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-5 gap-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="text-xs font-bold text-slate-700">Competência</div>
               <input
@@ -566,6 +715,17 @@ export default function AdminFatAnalysisTab({ showToast }) {
                 placeholder="somente números"
                 className="mt-1 w-full text-sm rounded-xl border border-slate-200 bg-white px-3 py-2"
               />
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-bold text-slate-700">NFS-e (número)</div>
+              <input
+                value={qNumber}
+                onChange={(e) => setQNumber(e.target.value)}
+                placeholder="ex.: 631"
+                className="mt-1 w-full text-sm rounded-xl border border-slate-200 bg-white px-3 py-2"
+              />
+              <div className="text-[11px] text-slate-500 mt-1">Busca exata pelo número informado.</div>
             </div>
           </div>
         </div>
@@ -726,6 +886,13 @@ export default function AdminFatAnalysisTab({ showToast }) {
                 >
                   <Download size={16} className="text-violet-700" /> Baixar CSV
                 </button>
+
+                <button
+                  onClick={exportXLS}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 shadow-lg shadow-violet-200"
+                >
+                  <Download size={16} /> Baixar XLS
+                </button>
               </div>
             </div>
 
@@ -776,7 +943,7 @@ export default function AdminFatAnalysisTab({ showToast }) {
               </div>
 
               <div className="mt-4 overflow-auto">
-                <table className="min-w-[980px] w-full text-sm">
+                <table className="min-w-[980px] w-full text-xs">
                   <thead>
                     <tr className="text-xs text-slate-600 border-b border-slate-200">
                       <th className="text-left py-2 pr-3">NFS-e</th>

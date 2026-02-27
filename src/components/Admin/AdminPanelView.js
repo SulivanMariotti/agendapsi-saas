@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { db } from '../../app/firebase';
 import { doc, setDoc } from 'firebase/firestore';
@@ -40,12 +40,12 @@ export default function AdminPanelView({
 
   // Jump para Histórico filtrado por batchId (evita caça manual no histórico)
   const [historyJump, setHistoryJump] = useState(null);
-  const openHistoryBatch = (batchId) => {
+  const openHistoryBatch = useCallback((batchId) => {
     const bid = String(batchId || '').trim();
     if (!bid) return;
     setHistoryJump({ batchId: bid, ts: Date.now() });
     setAdminTab('history');
-  };
+  }, []);
 
   // Manual de Uso: jump/atalho contextual (Agenda / Presença/Faltas)
   const [manualJump, setManualJump] = useState(null);

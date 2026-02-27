@@ -1,4 +1,15 @@
-# Changelog — Lembrete Psi (até 2026-02-19)
+# Changelog — Lembrete Psi (até 2026-02-27)## 2026-02-27 — Auditoria por lote (F3) + ANÁLISE FAT (ajustes Itaqua)
+
+- **F3 concluído:** Dashboard do Admin com card “Últimos lotes (batchId)” + link para abrir Histórico já filtrado.
+- **ANÁLISE FAT (/admin/fat):**
+  - Regra Itaqua: **PIS/COFINS entram no retido e são abatidos do líquido**.
+  - Compat: consulta recalcula em memória para notas antigas; novos imports salvam `calcV=2`.
+  - Consulta: filtro por **número da NFS-e**, botão **Baixar XLS** (colunas no Excel) e **Limpar filtros**.
+  - UI: fonte da tabela “Notas do mês” levemente menor.
+
+---
+
+
 
 ## Até 2026-02-16 (resumo)
 - Follow-ups de constância (presença/falta) com idempotência.

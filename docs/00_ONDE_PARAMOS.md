@@ -1,4 +1,4 @@
-# Onde paramos — Lembrete Psi (2026-02-26)
+# Onde paramos — Lembrete Psi (2026-02-27)
 
 ## Objetivo do sistema (norte clínico)
 O Lembrete Psi não é “agenda com disparo”. É ferramenta clínica para **sustentar vínculo e constância**.
@@ -144,3 +144,11 @@ BI operacional para fechamento mensal via XML de NFS-e.
 - UX: seções Importar/Consultar/Excluir **sem “troca” de botões no topo**.
 
 Docs: ver `docs/46_ANALISE_FAT_NFSE.md`.
+
+Atualizações (2026-02-27):
+- Regra Itaquaquecetuba aplicada no fechamento: **PIS/COFINS entram no retido e são abatidos do líquido**.
+- Compatibilidade: notas importadas antes da regra são **corrigidas na consulta** (recalcula em memória), e imports novos salvam `calcV=2`.
+- Consulta ganhou filtro por **número da NFS-e**.
+- Consulta ganhou **Baixar XLS** (exporta exatamente o resultado exibido, com colunas no Excel) + botão **Limpar filtros**.
+- Tabela “Notas do mês”: fonte levemente menor (≈ -2px) para caber melhor.
+
