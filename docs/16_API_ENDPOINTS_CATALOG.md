@@ -170,5 +170,48 @@ Cancela (não apaga) sessões **futuras** geradas por sync antigo fora da janela
 
 ---
 
+### `POST /api/admin/fat-analysis/parse`
+Analisa **XML de NFS-e** (SPED NFS-e namespace) para gerar resumo por competência (mês):
+- **Valor faturado (bruto)**
+- **Valor líquido**
+- **Tributos separados** (ISS, PIS, COFINS, IRRF retido, CSLL retida, Total retido)
+- **Controle do Tomador**: CNPJ/CPF + Nome
+
+**Auth:** admin.
+
+**Entrada (multipart/form-data)**
+- Campo: `files` (1 ou mais arquivos `.xml`)
+- Aceita: 1 XML com várias notas **ou** vários XMLs.
+
+**Guards**
+- Máx. arquivos: 15
+- Máx. por arquivo: 15MB
+- Máx. total: 40MB
+
+**Resposta (alto nível)**
+- `months`: lista de competências `YYYY-MM`
+- `summaryByMonth[YYYY-MM]`: totais do mês
+- `byTomador[YYYY-MM]`: ranking por tomador (doc + nome + gross + net)
+- `notes`: lista de notas com campos normalizados
+
+---
+
+### `POST /api/admin/fat-analysis/delete`
+Exclui NFS-e armazenadas no Firestore pelo **número da NFS-e** (`nNFSe`).
+
+**Auth:** admin.
+
+**Body (JSON)**
+- `number` (string): número da NFS-e (pode vir com caracteres; o backend normaliza para dígitos)
+- `competenceMonth` (string, opcional): `YYYY-MM` para restringir a exclusão
+- `dryRun` (boolean): quando `true`, apenas lista correspondências
+- `confirm` (string): obrigatório quando `dryRun=false` → deve ser `EXCLUIR`
+
+**Resposta (alto nível)**
+- `dryRun=true`: retorna `matches[]` com um resumo das notas encontradas
+- `dryRun=false`: retorna `deleted` (quantidade excluída)
+
+---
+
 ## Cron (desabilitado por decisão atual)
 - Rotas `/api/cron/*` existem para futuro e estão endurecidas (header-only + rotação de secrets).

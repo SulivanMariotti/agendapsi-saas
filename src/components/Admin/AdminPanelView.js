@@ -10,6 +10,7 @@ import {
   Settings,
   History,
   ShieldCheck,
+  BarChart3,
   BookOpen,
   FileText,
   LogOut,
@@ -24,6 +25,7 @@ import AdminScheduleTab from './AdminScheduleTab';
 import AdminConfigTab from './AdminConfigTab';
 import AdminManualTab from './AdminManualTab';
 import AdminLibraryTab from './AdminLibraryTab';
+import AdminFatAnalysisTab from './AdminFatAnalysisTab';
 
 export default function AdminPanelView({
   onLogout,
@@ -32,8 +34,9 @@ export default function AdminPanelView({
   dbAppointments,
   showToast,
   globalConfig,
+  initialTab,
 }) {
-  const [adminTab, setAdminTab] = useState('dashboard');
+  const [adminTab, setAdminTab] = useState(initialTab || 'dashboard');
 
   // Jump para Histórico filtrado por batchId (evita caça manual no histórico)
   const [historyJump, setHistoryJump] = useState(null);
@@ -745,6 +748,10 @@ export default function AdminPanelView({
             showToast={showToast}
             onGoToHistoryBatch={openHistoryBatch}
           />
+        )}
+
+        {adminTab === 'fat' && (
+          <AdminFatAnalysisTab showToast={showToast} />
         )}
 
         {adminTab === 'users' && <AdminPatientsTab subscribers={subscribers} showToast={showToast} globalConfig={globalConfig} />}

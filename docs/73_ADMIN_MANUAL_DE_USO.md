@@ -109,7 +109,44 @@ Se algo bloquear o lembrete, trate como risco de constância:
 
 ---
 
-## 7) Links úteis
+## 7) ANÁLISE FAT — XML de NFS-e (faturamento/tributos)
+Finalidade: auditoria administrativa mensal (não aparece no paciente).
+
+### 7.1 Passo a passo
+1. Acesse diretamente: **`/admin/fat`** (menu não aparece no `/admin` por decisão de UX).
+2. Clique **Selecionar XML**
+   - pode enviar **1 arquivo** com várias notas do mês
+   - ou **vários arquivos** (um por nota)
+3. Clique **Analisar**
+4. No topo, escolha a **Competência (YYYY-MM)**
+5. Confira os cards:
+   - **Valor faturado (bruto)**
+   - **Valor líquido**
+   - **ISS, PIS, COFINS, IRRF, CSLL, Total retido**
+6. Controle do tomador (para quem a nota foi emitida):
+   - coluna **Tomador** + **CNPJ/CPF**
+   - card lateral **Top Tomadores**
+7. Se precisar, clique **Baixar CSV**
+
+### 7.2 Exclusão de NFS-e (por número)
+Se uma nota foi importada indevidamente (ex.: teste/duplicidade), é possível excluir pelo **número da NFS-e**.
+
+1. Acesse `/admin/fat`
+2. Na seção **Excluir NFS-e (por número)**:
+   - informe o **número da NFS-e**
+   - (opcional) preencha **Competência (YYYY-MM)** para restringir o alvo
+3. Clique **Verificar** para listar as correspondências
+4. Digite **EXCLUIR** no campo de confirmação
+5. Clique **Excluir**
+
+> Ação irreversível. Use apenas para correções administrativas.
+
+### 7.3 Observação importante
+Este módulo lê o layout **NFS-e** (SPED NFS-e namespace). NF-e (modelo 55) é outro XML/layout.
+
+---
+
+## 8) Links úteis
 - Runbook operacional: `docs/27_OPERATIONS_RUNBOOK.md`
 - Checklist 1 página: `docs/27A_DAILY_CHECKLIST_ONEPAGER.md`
 - Template de registro: `docs/27B_DAILY_LOG_TEMPLATE.md`

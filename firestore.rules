@@ -99,6 +99,17 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ========= FAT (ANÁLISE FAT / NFS-e) =========
+    // Armazenamento administrativo de NFS-e importadas (para análises futuras).
+    // Não aparece no painel do paciente.
+    match /fat_nfse_invoices/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /fat_nfse_import_batches/{id} {
+      allow read, write: if isAdmin();
+    }
+
     // ========= ADMINS =========
     match /admins/{id} {
       allow read: if isAdmin();
