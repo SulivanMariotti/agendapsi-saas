@@ -13,11 +13,23 @@
  * - admin.firestore().collection(...)
  * - admin.firestore.FieldValue.serverTimestamp()
  * - admin.messaging().send(...)
+ *
+ * AgendaPsi note:
+ * - Supports SERVICE_ACCOUNT_JSON_PATH (local dev) in addition to the env JSON/B64.
  */
+import fs from "node:fs";
+import path from "node:path";
+
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
+
+function readJsonFile(p) {
+  const abs = path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
+  const raw = fs.readFileSync(abs, "utf-8");
+  return JSON.parse(raw);
+}
 
 function getServiceAccount() {
   const b64 = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_B64;
@@ -27,11 +39,16 @@ function getServiceAccount() {
   }
 
   const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
-  if (!raw) {
-    throw new Error("Missing FIREBASE_ADMIN_SERVICE_ACCOUNT(_B64) env var");
+  if (raw) return JSON.parse(raw);
+
+  const p = process.env.SERVICE_ACCOUNT_JSON_PATH;
+  if (p && fs.existsSync(path.isAbsolute(p) ? p : path.resolve(process.cwd(), p))) {
+    return readJsonFile(p);
   }
 
-  return JSON.parse(raw);
+  throw new Error(
+    "Missing service account. Set FIREBASE_ADMIN_SERVICE_ACCOUNT_B64 or FIREBASE_ADMIN_SERVICE_ACCOUNT or SERVICE_ACCOUNT_JSON_PATH"
+  );
 }
 
 function ensureAdmin() {

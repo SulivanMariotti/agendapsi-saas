@@ -1,5 +1,5 @@
 {
-  "name": "lembrete-psi",
+  "name": "agendapsi-saas",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "backup:local": "node scripts/backup-firestore.mjs",
-    "security:check": "node scripts/security-check.mjs"
+    "security:check": "node scripts/security-check.mjs",
+    "seed:agendapsi": "node scripts/seed-agendapsi.mjs"
   },
   "dependencies": {
     "firebase": "^12.8.0",

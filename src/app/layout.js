@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Lembrete Psi",
-  description: "Sistema de gestão de lembretes",
+  title: "AgendaPsi",
+  description: "Agenda clínica para psicólogos (SaaS)",
 };
 
 export const viewport = {
@@ -15,7 +15,7 @@ export default function RootLayout({ children }) {
   return (
     // O 'suppressHydrationWarning' impede o erro vermelho causado por extensões do navegador
     <html lang="pt-BR" suppressHydrationWarning={true}>
-      <body>
+      <body className="tone-soft">
         {children}
       </body>
     </html>

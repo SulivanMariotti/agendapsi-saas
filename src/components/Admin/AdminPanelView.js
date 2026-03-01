@@ -6,6 +6,7 @@ import { adminFetch } from '../../services/adminApi';
 import {
   LayoutDashboard,
   CalendarCheck,
+  CalendarClock,
   Users,
   Settings,
   History,
@@ -26,6 +27,7 @@ import AdminConfigTab from './AdminConfigTab';
 import AdminManualTab from './AdminManualTab';
 import AdminLibraryTab from './AdminLibraryTab';
 import AdminFatAnalysisTab from './AdminFatAnalysisTab';
+import AdminAgendaPsiScheduleTab from './AdminAgendaPsiScheduleTab';
 
 export default function AdminPanelView({
   onLogout,
@@ -652,6 +654,18 @@ export default function AdminPanelView({
             >
               <Settings size={18} /> Configurações
             </button>
+
+            {/* AgendaPsi (SaaS) - Configuração da agenda do profissional */}
+            <button
+              onClick={() => setAdminTab('agendapsi_schedule')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                adminTab === 'agendapsi_schedule'
+                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-200'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <CalendarClock size={18} /> AgendaPsi — Agenda do Profissional
+            </button>
           </div>
         </div>
       </div>
@@ -771,6 +785,10 @@ export default function AdminPanelView({
             saveConfig={saveConfig}
             isSaving={isSaving}
           />
+        )}
+
+        {adminTab === 'agendapsi_schedule' && (
+          <AdminAgendaPsiScheduleTab showToast={showToast} />
         )}
       </div>
     </div>

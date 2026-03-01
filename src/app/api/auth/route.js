@@ -7,19 +7,6 @@ import { enforceSameOrigin } from "@/lib/server/originGuard";
 
 export const runtime = "nodejs";
 
-function initAdmin() {
-  if (admin.apps.length) return;
-
-  const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
-  if (!raw) throw new Error("Missing FIREBASE_ADMIN_SERVICE_ACCOUNT env var");
-
-  const serviceAccount = JSON.parse(raw);
-
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-}
-
 function timingSafePasswordEquals(a, b) {
   const aStr = String(a ?? "");
   const bStr = String(b ?? "");
@@ -75,7 +62,12 @@ export async function POST(req) {
     const password = String(body?.password || "");
 
     const expectedPassword = process.env.ADMIN_PASSWORD;
-    const adminUid = process.env.ADMIN_UID;
+
+    // Em dev, facilitamos o setup: se ADMIN_UID não estiver definido, usamos um UID fixo.
+    // Em produção, recomenda-se definir explicitamente ADMIN_UID.
+    const adminUid =
+      process.env.ADMIN_UID ||
+      (process.env.NODE_ENV !== "production" ? "admin" : "");
 
     if (!expectedPassword || !adminUid) {
       // Configuração incorreta do servidor. Não vazar detalhes para o cliente.
@@ -94,10 +86,9 @@ export async function POST(req) {
       );
     }
 
-    initAdmin();
-    const token = await admin
-      .auth()
-      .createCustomToken(adminUid, { role: "admin" });
+    // Inicialização do Firebase Admin é resolvida pelo wrapper (/src/lib/firebaseAdmin.js),
+    // que suporta FIREBASE_ADMIN_SERVICE_ACCOUNT(_B64) e SERVICE_ACCOUNT_JSON_PATH.
+    const token = await admin.auth().createCustomToken(adminUid, { role: "admin" });
 
     return NextResponse.json({ ok: true, token });
   } catch (e) {

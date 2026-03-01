@@ -1,1 +1,0 @@
-Modo manual: nenhum Cron Job ativo na Vercel

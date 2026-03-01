@@ -1,51 +1,24 @@
-# Lembrete Psi
+# AgendaPsi SaaS — Documentação (pacote inicial)
 
-**Propósito:** sustentar vínculo terapêutico e constância (reduzir faltas) com lembretes e psicoeducação.
+Este pacote contém a documentação inicial do projeto **AgendaPsi SaaS**, consolidando:
+- requisitos do MVP
+- decisões e “onde paramos”
+- infra/deploy
+- modelo de dados Firestore
+- roles/permissões
+- mapa de telas/UX
 
-- Stack: **Next.js 16 (App Router)** + **Firebase (Firestore + Admin SDK + Web Push/FCM)**
-- Diretriz clínica/UX (painel do paciente):
-  - reforçar compromisso e continuidade
-  - **sem botão/CTA de cancelar/remarcar**
-  - WhatsApp (quando existir): **apenas para confirmação de presença**
-
-## Rodando localmente
-
-```bash
-npm install
-npm run dev
-```
-
-Acesse: http://localhost:3000
-
-## Operação (modo manual recomendado)
-
-Fluxo diário (Admin → Agenda):
-1. **Carregar Planilha** (janela móvel **hoje → +30 dias**)
-2. **Verificar**
-3. **Sincronizar**
-4. **Gerar Preview do Disparo** (dryRun)
-5. **Enviar lembrete**
-
-O Admin tem suporte operacional:
-- Card **Operação do Dia** (diagnóstico, CHECK, CSV, registro diário, auditoria e falha-segura)
-- Menu **Manual de Uso** (Agenda + Presença/Faltas)
-
-## Docs
-
-A documentação do projeto está em `./docs`.
-
-Arquivos mais úteis para operação e continuidade:
+## Arquivos
 - `docs/00_ONDE_PARAMOS.md`
-- `docs/00_PROMPT_NOVO_CHAT.md`
-- `docs/01_HANDOFF.md`
-- `docs/27_OPERATIONS_RUNBOOK.md`
-- `docs/73_ADMIN_MANUAL_DE_USO.md`
+- `docs/01_REQUISITOS_MVP.md`
+- `docs/02_INFRA_E_DEPLOY.md`
+- `docs/03_MODELO_FIRESTORE.md`
+- `docs/04_ROLES_E_REGRAS.md`
+- `docs/05_UI_UX_MAPA_TELAS.md`
+- `docs/06_LEMBRETES_NOTIFICACOES.md`
 
-## Segurança (importante)
-- Paciente **não lê** `appointments/*` diretamente no Firestore (client). Agenda do paciente é **server-side**:
-  - `GET /api/patient/appointments` (Admin SDK)
-- Firestore Rules: `appointments/*` é **admin-only**. Veja `docs/25_FIRESTORE_RULES_GUIDE.md`.
+## Como retomar em um novo chat
+1) Anexe os arquivos da pasta `/docs` (ou o zip inteiro)
+2) Cole no novo chat o prompt no final do `00_ONDE_PARAMOS.md`
 
-## Cron (opcional)
-Existe um endpoint opcional de cron (`/api/cron/reminders`), mas **não roda sozinho**.
-Só funciona se você configurar Cron Jobs na Vercel. Veja `docs/26_VERCEL_CRON_REMINDERS.md`.
+**Data do pacote:** 2026-02-27

@@ -68,6 +68,16 @@ body {
 
 /* Patient skin: grayscale surfaces + Lembrete Psi accent (patient area only) */
 @layer utilities {
+  /*
+    Tipografia (AgendaPsi): reduzir “peso” geral do UI.
+    Mantém hierarquia, mas evita negritos pesados em vários pontos do app.
+  */
+  .tone-soft .font-bold,
+  .tone-soft .font-extrabold,
+  .tone-soft .font-semibold {
+    font-weight: 500 !important;
+  }
+
   .skin-patient {
     /* Neutrals (surface) — grayscale only (keeps alerts untouched) */
     --surface-bg: #f8fafc;            /* slate-50 */
