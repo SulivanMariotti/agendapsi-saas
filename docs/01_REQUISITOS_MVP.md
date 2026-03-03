@@ -1,77 +1,56 @@
-# 01 — Requisitos do MVP (executável)
+# 01 — Requisitos do MVP (AgendaPsi)
 
-Atualizado: 2026-02-28
+Atualizado: **2026-03-02**
 
-> Observação: este documento lista MVP + regras críticas do produto. Itens implementados devem ser marcados como ✅.
-
----
-
-## 0) Regras de produto (críticas)
-- Paciente **sem CTA** de cancelar/remarcar.
-- Agenda do profissional é o centro do sistema (constância, rotina e clareza).
-- Status manuais (Agendado, Confirmado, Finalizado, Não comparece, Cancelado, Reagendado) com **cores**.
-- Edição de recorrência deve perguntar: “só esta ocorrência” vs “esta e futuras”.
-
----
-
-## 1) Painel Admin (desktop)
-### 1.1 Configurações da agenda (schedule) ✅
-- Intervalo da grade: 30/45/60
-- Horários por dia da semana
-- Buffer (intervalo entre atendimentos)
-- Almoço (opcional)
-- Duração padrão em blocos
-
-Persistência:
-- `tenants/{tenantId}/settings/schedule`
+## Objetivo do MVP
+Entregar o fluxo completo do profissional e o **portal do paciente informativo**:
+- configurar agenda (Admin)
+- visualizar agenda (Dia/Semana/Mês)
+- criar agendamento e hold com recorrência
+- reagendar e excluir (escopo: só esta vs futuras)
+- registrar evolução da sessão (texto livre) e ocorrências extra (código+descrição)
+- **cadastrar pacientes (completo + pré-cadastro rápido) no painel do Profissional**
+- **paciente ver sua agenda (somente leitura)**, sem cancelar/remarcar
+- manter separação total do Lembrete Psi
 
 ---
 
-## 2) Painel Profissional (mobile + desktop)
-### 2.1 Visões Dia/Semana/Mês ✅
-- Dia: lista compacta
-- Semana: grade tipo calendário (horas + dias)
-- Mês: grade mensal
+## MVP — Itens incluídos
+### Admin
+- Schedule (intervalo, buffer, almoço, ranges por dia)
+- Dashboard default e menus/submenus
+- Catálogo de códigos de ocorrência (para “registro extra”)
 
-### 2.2 Interações ✅/⏳
-- Clique em ocupado abre detalhes e permite mudar status ✅
-- Semana: clique em horário livre abre **Agendar** ou **Reservar (Hold)** ✅
-- Mês: clique em dia abre Visão Dia ✅
-- Mês: clique em área livre para Agendar/Reservar ⏳ (pendente)
+### Profissional — Agenda
+- Dia/Semana/Mês + navegação por granularidade
+- Agendar/Hold (multi-bloco, buffer) + Próximos horários (3)
+- Recorrência e plano (até 30 + manual)
+- Converter hold → agendamento (+ extensão)
+- Reagendar (só esta vs futuras) com week picker
+- Excluir (só esta vs futuras)
+- Detalhe em overlay + abas clínicas + “Salvar alterações” unificado
+- WhatsApp no detalhe (mensagem reforçando presença/constância)
 
-### 2.3 Próximos horários disponíveis ✅
-- Botão que lista **3 próximos** horários livres (até 30 dias)
-- Ao escolher, abre o fluxo de agendar
+### Profissional — Pacientes
+- Cadastro completo do paciente (campos obrigatórios do projeto)
+- Pré-cadastro rápido a partir da agenda + completar depois
+- Observações gerais do paciente visíveis no detalhe do agendamento
 
-### 2.4 Holds/Reservas ✅
-- Criar hold com nome + celular
-- Multi-bloco (ocupa N slots consecutivos)
-- Buffer respeitado
+### Paciente — Portal (informativo, sem CTA de cancel/remarca)
+- Ver próxima sessão + próximos agendamentos (somente leitura)
+- “Seu cadastro” visível (subset de dados) — sem editar o que for clínico/sensível
+- Termo/Contrato: visualizar + aceitar (auditável)
 
-### 2.5 Agendamento ✅
-- Pré-cadastro mínimo (nome + CPF + celular) para agendar
-
----
-
-## 3) Pacientes (cadastro)
-### 3.1 Cadastro completo ⏳
-Campos obrigatórios conforme definição do projeto (nome registro, nome social, email, data nasc, sexo biológico, gênero, celular, tel fixo, CPF, RG, estado civil, CEP/endereço etc.)
-
-### 3.2 Pré-cadastro rápido ✅
-Mínimo necessário para não travar o agendamento.
+### Registros
+- Evolução por sessão (texto livre) armazenada no paciente e referenciada pelo agendamento
+- Ocorrência extra (código+descrição), armazenada na ocorrência e espelhada no paciente
 
 ---
 
-## 4) Prontuário por sessão (sensível) ⏳
-- Observações da ocorrência
-- Código de ocorrência (lista pré-cadastrada)
-- Evolução/prontuário por sessão
-- Histórico completo por paciente
-- Progresso do plano (ex.: 4/30)
-
----
-
-## 5) Segurança (MVP → produção) ⏳
-- Tenant isolation (Rules) com menor privilégio
-- Evitar logs com conteúdo clínico
-- Trilhas mínimas (auditoria operacional)
+## MVP — Fora do escopo (Pós-MVP)
+- Biblioteca de artigos
+- Anotações do paciente (definir política de visibilidade/consentimento)
+- Envio automático de lembretes (FCM/email/WhatsApp programado) — no MVP apenas preferência, se habilitada
+- Templates WhatsApp (Admin) + preenchimento automático no Profissional (se não entrar no MVP)
+- Relatórios por código de ocorrência
+- Hardening completo de Rules para produção (além do mínimo necessário)

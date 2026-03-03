@@ -1,103 +1,74 @@
 # Segurança e Firestore Rules — AgendaPsi (SaaS)
 
-Atualizado: **2026-02-28**
+Atualizado: **2026-03-02**
 
 ## 1) Objetivo
 Garantir:
 - **isolamento por tenant** (zero acesso cross-tenant)
 - **mínimo privilégio** por role
-- proteção de dados sensíveis (LGPD), especialmente evolução/prontuário
+- proteção de dados sensíveis (LGPD), especialmente evolução e registros clínicos
 
 ---
 
-## 2) Padrões oficiais do AgendaPsi
-
-### 2.1 Isolamento por tenant
-- Todo dado de negócio vive em `tenants/{tenantId}/...`.
-- Identificação do tenant do usuário é resolvida por:
-  - `userTenantIndex/{uid}` (global)
-  - membership canônico em `tenants/{tenantId}/users/{uid}`
-
-> Decisão: evitar `collectionGroup` para membership; usar `userTenantIndex`.
-
-Referência: `docs/09_AUTH_E_ISOLAMENTO_TENANT.md`.
-
-### 2.2 Sessão server-side
-- Cookie httpOnly `__session` criado via Firebase Admin `createSessionCookie`.
-- Validação no servidor via `verifySessionCookie`.
+## 2) Princípios
+- Menor privilégio sempre.
+- Evitar logs com dados sensíveis (LGPD).
+- Validar entrada/saída em toda rota.
+- Admin e operações críticas preferencialmente via **server routes** (Admin SDK).
 
 ---
 
-## 3) Roles e permissões
+## 3) Perfis e permissões (resumo)
+### Admin
+- Acessa painel Admin, configurações e catálogos.
+- Pode ler/editar pacientes, agenda e registros.
 
-### 3.1 Roles (MVP)
-- `owner`: profissional dono do tenant
-- `professional`: (futuro)
-- `admin`: (admin do SaaS, se existir no futuro)
+### Profissional
+- Gerencia agenda (agendamentos/holds), status, reagendar/excluir.
+- Registra evolução por sessão e ocorrências extra.
+- Lê histórico do paciente necessário ao cuidado.
 
-### 3.2 Política mínima
-- **Profissional/Owner**: leitura e escrita dentro do seu tenant.
-- **Paciente** (quando existir): leitura limitada (sem ações de cancelamento/remarcação).
-
-Referência: `docs/04_ROLES_E_REGRAS.md`.
-
----
-
-## 4) Firestore Rules (diretrizes)
-
-### 4.1 Princípios
-- Negar por padrão.
-- Sempre validar:
-  1) `request.auth != null`
-  2) usuário ativo (`userTenantIndex/{uid}.isActive == true`)
-  3) `tenantId` do path == `tenantId` do índice
-  4) role mínima para a operação
-
-### 4.2 Recomendações práticas
-- Centralizar helpers em Rules:
-  - `isSignedIn()`
-  - `tenantIdForUid()`
-  - `hasRole(role)` / `isOwner()`
-- Para documentos sensíveis (ex.: `progressNote`):
-  - permitir apenas roles profissionais
-  - **evitar expor** em queries amplas para paciente
-
-### 4.3 O que deve ficar server-side (Admin SDK)
-Algumas garantias são mais seguras/consistentes no servidor:
-- Rematerializar ocorrências futuras quando editar série
-- Garantir unicidade de CPF por tenant
-- Gating de escrita por `planStatus` (trial/active/past_due/expired)
+### Paciente
+- Lê apenas seus próprios dados mínimos e agendamentos.
+- **Proibido CTA** cancelar/remarcar.
 
 ---
 
-## 5) LGPD (mínimo operacional para o MVP)
+## 4) Dados sensíveis e escopo
+### 4.1 Evolução / prontuário
+- Armazenado em `patients/{patientId}/sessionEvolutions/{occurrenceId}`.
+- Acesso: **apenas Admin/Profissional do tenant**.
+- Paciente: **sem acesso** no MVP (ou acesso extremamente restrito se definido depois).
 
-### 5.1 Classificação
-- `progressNote` (evolução/prontuário) é **dado sensível**.
-
-### 5.2 Regras de implementação
-- Não logar conteúdo clínico.
-- Evitar snapshots com informação clínica na agenda.
-- Preferir snapshots leves (nome/contato/observações gerais).
-
-### 5.3 Auditoria (planejamento)
-- Criar trilha de auditoria para escritas relevantes (sem conteúdo clínico), ex.:
-  - qual usuário alterou
-  - qual documento
-  - quando
-  - tipo de ação
+### 4.2 Ocorrência extra
+- Armazenada em:
+  - `appointmentOccurrences/{occurrenceId}/occurrenceLogs/{logId}`
+  - espelho em `patients/{patientId}/occurrenceLogs/{logId}`
+- Acesso: **apenas Admin/Profissional**.
 
 ---
 
-## 6) Como validar segurança rapidamente
-- [ ] Usuário autenticado não consegue ler tenant diferente (testar com tenantId trocado)
-- [ ] Usuário inativo (`isActive=false`) perde acesso
-- [ ] Tentativa de leitura direta de `tenants/{tenantId}/...` sem sessão falha
-- [ ] Somente roles profissionais conseguem gravar/ler `progressNote`
+## 5) Diretrizes de Rules (placeholder até hardening final)
+> Hardening final ainda pendente; enquanto isso, adotar as diretrizes:
+
+- `userTenantIndex/{uid}`:
+  - leitura apenas do próprio usuário autenticado **ou** leitura bloqueada no client e resolvida via server.
+- `tenants/{tenantId}/**`:
+  - permitir somente se o usuário pertence ao tenant (`tenants/{tenantId}/users/{uid}` existe) e `isActive=true`
+  - restringir por role:
+    - Admin/Owner: CRUD completo
+    - Profissional: CRUD em agenda/pacientes/registros (conforme escopo)
+    - Paciente: leitura mínima e apenas do próprio paciente (quando implementado)
+
+- Subcoleções clínicas:
+  - `sessionEvolutions/**` e `occurrenceLogs/**` devem ser **sempre** bloqueadas para pacientes no MVP.
 
 ---
 
-## 7) Arquivos relacionados
-- `firestore.rules` (na raiz do projeto)
-- `docs/09_AUTH_E_ISOLAMENTO_TENANT.md`
-- `docs/04_ROLES_E_REGRAS.md`
+## 6) Observação sobre o Admin
+Evitar que o Admin UI conecte listeners client em coleções que:
+- não existem no AgendaPsi
+- ou não possuem permissão no Rules (ex.: módulos “Lembretes” ainda placeholders)
+
+Padrão recomendado:
+- Admin consome dados via rotas `/api/admin/...` usando Admin SDK.

@@ -1,87 +1,54 @@
-# 05 — UI/UX: mapa de telas e navegação (MVP)
+# UI/UX — Mapa de telas (AgendaPsi)
+
+Atualizado: **2026-03-02**
+
+## 1) Admin (/admin)
+### Sidebar (Menus + Submenus)
+- **Dashboard** (default)
+- **Lembretes** (placeholders)
+  - Agenda
+  - Presença/Faltas
+  - Histórico
+  - Auditoria
+  - Biblioteca
+  - Configurações
+- **AgendaPsi**
+  - Agenda do Profissional (Schedule)
+  - Códigos de Ocorrência (catálogo)
+- **Pacientes** (placeholder / evolução futura)
+
+> Importante: “Lembretes” aqui é apenas estrutura de navegação; não integra com o Firebase do Lembrete Psi.
 
 ---
 
-## 1) Painel Admin (desktop)
-### 1.1 Navegação sugerida (menu lateral)
-- **Agenda**
-- **Pacientes**
-- **Prontuários**
-- **Reservas**
-- **Códigos de ocorrência**
-- **Templates WhatsApp**
-- **Configuração da agenda**
-- **Perfil (CRP)**
-- **Plano/Trial**
+## 2) Profissional (/profissional)
+### Navegação
+- Botões de visão: **Dia / Semana / Mês**
+- Avançar/retroceder por granularidade (próximo/anterior dia, semana, mês)
 
-### 1.2 Telas-chave
-- Agenda (Dia/Semana/Mês) com criação/edição avançada
-- Paciente (cadastro completo)
-- Prontuário do paciente (linha do tempo por sessão)
-- Catálogos (códigos/templates)
-- Configuração de agenda (horários/duração/buffer/almoço)
+### Visão Dia
+- Grade por slots
+- Ações: agendar/hold, detalhes, excluir, reagendar
 
----
+### Visão Semana
+- Grade semanal com blocos posicionados
+- Clique em horário livre → Agendar ou Reservar (Hold)
+- Clique em item → detalhes
 
-## 2) Painel Profissional (mobile + desktop)
-### 2.1 Foco
-- Operação rápida: ver agenda do dia, marcar status, registrar evolução, WhatsApp.
+### Visão Mês
+- Grade mensal com itens compactos por dia
+- Clique em **área livre do dia** → modal “Ações do dia”
+- Clique no **número do dia** → abre Dia
 
-### 2.2 Telas-chave
-- Agenda (Dia como padrão; Semana/Mês disponíveis)
-- Detalhe da ocorrência (status, código, observação, evolução)
-- Criar agendamento (selecionar paciente existente ou pré-cadastro)
-- Criar reserva (nome + celular, replicar até 15 dias)
-- Próximo horário livre (navega e destaca o slot)
-
-### 2.3 Elementos obrigatórios no slot (base na referência)
-- Coluna/área à esquerda com ações rápidas
-- Hora e duração
-- Nome/resumo do paciente
-- Cor por status
-- Marca “semana do aniversário” quando aplicável
-- Botão WhatsApp (com menu de templates)
+### Detalhe do agendamento/hold
+- Card principal (status / ações)
+- Card lateral “Resumo do paciente”
+- Registros:
+  - Evolução por sessão (texto livre)
+  - Ocorrência extra (código + descrição) + histórico recente
 
 ---
 
-## 3) Painel do Paciente (mobile)
-- Lista de próximas sessões (somente leitura).
-- Conteúdos (diário/leituras/contrato) no padrão do Lembrete, sem CTA de cancelar/remarcar.
-- **Lembretes/Notificações** (push) reaproveitando a base do Lembrete Psi, agora disparados a partir dos agendamentos (ocorrências).
-
----
-
-## 4) Componentes e padrões
-- Modal “horário vago”:
-  - (A) Selecionar paciente existente
-  - (B) Pré-cadastro (Nome + CPF) e agendar
-  - (C) Criar reserva (nome + celular)
-- Modal “editar recorrente”:
-  - (A) Somente esta ocorrência
-  - (B) Esta e futuras a partir desta
-- Menu WhatsApp:
-  - lista de templates (assuntos diversos) → abrir WhatsApp já com texto
-
----
-
-## 5) Itens em aberto (UI)
-- Definir mapa de cores por status (padrão clínico/minimalista).
-- Definir forma de marcação de aniversário (ícone, tag ou destaque discreto).
-
-
----
-
-## 6) Profissional — Visões (query param)
-Rota base:
-- `/profissional`
-
-Parâmetros:
-- `?view=day` (padrão)
-- `?view=week`
-- `?view=month`
-- `&date=YYYY-MM-DD` (âncora de navegação)
-
-Comportamento:
-- Clique em bloco ocupado → abre detalhes/edição.
-- Semana: clique em horário livre → abre escolha Agendar/Reservar.
-- Mês: clique em dia → abre Visão Dia; clique em item → abre detalhes.
+## 3) Paciente (a implementar)
+- Visualizar agendamentos e informações essenciais.
+- Proibido CTA cancelar/remarcar.

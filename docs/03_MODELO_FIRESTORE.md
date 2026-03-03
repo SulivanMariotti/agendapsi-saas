@@ -1,179 +1,228 @@
-# 03 — Modelo de dados Firestore (MVP)
+# Modelo Firestore (detalhado) — AgendaPsi
 
-**Objetivo:** organizar a estrutura multi-tenant e os documentos necessários para o MVP.
+Atualizado: **2026-03-02**
 
----
-
-## 1) Princípios de modelagem
-- **Multi-tenant:** dados isolados por tenant (subcoleções dentro de `tenants/{tenantId}`).
-- **Agenda performática:** consultas por janela (dia/semana/mês) devem bater em uma coleção de ocorrências com índice em `startAt`.
-- **Recorrência escalável:** `appointmentSeries` define regra; `appointmentOccurrences` materializa instâncias.
-- **Histórico preservado:** mudanças em séries recalculam futuro sem sobrescrever passado.
-- **CPF não deve ser ID do documento:** manter ID aleatório e CPF como campo; unicidade via validação server-side/índice auxiliar (a implementar).
-
----
-
-## 2) Árvore de coleções (sugerida)
-```
-tenants/{tenantId}
-  users/{uid}
-  settings/schedule
-  patients/{patientId}
-  occurrenceCodes/{codeId}
-  whatsappTemplates/{templateId}
-  appointmentSeries/{seriesId}
-  appointmentOccurrences/{occId}
-  slotReservations/{reservationId}
-```
+## 1) Regras gerais
+- Todos os dados de negócio ficam em `tenants/{tenantId}/...`.
+- Evitar `collectionGroup`.
+- Preferir escrita/leituras atômicas via transações/batches no server (API routes).
+- Evitar índices compostos:
+  - agenda usa `slotKey`
+  - logs usam subcoleções sem `where + orderBy` na mesma query
 
 ---
 
-## 3) Documentos e campos essenciais
+## 2) Coleções globais
 
-### 3.1 `tenants/{tenantId}`
-- `name` (string)
-- `ownerUid` (string)
-- `planStatus` (string: trial|active|past_due|expired)
-- `trialDays` (number = 10)
-- `trialEndsAt` (timestamp)
-- `timezone` (string, ex.: America/Sao_Paulo)
-- `createdAt` (timestamp)
+### 2.1 `userTenantIndex/{uid}`
+Índice para resolver tenant rapidamente no login (server-side).
 
-### 3.2 `tenants/{tenantId}/users/{uid}`
-- `role` (string: owner|professional)
-- `displayName` (string)
+Campos:
+- `tenantId` (string)
+- `role` (`admin` | `professional` | `owner`)
 - `isActive` (boolean)
-- `createdAt` (timestamp)
-
-### 3.3 `tenants/{tenantId}/settings/schedule`
-- `sessionDurationMin` (number; 0 = não configurado)
-- `bufferMin` (number; 0 = não configurado)
-- `timezone` (string)
-- `weekAvailability` (map: mon..sun → array de blocos `{start,end}`)
-- `lunchBreakEnabled` (boolean)
-- `lunchStart` (string "HH:mm")
-- `lunchEnd` (string "HH:mm")
-- `lunchDays` (array de strings)
 - `updatedAt` (timestamp)
 
-### 3.4 `tenants/{tenantId}/patients/{patientId}`
-Campos mínimos (pré-cadastro):
+---
+
+## 3) Estrutura por tenant
+
+### 3.1 `tenants/{tenantId}`
+Campos:
+- `name`
+- `ownerUid`
+- `timezone` (ex.: `America/Sao_Paulo`)
+- `planStatus` (trial|active|past_due|expired)
+- `trialEndsAt`
+- `createdAt`
+
+### 3.2 Membership — `tenants/{tenantId}/users/{uid}`
+Campos:
+- `uid`
+- `role` (`admin` | `professional` | `owner`)
+- `displayName`
+- `email`
+- `isActive`
+- `createdAt`, `updatedAt`
+
+### 3.3 Settings — `tenants/{tenantId}/settings/schedule`
+Campos (MVP):
+- `slotIntervalMin` (30|45|60)
+- `bufferMin` (0..)
+- `lunchEnabled` (bool) + `lunchStart`/`lunchEnd` (HH:MM)
+- `days` (map por weekday):
+  - `enabled` (bool)
+  - `ranges`: lista de `{start,end}` em HH:MM
+- `defaultBlocks` (int)  # duração padrão em múltiplos do slot
+- `updatedAt`
+
+### 3.4 Pacientes — `tenants/{tenantId}/patients/{patientId}`
+Campos (MVP):
 - `fullName` (string)
-- `cpf` (string)
-- `profileStatus` (string: pre_cadastro|completo)
-- `createdFrom` (string: quick_booking|full_form)
-- `mobile` (string, formato E.164 recomendado)
-- `createdAt`, `updatedAt` (timestamp)
+- `cpf` (string, 11 dígitos)
+- `mobile` (string, dígitos)
+- `email` (opcional)
+- `birthDate` (YYYY-MM-DD, opcional no doc antigo; recomendado no MVP de cadastro completo)
+- `birthMonthDay` (MM-DD, derivado de birthDate; usado para “semana de aniversário”)
+  - `portal` (map) — dados do portal do paciente (sem clínico):
+    - `termsAcceptedVersion` (number)
+    - `termsAcceptedAt` (timestamp)
+    - `remindersEnabled` (boolean)
+    - `updatedAt` (timestamp)
+- `gender` (opcional)
+- `occupation` (opcional)
+- `notes` (observações gerais, opcional)
+- `address` (map, opcional): `zipCode, street, number, complement, district, city, state`
+- `emergency` (map, opcional): `name, mobile, relationship`
+- `profileCompleted` (bool)
+- `createdAt`, `updatedAt`
+- (opcional) `activePlanTotalSessions` (int)
 
-Campos completos (cadastro detalhado):
-- Identificação: `legalName`, `socialName`, `email`, `birthDate`, `sexBiological`, `gender`, `maritalStatus`
-- Docs: `rg`
-- Endereço: `cep`, `address`, `number`, `complement`, `district`, `city`, `stateUF` (+ `addressAutoFilled` boolean opcional)
-- Menor: `isMinor`, `motherName`, `motherJob`, `fatherName`, `fatherJob`, `guardianName`, `guardianCpf`
-- Outras: `education`, `job`, `company`, `weightKg`, `heightCm`, `bloodType`
-- Origem: `howFoundMe`, `referredByName`, `referredByPhone`
-- `generalNotes` (string) — deve aparecer no agendamento/slot (snapshot)
 
-### 3.5 `tenants/{tenantId}/slotReservations/{reservationId}`
-- `startAt`, `endAt` (timestamp)
-- `leadName` (string)
-- `leadMobile` (string)
-- `status` (string: held|converted|cancelled)
-- `replicateUntil` (timestamp; max 15 dias)
+#### 3.4.0.1 Anotações do paciente (Portal)
+`tenants/{tenantId}/patients/{patientId}/patientNotes/{noteId}`
+
+Campos (MVP):
+- `text` (string, até 2000 chars)
+- `createdAt`, `updatedAt` (serverTimestamp)
+- `deletedAt` (timestamp|null) — exclusão lógica
+- `createdBy` (string, uid do paciente)
+- `source` (string) = `patientPortal`
+
+> Notas do paciente **não são** prontuário/evolução do profissional. São um módulo do portal e devem ser tratadas com cautela (LGPD).
+
+
+
+#### 3.4.0.2 Biblioteca de artigos (Admin → Paciente)
+
+**Fonte da verdade:** Painel Admin (já existente)  
+Coleções globais (MVP):
+- `library_articles/{articleId}`
+- `library_categories/{categoryId}` (opcional; para curadoria por trilhas/categorias)
+
+Campos em `library_articles` (MVP):
+- `title` (string)
+- `categoryId` (string, ex.: `geral`)
+- `categoryLabel` (string, ex.: `Geral`)
+- `summary` (string)
+- `content` (string) **ou** `body` (array de strings)
+- `status` (string: `draft` | `published`)
+- `pinned` (boolean)
+- `order` (number) (ordem de curadoria)
+- `readingTime` (string opcional, ex.: `"3 min"`)
+- `createdAt`, `updatedAt` (serverTimestamp)
+
+Regras:
+- O paciente lê a biblioteca via **API server-side** (Admin SDK) — sem acesso direto ao Firestore no client.
+- O paciente vê **somente artigos publicados** (`status === "published"`).
+
+> Observação (multi-tenant): no MVP a biblioteca é **global** (conteúdo do produto).  
+> Se no futuro precisar por tenant, migramos para `tenants/{tenantId}/library_articles` preservando a UI/UX e mantendo compatibilidade por API.
+
+#### 3.4.1 Evolução por sessão (prontuário)
+
+#### 3.4.1 Evolução por sessão (prontuário)
+ Evolução por sessão (prontuário)
+`tenants/{tenantId}/patients/{patientId}/sessionEvolutions/{occurrenceId}`
+
+Campos:
+- `occurrenceId` (string)  # redundante (docId = occurrenceId)
+- `seriesId` (string, opcional)
+- `sessionStartAt` (timestamp)  # data/hora da sessão
+- `text` (string)  # texto livre (sem código)
+- `createdByUid` (string)
 - `createdAt`, `updatedAt`
 
-### 3.6 `tenants/{tenantId}/appointmentSeries/{seriesId}`
-- `patientId` (string)
-- `active` (boolean)
-- `totalSessions` (number, ex.: 30)
-- Recorrência:
-  - `recurrenceType` (weekly|biweekly|monthly|custom)
-  - `recurrenceInterval` (number)
-  - `daysOfWeek` (array ["mon","wed"])
-  - `startsAt` (timestamp)
-- Snapshot de agenda:
-  - `sessionDurationMin` (number)
-  - `bufferMin` (number)
-  - `locationType` (string: presencial|online) (tag no MVP)
-- `createdAt`, `updatedAt`
+> Observação: excluir o agendamento libera horário, mas **não apaga** este documento.
 
-### 3.7 `tenants/{tenantId}/appointmentOccurrences/{occId}`
-- `seriesId` (string)
-- `patientId` (string)
-- `startAt`, `endAt` (timestamp)
-- `status` (Agendado|Confirmado|Finalizado|Não comparece|Cancelado|Reagendado)
-- `sessionNumber` (number)  → para “4/30”
-- `totalSessions` (number)  → snapshot
-- `occurrenceCodeId` (string, opcional)
-- `observation` (string, opcional)
-- `progressNote` (string, opcional; prontuário da sessão)
-- `patientSnapshot` (map leve para agenda):
-  - `displayName`, `mobile`, `generalNotes`, `birthMonthDay`
-- `isBirthdayWeek` (boolean, opcional; pode ser calculado e/ou gravado)
-- `createdAt`, `updatedAt`
+#### 3.4.2 Ocorrências “extra” (espelho no paciente)
+`tenants/{tenantId}/patients/{patientId}/occurrenceLogs/{logId}`
 
-### 3.8 Catálogos
+Campos:
+- `patientId`
+- `occurrenceId` (string)
+- `seriesId` (string, opcional)
+- `sessionStartAt` (timestamp)  # data/hora da sessão associada (quando existir)
+- `codeId` (string)
+- `code` (string)  # snapshot do código para facilitar relatórios
+- `description` (string)
+- `createdByUid`
+- `createdAt`
+
+### 3.5 Catálogo de códigos (Admin)
 `tenants/{tenantId}/occurrenceCodes/{codeId}`
-- `code`, `description`, `isActive`, `createdAt`
 
-`tenants/{tenantId}/whatsappTemplates/{templateId}`
-- `title`, `body` (com placeholders `{nome}`, `{data}`, `{hora}`)
-- `isActive`, `sortOrder`, `createdAt`
+Campos:
+- `code` (string, ex.: `OC01`)
+- `description` (string)
+- `isActive` (boolean)
+- `createdAt`, `updatedAt`
+
+### 3.6 Séries — `tenants/{tenantId}/appointmentSeries/{seriesId}`
+Campos (MVP):
+- `type` (`appointment` | `hold`)
+- `repeatFrequency` (daily|weekly|biweekly|monthly)
+- `plannedTotalSessions` (int)
+- `startsAt` (timestamp)
+- `endsAt` (timestamp, opcional)
+- `patientId` (opcional, até converter hold)
+- `createdAt`, `updatedAt`
+
+### 3.7 Ocorrências — `tenants/{tenantId}/appointmentOccurrences/{occurrenceId}`
+Campos (MVP):
+- `seriesId` (string, opcional)
+- `groupId` (string)  # agrupa blocos da mesma sessão
+- `isBlock` (boolean)
+- `blockIndex` (0..n-1)
+- `startAt` (timestamp)
+- `endAt` (timestamp)
+- `slotKey` (`YYYY-MM-DD#HH:MM`)
+- `isHold` (boolean)
+- `status` (agendamento)  # hold não altera
+- `sessionIndex` (int)
+- `plannedTotalSessions` (int)
+- `patientId` (string, opcional)
+- `leadName`, `leadMobile` (para hold sem paciente)
+- `patientSnapshot` (opcional, para render rápido): `{ fullName, mobile, notes, birthMonthDay }`
+- `createdAt`, `updatedAt`
+
+#### 3.7.1 Ocorrências “extra” (subcoleção na ocorrência)
+`tenants/{tenantId}/appointmentOccurrences/{occurrenceId}/occurrenceLogs/{logId}`
+
+Campos:
+- `occurrenceId`
+- `patientId`
+- `seriesId` (opcional)
+- `sessionStartAt` (timestamp)
+- `codeId`, `code`
+- `description`
+- `createdByUid`
+- `createdAt`
 
 ---
 
-## 4) Operações críticas (definições)
-### 4.1 Edição “somente esta” vs “futuros”
-- “Somente esta” → escreve apenas na ocorrência.
-- “Futuros” → altera série e rematerializa ocorrências futuras (preserva passado).
+## 4) Operações críticas
+### 4.1 Criar Agendar / Hold
+- Respeitar schedule + buffer + multi-bloco.
+- Criar `appointmentSeries` (quando recorrente) e materializar ocorrências.
+- Operação atômica para recorrência (sem criação parcial).
 
-### 4.2 Reagendado
-- Ocorrência original recebe status **Reagendado**.
-- Nova ocorrência mantém o mesmo `sessionNumber` quando fizer sentido (regra simples do MVP).
+### 4.2 Converter hold → agendamento
+- Atualiza tipo na série e converte ocorrências existentes.
+- Pode estender para novo total (materializa adicionais).
+- Operação atômica (sem conflito).
 
-### 4.3 Semana do aniversário
-- Regra: marcar ocorrências que caem na semana em que o aniversário ocorre (definir critério de semana: Seg–Dom).
+### 4.3 Reagendar recorrente
+- Perguntar: “Só esta” vs “Esta e futuras”.
+- Operação atômica (conflito bloqueia).
 
----
-
-## 5) Índices (planejamento)
-A definir na implementação conforme queries do app:
-- Ocorrências por intervalo de datas (`startAt`) + filtro por status.
-- Ocorrências por `patientId` para prontuário completo.
-- Reservas por intervalo de datas (`startAt`).
-
----
-
-## 6) Itens em aberto
-- Política de leitura do paciente quando plano expira.
-- Mapa de cores por status (UI).
-- Unicidade de CPF por tenant (implementar via backend/índice auxiliar).
-
+### 4.4 Excluir
+- Perguntar: “Só esta” vs “Esta e futuras”.
+- Remove ocorrências da agenda (libera horário).
+- Não apagar evolução (prontuário) nem ocorrência extra do paciente.
 
 ---
 
-## 9) Settings — Schedule (Agenda do Profissional) ✅
-
-Documento:
-- `tenants/{tenantId}/settings/schedule`
-
-Campos (proposta atual):
-- `slotIntervalMin`: 30 | 45 | 60
-- `bufferMin`: number (ex.: 0, 10, 15, 30)
-- `defaultBlocks`: number (ex.: 1..6)
-- `week`: mapa por dia da semana (ex.: `mon..sun`)
-  - `enabled`: boolean
-  - `ranges`: lista de períodos (ex.: `{ start: "08:00", end: "18:00" }`)
-- `lunchBreak` (opcional):
-  - `enabled`: boolean
-  - `start`: "12:00"
-  - `end`: "13:00"
-
-Normalização:
-- Ao salvar, o servidor deriva `weekAvailability` (ranges efetivos) removendo o almoço.
-- A UI do Profissional consome ranges “do dia” (dayRanges) e renderiza slots apenas dentro do horário aberto.
-
-Consultas:
-- **Dia**: buscar ocorrências por janela `[startOfDay, endOfDay)` filtrando por `startAt`.
-- **Semana/Mês**: buscar por janela e agrupar client-side por `isoDate` (YYYY-MM-DD).
-
+## 5) Índices
+- Preferir não depender de índices compostos.
+- Se for inevitável (futuro), registrar explicitamente em docs a necessidade do índice e o motivo.

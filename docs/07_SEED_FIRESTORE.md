@@ -1,20 +1,21 @@
 # Seed Firestore — AgendaPsi
 
-Atualizado: 2026-02-28
+Atualizado: **2026-03-02**
 
-## Rodar
-- `npm run seed:agendapsi`
+## Objetivo
+Popular dados mínimos para teste rápido:
+- tenant demo
+- paciente demo
+- série + ocorrências
+- schedule do tenant
 
-## O que cria/atualiza
-- tenant + settings/schedule
-- occurrenceCodes
-- whatsappTemplates
-- patient teste
-- appointmentSeries + appointmentOccurrences (inclui exemplos)
-- membership + `userTenantIndex/{uid}`
+## Observação
+O seed atual cria um conjunto básico (tenant/paciente/série/ocorrências).
+Itens úteis para ampliar no seed (opcional):
+- alguns `occurrenceCodes` (para ocorrência extra)
+- 1 evolução em `patients/{patientId}/sessionEvolutions/{occurrenceId}`
+- 1 ocorrência extra em `appointmentOccurrences/{occurrenceId}/occurrenceLogs/{logId}` (e espelho no paciente)
 
-## Pegadinha do Console (subcoleções)
-Às vezes o Firestore Console não lista todas as subcoleções do doc do tenant.
-Use URL direta, por exemplo (dentro do Firestore Data URL):
-- adicionar `~2FappointmentSeries`
-- adicionar `~2FappointmentOccurrences`
+## Dica de validação
+Após rodar seed:
+- `/profissional` deve exibir sessões na semana e no mês sem deslocar o weekday (timezone).

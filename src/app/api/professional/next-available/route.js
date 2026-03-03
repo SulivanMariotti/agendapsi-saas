@@ -13,6 +13,7 @@ export async function GET(request) {
   const fromTime = String(searchParams.get("fromTime") || "").trim();
   const blocks = searchParams.get("blocks");
   const limit = searchParams.get("limit");
+  const maxDays = searchParams.get("maxDays");
 
   try {
     const res = await findNextAvailableSlots({
@@ -20,7 +21,11 @@ export async function GET(request) {
       fromIsoDate,
       fromTime,
       durationBlocks: blocks,
-      maxDays: 30,
+      maxDays: (() => {
+        const n = parseInt(maxDays, 10);
+        if (!Number.isFinite(n)) return 30;
+        return Math.max(0, Math.min(90, n));
+      })(),
       limit,
     });
 

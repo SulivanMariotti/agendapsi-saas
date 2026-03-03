@@ -6,7 +6,6 @@ import { getAuth, onAuthStateChanged, signInWithCustomToken, getIdTokenResult } 
 
 import { app } from "../firebase";
 
-import { useData } from "../../hooks/useData";
 import AdminPanel from "../../components/Admin/AdminPanel";
 import { Button, Card, Toast } from "../../components/DesignSystem";
 
@@ -24,9 +23,11 @@ export default function AdminPage() {
   const showToast = (msg, type = "success") => setToast({ msg, type });
 
   // ✅ Hook de dados: só carrega coleções sensíveis quando isAdmin === true
-  const { subscribers, historyLogs, appointments: dbAppointments, globalConfig } = useData(isAdmin);
-
-  const needsLogoutToProceed = useMemo(() => Boolean(user) && !isAdmin, [user, isAdmin]);
+  const subscribers = [];
+  const historyLogs = [];
+  const dbAppointments = [];
+  const globalConfig = null;
+const needsLogoutToProceed = useMemo(() => Boolean(user) && !isAdmin, [user, isAdmin]);
 
   useEffect(() => {
     const auth = getAuth(app);
@@ -138,6 +139,7 @@ export default function AdminPage() {
 
         <div className="min-h-screen bg-slate-50 p-4 md:p-8">
           <AdminPanel
+          initialTab="dashboard"
             onLogout={handleLogout}
             subscribers={subscribers}
             historyLogs={historyLogs}

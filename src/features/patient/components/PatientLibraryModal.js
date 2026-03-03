@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../../components/DesignSystem";
 import { X, Search, ChevronDown, ChevronUp, Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
 import { getAuth } from "firebase/auth";
+import { patientApp } from "@/app/firebasePatient";
 import { LIBRARY_TOP_MANTRA, SESSION_TAKEAWAYS } from "../content/library";
 import { PT } from "../lib/uiTokens";
 import { LIBRARY_SEED_ARTICLES } from "../../../lib/shared/librarySeed";
@@ -147,7 +148,7 @@ export default function PatientLibraryModal({ open, onClose }) {
         setLoading(true);
         setWarning(null);
 
-        const auth = getAuth();
+        const auth = getAuth(patientApp);
         const user = auth.currentUser;
         if (!user) {
           setWarning("Você precisa estar logado para acessar a biblioteca.");
@@ -155,22 +156,39 @@ export default function PatientLibraryModal({ open, onClose }) {
           return;
         }
 
-        const idToken = await user.getIdToken();
-        const res = await fetch("/api/patient/library/list", {
-          method: "GET",
-          headers: { authorization: `Bearer ${idToken}` },
-        });
+        const idToken = await user.getIdToken(true);
+        const endpoints = ["/api/patient/library/list", "/api/paciente/library"];
+        let lastMessage = null;
+        let items = [];
 
-        const data = await res.json().catch(() => ({}));
+        for (const endpoint of endpoints) {
+          const res = await fetch(endpoint, {
+            method: "GET",
+            headers: { authorization: `Bearer ${idToken}` },
+          });
 
-        if (!res.ok || !data?.ok) {
-          const msg = data?.error || "Não foi possível carregar a biblioteca agora.";
-          setWarning(msg);
+          const data = await res.json().catch(() => ({}));
+
+          if (res.ok && data?.ok) {
+            items = Array.isArray(data?.articles) ? data.articles : [];
+            lastMessage = null;
+            break;
+          }
+
+          // Se a rota não existir (ambientes com naming diferente), tenta a alternativa.
+          if (res.status === 404) {
+            lastMessage = "Biblioteca indisponível neste ambiente.";
+            continue;
+          }
+
+          lastMessage = data?.error || "Não foi possível carregar a biblioteca agora.";
+        }
+
+        if (lastMessage) {
+          setWarning(lastMessage);
           setRemoteArticles([]);
           return;
         }
-
-        const items = Array.isArray(data?.articles) ? data.articles : [];
         if (!cancelled) {
           setRemoteArticles(items);
         }

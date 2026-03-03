@@ -14,6 +14,9 @@ import {
   BarChart3,
   BookOpen,
   FileText,
+  Tag,
+  ChevronDown,
+  ChevronRight,
   LogOut,
 } from 'lucide-react';
 
@@ -28,6 +31,7 @@ import AdminManualTab from './AdminManualTab';
 import AdminLibraryTab from './AdminLibraryTab';
 import AdminFatAnalysisTab from './AdminFatAnalysisTab';
 import AdminAgendaPsiScheduleTab from './AdminAgendaPsiScheduleTab';
+import AdminAgendaPsiOccurrenceCodesTab from './AdminAgendaPsiOccurrenceCodesTab';
 
 export default function AdminPanelView({
   onLogout,
@@ -39,6 +43,21 @@ export default function AdminPanelView({
   initialTab,
 }) {
   const [adminTab, setAdminTab] = useState(initialTab || 'dashboard');
+  const [menuOpen, setMenuOpen] = useState({ lembretes: true, agendapsi: true });
+
+  const isLembretesTab = useMemo(() => {
+    return ['schedule', 'attendance', 'history', 'audit', 'library', 'config', 'manual', 'fat'].includes(adminTab);
+  }, [adminTab]);
+
+  const isAgendaPsiTab = useMemo(() => {
+    return ['agendapsi_schedule', 'agendapsi_occurrence_codes'].includes(adminTab);
+  }, [adminTab]);
+
+  useEffect(() => {
+    // Abre automaticamente o grupo do menu relacionado ao tab ativo
+    if (isLembretesTab) setMenuOpen((prev) => ({ ...prev, lembretes: true }));
+    if (isAgendaPsiTab) setMenuOpen((prev) => ({ ...prev, agendapsi: true }));
+  }, [isLembretesTab, isAgendaPsiTab]);
 
   // Jump para Histórico filtrado por batchId (evita caça manual no histórico)
   const [historyJump, setHistoryJump] = useState(null);
@@ -535,13 +554,13 @@ export default function AdminPanelView({
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <div className="text-lg font-extrabold text-slate-900 leading-none truncate">
-                    Lembrete Psi
+                    Admin
                   </div>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-semibold">
                     Admin
                   </span>
                 </div>
-                <div className="text-xs text-slate-500 mt-0.5">Constância terapêutica</div>
+                <div className="text-xs text-slate-500 mt-0.5">Lembretes + AgendaPsi</div>
               </div>
             </div>
 
@@ -553,7 +572,8 @@ export default function AdminPanelView({
             </button>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
+            {/* Menu: Dashboard */}
             <button
               onClick={() => setAdminTab('dashboard')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
@@ -565,28 +585,129 @@ export default function AdminPanelView({
               <LayoutDashboard size={18} /> Dashboard
             </button>
 
-            <button
-              onClick={() => setAdminTab('schedule')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                adminTab === 'schedule'
-                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-200'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <CalendarCheck size={18} /> Agenda
-            </button>
+            {/* Menu: Lembretes */}
+            <div>
+              <button
+                onClick={() => setMenuOpen((prev) => ({ ...prev, lembretes: !prev.lembretes }))}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-sm font-extrabold bg-white border border-slate-200 hover:bg-slate-50"
+              >
+                <span className="inline-flex items-center gap-3 text-slate-900">
+                  <CalendarCheck size={18} /> Lembretes
+                </span>
+                {menuOpen.lembretes ? <ChevronDown size={18} className="text-slate-500" /> : <ChevronRight size={18} className="text-slate-500" />}
+              </button>
 
-            <button
-              onClick={() => setAdminTab('attendance')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                adminTab === 'attendance'
-                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-200'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <CalendarCheck size={18} /> Presença/Faltas
-            </button>
+              {menuOpen.lembretes ? (
+                <div className="mt-2 space-y-2 pl-2">
+                  <button
+                    onClick={() => setAdminTab('schedule')}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      adminTab === 'schedule'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <CalendarCheck size={16} /> Agenda
+                  </button>
 
+                  <button
+                    onClick={() => setAdminTab('attendance')}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      adminTab === 'attendance'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <CalendarCheck size={16} /> Presença/Faltas
+                  </button>
+
+                  <button
+                    onClick={() => setAdminTab('history')}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      adminTab === 'history'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <History size={16} /> Histórico
+                  </button>
+
+                  <button
+                    onClick={() => setAdminTab('audit')}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      adminTab === 'audit'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <ShieldCheck size={16} /> Auditoria
+                  </button>
+
+                  <button
+                    onClick={() => setAdminTab('library')}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      adminTab === 'library'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <BookOpen size={16} /> Biblioteca
+                  </button>
+
+                  <button
+                    onClick={() => setAdminTab('config')}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      adminTab === 'config'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Settings size={16} /> Configurações
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Menu: AgendaPsi */}
+            <div>
+              <button
+                onClick={() => setMenuOpen((prev) => ({ ...prev, agendapsi: !prev.agendapsi }))}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-sm font-extrabold bg-white border border-slate-200 hover:bg-slate-50"
+              >
+                <span className="inline-flex items-center gap-3 text-slate-900">
+                  <CalendarClock size={18} /> AgendaPsi
+                </span>
+                {menuOpen.agendapsi ? <ChevronDown size={18} className="text-slate-500" /> : <ChevronRight size={18} className="text-slate-500" />}
+              </button>
+
+              {menuOpen.agendapsi ? (
+                <div className="mt-2 space-y-2 pl-2">
+                  <button
+                    onClick={() => setAdminTab('agendapsi_schedule')}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      adminTab === 'agendapsi_schedule'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <CalendarClock size={16} /> Agenda do Profissional
+                  </button>
+
+                  <button
+                    onClick={() => setAdminTab('agendapsi_occurrence_codes')}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      adminTab === 'agendapsi_occurrence_codes'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Tag size={16} /> Códigos de Ocorrência
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Menu: Pacientes */}
             <button
               onClick={() => setAdminTab('users')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
@@ -596,75 +717,6 @@ export default function AdminPanelView({
               }`}
             >
               <Users size={18} /> Pacientes
-            </button>
-
-            <button
-              onClick={() => setAdminTab('history')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                adminTab === 'history'
-                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-200'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <History size={18} /> Histórico
-            </button>
-
-            <button
-              onClick={() => setAdminTab('audit')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                adminTab === 'audit'
-                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-200'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <ShieldCheck size={18} /> Auditoria
-            </button>
-
-            <button
-              onClick={() => openManual('visao-geral')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                adminTab === 'manual'
-                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-200'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <FileText size={18} /> Manual de Uso
-            </button>
-
-
-            <button
-              onClick={() => setAdminTab('library')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                adminTab === 'library'
-                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-200'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <BookOpen size={18} /> Biblioteca
-            </button>
-
-
-            <button
-              onClick={() => setAdminTab('config')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                adminTab === 'config'
-                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-200'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Settings size={18} /> Configurações
-            </button>
-
-            {/* AgendaPsi (SaaS) - Configuração da agenda do profissional */}
-            <button
-              onClick={() => setAdminTab('agendapsi_schedule')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                adminTab === 'agendapsi_schedule'
-                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-200'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <CalendarClock size={18} /> AgendaPsi — Agenda do Profissional
             </button>
           </div>
         </div>
@@ -789,6 +841,10 @@ export default function AdminPanelView({
 
         {adminTab === 'agendapsi_schedule' && (
           <AdminAgendaPsiScheduleTab showToast={showToast} />
+        )}
+
+        {adminTab === 'agendapsi_occurrence_codes' && (
+          <AdminAgendaPsiOccurrenceCodesTab showToast={showToast} />
         )}
       </div>
     </div>

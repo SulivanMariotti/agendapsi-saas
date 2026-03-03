@@ -25,6 +25,8 @@ export async function POST(request) {
       durationBlocks: body.durationBlocks,
       durationMin: body.durationMin,
       replicateDays: body.replicateDays,
+      plannedTotalSessions: body.plannedTotalSessions,
+      repeatFrequency: body.repeatFrequency,
     });
     return NextResponse.json({ ok: true, ...res });
   } catch (e) {

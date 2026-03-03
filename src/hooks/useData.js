@@ -137,10 +137,18 @@ export function useData(isAdmin) {
     // ✅ CONFIG deve carregar para Admin e Paciente (rules permitem read em /config)
     // Isso alimenta: contrato terapêutico, whatsapp da clínica, offsets e textos.
     const configRef = doc(db, 'config', 'global');
-    const unsubConfig = onDocSnapshot(configRef, (docSnap) => {
-      if (docSnap.exists()) setGlobalConfig(docSnap.data());
-      else setGlobalConfig(null);
-    });
+    const unsubConfig = onDocSnapshot(
+      configRef,
+      (docSnap) => {
+        if (docSnap.exists()) setGlobalConfig(docSnap.data());
+        else setGlobalConfig(null);
+      },
+      (err) => {
+        // Evita crash em ambientes onde /config não existe ou rules bloqueiam.
+        console.error(err);
+        setGlobalConfig(null);
+      }
+    );
 
     // ✅ Dados sensíveis: só admin (evita permission-denied no modo paciente)
     if (!isAdmin) {

@@ -1,30 +1,55 @@
-# Agenda — Ocorrências, Holds e duração por blocos (MVP)
+# Agenda — Ocorrências, Holds, recorrência e duração por blocos (MVP)
 
-Atualizado: 2026-02-28
+Atualizado: **2026-03-02**
 
 ## Coleções principais (por tenant)
-- `appointmentOccurrences`:
-  - `isHold`: true/false
-  - `groupId`: agrupa blocos da mesma sessão
-  - `isBlock`: true para blocos de continuação
-  - `blockIndex`: 0..n-1
-  - `slotKey`: `YYYY-MM-DD#HH:MM` (para buscas simples e evitar índices compostos)
+- `appointmentSeries`
+- `appointmentOccurrences` (inclui hold via `isHold=true`)
+- `settings/schedule`
 
-## Regra de blocos
-- A grade (slotIntervalMin) define o tamanho do bloco.
-- Ao criar hold/agendamento, o profissional escolhe a duração em **n blocos**.
-- O sistema só cria se os próximos slots estiverem livres.
-- Para bloquear corretamente:
-  - cria o doc principal (blockIndex 0)
-  - cria docs `isBlock=true` para os slots seguintes
+---
 
-## Status em grupo
-- Alterar status deve atualizar todos os docs com o mesmo `groupId`.
+## 1) Duração por blocos (multi-bloco)
+- Cada compromisso pode ocupar N slots.
+- A sessão principal (blockIndex=0) tem `groupId`.
+- Blocos adicionais usam `isBlock=true` e compartilham o `groupId`.
 
+## 2) Buffer
+- `bufferMin` impede agendar “encostado” em outro item.
+- Deve considerar início e fim reais da sessão (incluindo multi-bloco).
 
-## Próximos horários disponíveis ✅
-- No Profissional existe ação que lista 3 próximos horários livres.
-- Regras respeitadas:
-  - schedule (horário aberto + almoço)
-  - multi-bloco
-  - bufferMin
+## 3) Hold/Reserva
+- Hold é uma ocorrência com `isHold=true`.
+- Status travado até converter em agendamento.
+- Pode existir sem paciente (lead).
+
+## 4) Recorrência e plano
+- Frequências: diário / semanal / quinzenal / mensal.
+- Materializa as ocorrências com:
+  - `sessionIndex`
+  - `plannedTotalSessions`
+- Operações recorrentes são **atômicas** (sem criação parcial).
+
+## 5) Converter hold → agendamento
+- Converte ocorrências existentes.
+- Pode estender o plano materializando as sessões restantes.
+- Sem conflito (atômico).
+
+## 6) Reagendar
+- Sempre perguntar:
+  - “Só esta ocorrência”
+  - “Esta e futuras”
+- Week picker seg→dom com legenda:
+  - L (livre)
+  - R (hold, não clicável)
+  - — (ocupado)
+
+## 7) Excluir
+- Mesmo padrão:
+  - “Só esta ocorrência”
+  - “Esta e futuras”
+- Excluir libera o horário na agenda.
+- Não apaga evolução (prontuário) nem ocorrência extra do paciente.
+
+## 8) Mês — clique em área livre do dia
+- Abre modal “Ações do dia” e sugere horários do próprio dia.

@@ -25,7 +25,9 @@ export async function POST(request) {
       mobile: body.mobile,
       durationBlocks: body.durationBlocks,
       durationMin: body.durationMin,
-      durationMin: body.durationMin,
+      plannedTotalSessions: body.plannedTotalSessions,
+      repeatFrequency: body.repeatFrequency,
+      fromHoldOccurrenceId: body.fromHoldOccurrenceId,
     });
     return NextResponse.json({ ok: true, ...res });
   } catch (e) {

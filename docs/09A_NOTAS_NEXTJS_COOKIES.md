@@ -1,18 +1,12 @@
-# 09A — Notas de Compatibilidade (Next.js)
+# Notas Next.js / Cookies — AgendaPsi
 
-## APIs dinâmicas como Promise (Next 15+)
+Atualizado: **2026-03-02**
 
-Em algumas versões recentes do Next.js, APIs como `cookies()` e `headers()` podem ser retornadas como **Promise** e exigem `await`.
+## Sessão server-side
+- Autenticação do profissional utiliza sessão server-side (cookie).
+- Evitar expor tokens sensíveis no client.
 
-### Sintoma
-Erro em runtime parecido com:
-
-- `cookies(...).get is not a function`
-
-### Correção
-Usar:
-
-- `const cookieStore = await cookies();`
-- `cookieStore.get(...)`
-
-> Observação: `await` é seguro mesmo quando a API retorna um valor síncrono.
+## Boas práticas
+- Validar inputs nas API routes.
+- Retornar erros padronizados.
+- Evitar logar dados sensíveis (LGPD).

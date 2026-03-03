@@ -5,15 +5,15 @@ import { Menu } from "lucide-react";
 import { PT } from "../lib/uiTokens";
 
 export default function PatientTopAppBar({
-  appName = "Lembrete Psi",
-  logoSrc,
+  appName = "AgendaPsi",
+  logoSrc = null,
   onOpenMenu,
 }) {
   const [imgOk, setImgOk] = useState(true);
 
   const finalLogoSrc = useMemo(() => {
-    // Prefer the provided logo, otherwise fallback to the Lembrete Psi mark.
-    return String(logoSrc || "/brand/lembretepsi-logo-white.png");
+    const s = String(logoSrc || "").trim();
+    return s ? s : null;
   }, [logoSrc]);
 
   return (
@@ -24,7 +24,7 @@ export default function PatientTopAppBar({
       >
         <div className="max-w-5xl mx-auto px-[var(--pad)] h-14 flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
-            {imgOk ? (
+            {finalLogoSrc && imgOk ? (
               <img
                 src={finalLogoSrc}
                 alt={appName}
@@ -33,7 +33,7 @@ export default function PatientTopAppBar({
               />
             ) : (
               <div className="w-6 h-6 rounded-md bg-white/15 flex items-center justify-center text-[10px] font-extrabold tracking-wide">
-                LP
+                AP
               </div>
             )}
 

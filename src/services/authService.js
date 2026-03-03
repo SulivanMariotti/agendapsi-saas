@@ -1,4 +1,5 @@
 import { app } from "../app/firebase";
+import { patientApp } from "../app/firebasePatient";
 import {
   getAuth,
   signInWithPopup,
@@ -20,6 +21,9 @@ export async function loginWithGoogle() {
  * - valida se o email está em subscribers
  * - gera custom token
  * - faz signInWithCustomToken
+ *
+ * IMPORTANTE:
+ * - Usa Auth do app secundário (patientApp) para não derrubar a sessão do profissional.
  */
 export async function patientLoginByEmail(email) {
   // 🔒 Por padrão, o login por e-mail do paciente fica desativado.
@@ -37,7 +41,7 @@ export async function patientLoginByEmail(email) {
     );
   }
 
-  const auth = getAuth(app);
+  const auth = getAuth(patientApp);
 
   const res = await fetch("/api/patient-auth", {
     method: "POST",
@@ -55,17 +59,19 @@ export async function patientLoginByEmail(email) {
   return cred.user;
 }
 
-
 /**
- * ✅ Login do paciente via Código de Vinculação (telefone + código)
- * - valida no backend pelo users/{uid}.pairCodeHash
+ * ✅ Login do paciente via Código de Acesso (6 dígitos)
+ * - valida no backend em patientAccessCodes/{code}
  * - retorna custom token
  * - faz signInWithCustomToken
+ *
+ * IMPORTANTE:
+ * - Usa Auth do app secundário (patientApp) para não derrubar a sessão do profissional.
  */
 export async function patientLoginByPairCode(phone, code) {
-  const auth = getAuth(app);
+  const auth = getAuth(patientApp);
 
-  const res = await fetch("/api/patient/pair", {
+  const res = await fetch("/api/paciente/access-code", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone, code }),
@@ -81,7 +87,45 @@ export async function patientLoginByPairCode(phone, code) {
   return cred.user;
 }
 
+/**
+ * ✅ DEV: Login do paciente (demo) via token gerado no backend (AgendaPsi)
+ * - Exige ENABLE_PATIENT_DEV_TOKEN=true no server
+ * - O botão só aparece quando NEXT_PUBLIC_ENABLE_PATIENT_DEV_DEMO=true
+ *
+ * IMPORTANTE:
+ * - Usa Auth do app secundário (patientApp) para não derrubar a sessão do profissional.
+ */
+export async function patientLoginDevDemo() {
+  const auth = getAuth(patientApp);
+
+  const res = await fetch("/api/paciente/dev-token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || !data?.ok || !data?.token) {
+    throw new Error(data?.error || "Falha no login demo do paciente");
+  }
+
+  const cred = await signInWithCustomToken(auth, data.token);
+  return cred.user;
+}
+
+/**
+ * Logout padrão (painel profissional / usos gerais) — app principal.
+ */
 export async function logoutUser() {
   const auth = getAuth(app);
+  await signOut(auth);
+}
+
+/**
+ * Logout do paciente — app secundário (patientApp).
+ * (não derruba a sessão do profissional no mesmo navegador)
+ */
+export async function logoutPatientUser() {
+  const auth = getAuth(patientApp);
   await signOut(auth);
 }

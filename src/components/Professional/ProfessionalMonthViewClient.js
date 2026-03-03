@@ -1,10 +1,40 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useRouter } from "next/navigation";
+import { BadgeCheck,
+  CalendarDays,
+  Layers,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle,
+  XCircle,
+  Lock,
+  Trash2,
+  X,
+  KeyRound,
+  Copy,
+  Loader2,
+} from "lucide-react";
 
 import { Button } from "@/components/DesignSystem";
+import SessionEvolutionPanel from "./SessionEvolutionPanel";
+import OccurrenceLogPanel from "./OccurrenceLogPanel";
+
+
+function normalizePhone(phone) {
+  const digits = String(phone || "").replace(/\D+/g, "");
+  return digits;
+}
+
+function buildWhatsappUrl(phone, text) {
+  const p = normalizePhone(phone);
+  if (!p) return null;
+  const q = encodeURIComponent(String(text || "").trim());
+  return `https://wa.me/${p}?text=${q}`;
+}
+
 
 function toDateFromIso(iso) {
   const d = new Date(`${iso}T12:00:00.000Z`);
@@ -74,24 +104,58 @@ function statusDotClass(status) {
   }
 }
 
-function ModalShell({ title, children, onClose }) {
+function statusItemBgClass({ status, isHold, inMonth }) {
+  // Month view: color the whole chip background based on status.
+  // Holds should be visually "muted" (gray ~50%).
+  if (isHold) return `${inMonth ? "" : "opacity-70 "}bg-slate-100/60 border border-slate-200 text-slate-700`;
+  const base =
+    status === "Agendado"
+      ? "bg-violet-100/80 border border-violet-200 text-violet-900"
+      : status === "Confirmado"
+      ? "bg-emerald-100/80 border border-emerald-200 text-emerald-900"
+      : status === "Finalizado"
+      ? "bg-slate-100/80 border border-slate-200 text-slate-700"
+      : status === "Não comparece"
+      ? "bg-amber-100/80 border border-amber-200 text-amber-900"
+      : status === "Cancelado"
+      ? "bg-red-100/80 border border-red-200 text-red-900"
+      : status === "Reagendado"
+      ? "bg-blue-100/80 border border-blue-200 text-blue-900"
+      : "bg-slate-50 border border-slate-200 text-slate-800";
+  return `${inMonth ? "" : "opacity-70 "}${base}`;
+}
+
+
+function ModalShell({ title, children, onClose, footer = null, maxWidthClass = "max-w-md", bodyClass = "p-5" }) {
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/30 p-3" onMouseDown={onClose}>
+    <div
+      className="fixed inset-0 z-[999] flex items-end sm:items-center justify-center bg-black/30 p-3"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
       <div
-        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl"
+        className={`w-full ${maxWidthClass} max-h-[92dvh] rounded-2xl border border-slate-200 bg-white shadow-xl flex flex-col overflow-hidden`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <p className="text-sm font-semibold text-slate-900 truncate">{title}</p>
           <button
             type="button"
-            className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50"
             onClick={onClose}
+            aria-label="Fechar"
+            title="Fechar"
           >
-            Fechar
+            <X size={16} />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className={`${bodyClass} overflow-y-auto min-h-0`}>{children}</div>
+        {footer ? (
+          <div className="border-t border-slate-100 px-5 py-4">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -123,8 +187,15 @@ export default function ProfessionalMonthViewClient({ initialData }) {
   }, [initialData]);
 
   const [detail, setDetail] = useState(null); // { isoDate, occId }
+  const [deleteOcc, setDeleteOcc] = useState(null); // occurrence object for delete confirmation
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+const [clinicalTab, setClinicalTab] = useState("evolution"); // "evolution" | "logs"
+
+useEffect(() => {
+  if (detail?.occId) setClinicalTab("evolution");
+}, [detail?.occId]);
+
 
   const monthAnchorIso = data?.monthAnchorIso || data?.isoDate;
   const monthLabel = useMemo(() => (monthAnchorIso ? fmtMonthPt(monthAnchorIso) : ""), [monthAnchorIso]);
@@ -154,16 +225,102 @@ export default function ProfessionalMonthViewClient({ initialData }) {
     return occIndex.get(`${detail.isoDate}#${detail.occId}`) || null;
   }, [detail, occIndex]);
 
+  const currentPatient = useMemo(() => {
+    const pid = currentOcc?.patientId;
+    return pid ? patientsById?.[pid] || null : null;
+  }, [currentOcc?.patientId, patientsById]);
+
   const currentTitle = useMemo(() => {
     if (!currentOcc) return "";
-    const p = currentOcc?.patientId ? patientsById?.[currentOcc.patientId] : null;
-    return p?.fullName || currentOcc?.leadName || "(sem nome)";
-  }, [currentOcc, patientsById]);
+    return currentPatient?.fullName || currentOcc?.leadName || "(sem nome)";
+  }, [currentOcc, currentPatient?.fullName]);
 
   const [status, setStatus] = useState("Agendado");
   useEffect(() => {
     setStatus(currentOcc?.status || "Agendado");
   }, [currentOcc?.status]);
+
+// Paciente (MVP): gerar código de acesso (one-time) para o portal /paciente
+const [patientAccessCode, setPatientAccessCode] = useState(null); // { code, expiresAt, ttlMin }
+const [patientCodeBusy, setPatientCodeBusy] = useState(false);
+const [patientCodeErr, setPatientCodeErr] = useState("");
+
+useEffect(() => {
+  setPatientAccessCode(null);
+  setPatientCodeErr("");
+}, [detail?.occId]);
+
+const handleGeneratePatientAccessCode = async () => {
+  const pid = currentOcc?.patientId;
+  if (!pid) return;
+
+  setPatientCodeBusy(true);
+  setPatientCodeErr("");
+  try {
+    const res = await fetch("/api/profissional/pacientes/access-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patientId: pid }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok || !data?.code) {
+      throw new Error(data?.error || "Falha ao gerar código.");
+    }
+
+    setPatientAccessCode({ code: data.code, expiresAt: data.expiresAt, ttlMin: data.ttlMin });
+
+    try {
+      await navigator.clipboard.writeText(String(data.code));
+    } catch {
+      // ignore
+    }
+  } catch (e) {
+    setPatientCodeErr(e?.message || "Falha ao gerar código.");
+  } finally {
+    setPatientCodeBusy(false);
+  }
+};
+
+const handleCopyPatientAccessCode = async () => {
+  if (!patientAccessCode?.code) return;
+  try {
+    await navigator.clipboard.writeText(String(patientAccessCode.code));
+  } catch {
+    // ignore
+  }
+};
+
+
+  const statusOriginal = currentOcc?.status || "Agendado";
+  const isStatusDirty = Boolean(detail) && Boolean(currentOcc) && !currentOcc?.isHold && status !== statusOriginal;
+
+  function requestCloseDetail() {
+    if (isStatusDirty) {
+      const ok = window.confirm("Você tem alterações não salvas neste agendamento. Deseja descartar e fechar?");
+      if (!ok) return;
+    }
+    setDetail(null);
+  }
+
+  const detailDisplayName = currentPatient?.fullName || currentOcc?.leadName || "";
+  const detailPhone = currentPatient?.mobile || currentOcc?.leadMobile || "";
+  const detailStartTime = String(currentOcc?.startTime || "").slice(0, 5);
+
+  const detailSessionIndex = Number(currentOcc?.sessionIndex);
+  const detailPlannedTotal = Number(currentOcc?.plannedTotalSessions);
+  const detailProgress =
+    Number.isFinite(detailSessionIndex) && Number.isFinite(detailPlannedTotal) && detailPlannedTotal > 0 ? `${detailSessionIndex}/${detailPlannedTotal}` : null;
+
+  const detailWhatsappMsg = detailDisplayName
+    ? `Olá, ${detailDisplayName}! Confirmando sua sessão em ${fmtDateShortPt(detail?.isoDate)} às ${detailStartTime}. Conto com sua presença.`
+    : `Confirmando sua sessão em ${fmtDateShortPt(detail?.isoDate)} às ${detailStartTime}. Conto com sua presença.`;
+  const detailWhatsappUrl = buildWhatsappUrl(detailPhone, detailWhatsappMsg);
+
+  function openDetailWhatsapp() {
+    if (!detailWhatsappUrl) return;
+    window.open(detailWhatsappUrl, "_blank", "noopener,noreferrer");
+  }
 
   function goMonth(delta) {
     const next = addMonthsIso(monthAnchorIso || todayIso, delta);
@@ -184,10 +341,31 @@ export default function ProfessionalMonthViewClient({ initialData }) {
     router.push(`/profissional?view=week&date=${encodeURIComponent(iso)}`);
   }
 
-  async function saveStatus(occurrenceId, nextStatus) {
-    if (!occurrenceId || !nextStatus) return;
-    setBusy(true);
-    setErrorMsg("");
+  
+async function runDelete(occurrenceId, scope) {
+  if (!occurrenceId) return;
+  setBusy(true);
+  setErrorMsg("");
+  try {
+    const res = await fetch("/api/professional/occurrence/delete", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ occurrenceId, scope }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j?.message || "Falha ao excluir");
+    setDeleteOcc(null);
+    setDetail(null);
+    router.refresh();
+  } catch (e) {
+    setErrorMsg(e?.message || "Erro ao excluir");
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function patchStatus(occurrenceId, nextStatus) {
+    if (!occurrenceId || !nextStatus) return false;
     try {
       const res = await fetch("/api/professional/occurrence/status", {
         method: "PATCH",
@@ -196,10 +374,31 @@ export default function ProfessionalMonthViewClient({ initialData }) {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.message || "Falha ao salvar status");
-      setDetail(null);
-      router.refresh();
+      return true;
     } catch (e) {
       setErrorMsg(e?.message || "Erro ao salvar status");
+      return false;
+    }
+  }
+
+  async function saveAll() {
+    if (!currentOcc?.id || currentOcc?.isHold) return;
+    setBusy(true);
+    setErrorMsg("");
+    try {
+      const evoOk = await evolutionRef.current?.saveIfDirty?.();
+      if (evoOk === false) throw new Error("Falha ao salvar evolução.");
+
+      const logOk = await logsRef.current?.saveDraft?.();
+      if (logOk === false) throw new Error("Falha ao registrar ocorrência.");
+
+      if (isStatusDirty) {
+        const ok = await patchStatus(currentOcc.id, status);
+        if (!ok) throw new Error("Falha ao salvar status.");
+        router.refresh();
+      }
+    } catch (e) {
+      setErrorMsg(e?.message || "Erro ao salvar alterações");
     } finally {
       setBusy(false);
     }
@@ -219,23 +418,29 @@ export default function ProfessionalMonthViewClient({ initialData }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1">
-            <button className="rounded-xl px-3 py-2 text-xs text-slate-900 bg-slate-100" type="button" onClick={() => {}}>
-              Mês
+          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
+            <button
+              type="button"
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 hover:bg-slate-50"
+              onClick={() => goDay(monthAnchorIso || todayIso)}
+            >
+              Dia
             </button>
             <button
-              className="rounded-xl px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
               type="button"
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 hover:bg-slate-50"
               onClick={() => goWeek(monthAnchorIso || todayIso)}
             >
               Semana
             </button>
             <button
-              className="rounded-xl px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
               type="button"
-              onClick={() => goDay(monthAnchorIso || todayIso)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-600 text-white"
+              onClick={() => {
+                // already on month
+              }}
             >
-              Dia
+              Mês
             </button>
           </div>
 
@@ -312,7 +517,7 @@ export default function ProfessionalMonthViewClient({ initialData }) {
                           <button
                             key={o.id}
                             type="button"
-                            className="w-full rounded-lg px-2 py-1 text-left hover:bg-white/80"
+                            className={`w-full rounded-lg px-2 py-1 text-left ${statusItemBgClass({ status: o?.status, isHold: o?.isHold, inMonth })} hover:brightness-[0.99]`}
                             onClick={(e) => {
                               e.stopPropagation();
                               setDetail({ isoDate: iso, occId: o.id });
@@ -320,7 +525,7 @@ export default function ProfessionalMonthViewClient({ initialData }) {
                             title="Abrir detalhes"
                           >
                             <div className="flex items-center gap-2">
-                              <span className={`h-2 w-2 rounded-full ${statusDotClass(o?.status)}`} />
+                              <span className={`h-2 w-2 rounded-full ${o?.isHold ? "bg-slate-400" : statusDotClass(o?.status)}`} />
                               <span className={`truncate text-[11px] ${inMonth ? "text-slate-700" : "text-slate-400"}`}>
                                 {line}
                               </span>
@@ -342,56 +547,264 @@ export default function ProfessionalMonthViewClient({ initialData }) {
 
       {detail && currentOcc ? (
         <ModalShell
-          title={`${currentOcc?.isHold ? "Reserva" : "Agendamento"} — ${fmtDateShortPt(detail.isoDate)} ${String(
-            currentOcc?.startTime || ""
-          ).slice(0, 5)}`}
-          onClose={() => setDetail(null)}
-        >
-          <div className="flex flex-col gap-3">
-            <div>
-              <p className="text-xs text-slate-400 font-semibold">Paciente/Lead</p>
-              <p className="text-sm font-semibold text-slate-900 truncate">{currentTitle}</p>
-            </div>
+          title={currentOcc?.isHold ? "Reserva" : "Agendamento"}
+          onClose={requestCloseDetail}
+          footer={
+            currentOcc?.isBlock === true ? null : (
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="danger"
+                    icon={Trash2}
+                    disabled={busy}
+                    onClick={() => {
+                      setDetail(null);
+                      setDeleteOcc(currentOcc);
+                    }}
+                    title="Excluir"
+                    aria-label="Excluir"
+                    className="px-3"
+                  >
+                    <span className="sr-only">Excluir</span>
+                  </Button>
 
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
-              <p className="text-xs text-slate-500 font-semibold">Status</p>
-              <div className="mt-2 flex items-center gap-2">
-                <select
-                  className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  disabled={busy}
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <Button variant="primary" disabled={busy} onClick={() => saveStatus(currentOcc.id, status)}>
-                  Salvar
-                </Button>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      setDetail(null);
+                      goDay(detail.isoDate);
+                    }}
+                    disabled={busy}
+                  >
+                    Abrir no Dia
+                  </button>
+                </div>
+
+                {currentOcc?.isHold ? (
+                  <p className="text-[11px] text-slate-500 font-semibold">Reserva</p>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <p className="text-[11px] text-slate-500 font-semibold">
+                      {hasAnyDirty ? "Alterações pendentes" : "Nenhuma alteração pendente"}
+                    </p>
+                    <Button variant="primary" icon={CheckCircle} disabled={busy || !hasAnyDirty} onClick={() => void saveAll()}>
+                      Salvar alterações
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )
+          }
+          maxWidthClass="max-w-4xl"
+        >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex-1 min-w-0 flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-base font-extrabold text-slate-900 truncate">
+                  {fmtDateShortPt(detail.isoDate)} — {String(currentOcc?.startTime || "").slice(0, 5)}
+                </p>
+                <p className="mt-0.5 text-[11px] uppercase tracking-wider text-slate-400 font-bold">
+                  {currentOcc?.isHold ? "Reserva" : "Agendamento"}
+                </p>
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => {
-                  setDetail(null);
-                  goDay(detail.isoDate);
-                }}
-              >
-                Abrir no Dia
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-xl bg-slate-900 px-4 py-3 text-xs font-semibold text-white hover:bg-slate-800"
-                onClick={() => setDetail(null)}
-              >
-                Fechar
-              </button>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Paciente</p>
+              <div className="flex flex-wrap items-center justify-end gap-1">
+                {detailProgress ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-extrabold text-slate-700">
+                    Plano: {detailProgress}
+                  </span>
+                ) : null}
+
+                {currentOcc?.isHold ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-extrabold text-slate-700">
+                    <Lock size={14} /> Reserva
+                  </span>
+                ) : (
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-extrabold ${statusPillClass(status)}`}>
+                    <BadgeCheck size={14} /> {status}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold text-slate-900 truncate">{currentTitle}</p>
+
+{currentOcc?.patientId ? (
+  <div className="mt-3 rounded-2xl border border-slate-100 bg-white p-3">
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-[11px] text-slate-400 font-bold">Código de acesso do paciente</p>
+
+        {patientAccessCode?.code ? (
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-sm font-extrabold tracking-widest text-slate-900">
+              {patientAccessCode.code}
+            </span>
+
+            <button
+              type="button"
+              onClick={handleCopyPatientAccessCode}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700"
+              title="Copiar"
+            >
+              <Copy size={16} />
+            </button>
+
+            <span className="text-[11px] text-slate-500">
+              expira em {patientAccessCode.ttlMin || 15} min
+            </span>
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-slate-600">Gere um código para o paciente acessar o painel.</p>
+        )}
+
+        {patientCodeErr ? <p className="mt-1 text-xs text-rose-600">{patientCodeErr}</p> : null}
+      </div>
+
+      <button
+        type="button"
+        onClick={handleGeneratePatientAccessCode}
+        disabled={patientCodeBusy}
+        className={`shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border ${
+          patientCodeBusy
+            ? "bg-slate-100 text-slate-400 border-slate-200"
+            : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+        }`}
+      >
+        {patientCodeBusy ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />}
+        {patientAccessCode?.code ? "Gerar outro" : "Gerar"}
+      </button>
+    </div>
+  </div>
+) : null}
+
+            </div>
+
+            <div className="rounded-2xl border border-slate-100 bg-white p-2">
+              <p className="text-xs text-slate-500 font-semibold">Status</p>
+              {currentOcc?.isHold ? (
+                <div className="mt-2">
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border bg-slate-100 text-slate-700 border-slate-200 text-xs font-extrabold">
+                    Reserva
+                  </span>
+                  <p className="mt-2 text-[11px] font-semibold text-slate-500">Reserva: status travado até converter em agendamento.</p>
+                </div>
+              ) : (
+                <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2">
+                  <select
+                    className="h-8 w-[132px] rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    disabled={busy}
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-1">
+  <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
+    <button
+      type="button"
+      className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${
+        clinicalTab === "evolution" ? "bg-violet-600 text-white" : "text-slate-700 hover:bg-slate-50"
+      }`}
+      onClick={() => setClinicalTab("evolution")}
+    >
+      Evolução
+    </button>
+    <button
+      type="button"
+      className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${
+        clinicalTab === "logs" ? "bg-violet-600 text-white" : "text-slate-700 hover:bg-slate-50"
+      }`}
+      onClick={() => setClinicalTab("logs")}
+    >
+      Ocorrências (extra)
+    </button>
+  </div>
+  <p className="text-[11px] text-slate-400 font-semibold">Registros clínicos</p>
+</div>
+
+<div className={clinicalTab === "evolution" ? "" : "hidden"}>
+  <SessionEvolutionPanel ref={evolutionRef} externalSave occurrence={currentOcc} patientId={currentOcc?.patientId || ""} disabled={busy} onDirtyChange={setIsEvoDirty} />
+</div>
+<div className={clinicalTab === "logs" ? "" : "hidden"}>
+  <OccurrenceLogPanel ref={logsRef} externalSave occurrence={currentOcc} patientId={currentOcc?.patientId || ""} disabled={busy} onDirtyChange={setIsLogDraftDirty} />
+</div>
+</div>
+
+            <div className="w-full sm:w-80 shrink-0">
+              <div className="rounded-2xl border border-slate-100 bg-white p-2">
+                <p className="text-xs text-slate-500 font-semibold">Resumo do paciente</p>
+                <p className="mt-1 text-sm font-extrabold text-slate-900 truncate">{detailDisplayName || "(sem paciente)"}</p>
+
+                {detailProgress ? (
+                  <div className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-[11px] font-semibold text-slate-500">Plano</p>
+                    <p className="text-xs font-extrabold text-slate-800">{detailProgress}</p>
+                  </div>
+                ) : null}
+      {deleteOcc ? (
+        <ModalShell title={`Excluir ${deleteOcc?.isHold ? "reserva" : "agendamento"}?`} onClose={() => setDeleteOcc(null)} maxWidthClass="max-w-md">
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-slate-700">
+              Isso remove o horário da agenda (libera o slot). O prontuário/histórico do paciente não é apagado.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <Button variant="danger" icon={Trash2} disabled={busy} onClick={() => runDelete(deleteOcc.id, "single")}>
+                Excluir só esta ocorrência
+              </Button>
+
+              {Boolean(deleteOcc?.seriesId) &&
+              Number(deleteOcc?.plannedTotalSessions) > 1 &&
+              Number(deleteOcc?.sessionIndex) < Number(deleteOcc?.plannedTotalSessions) ? (
+                <Button variant="danger" icon={Trash2} disabled={busy} onClick={() => runDelete(deleteOcc.id, "future")}>
+                  Excluir esta e futuras
+                </Button>
+              ) : null}
+
+              <Button variant="secondary" disabled={busy} onClick={() => setDeleteOcc(null)}>
+                Cancelar
+              </Button>
+            </div>
+
+            {errorMsg ? <p className="text-xs text-red-600">{errorMsg}</p> : null}
+          </div>
+        </ModalShell>
+      ) : null}
+
+
+
+                <div className="mt-3">
+                  <p className="text-[11px] font-semibold text-slate-500">WhatsApp</p>
+                  <p className="text-xs font-semibold text-slate-800 break-all">{detailPhone || "—"}</p>
+                  <div className="mt-2">
+                    <Button variant="primary" icon={WhatsAppIcon} onClick={openDetailWhatsapp} disabled={!detailWhatsappUrl} className="w-full">
+                      Abrir WhatsApp
+                    </Button>
+                  </div>
+                </div>
+
+                {currentPatient?.notes ? (
+                  <div className="mt-3">
+                    <p className="text-[11px] font-semibold text-slate-500">Observações</p>
+                    <p className="mt-1 text-xs text-slate-700 whitespace-pre-line">{currentPatient.notes}</p>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </ModalShell>

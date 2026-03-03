@@ -2,12 +2,17 @@
 
 import React, { useMemo, useState } from "react";
 import Image from "next/image";
-import { patientLoginByEmail, patientLoginByPairCode } from "../../services/authService";
+import { patientLoginByEmail, patientLoginByPairCode, patientLoginDevDemo } from "../../services/authService";
 import { Button, Card } from "../DesignSystem";
 import { Mail, CheckCircle, Bell, CalendarCheck, NotebookPen, Info, Key } from "lucide-react";
 
 const ENABLE_EMAIL_LOGIN =
   String(process.env.NEXT_PUBLIC_ENABLE_PATIENT_EMAIL_LOGIN || "").toLowerCase() === "true";
+
+const ENABLE_DEV_DEMO =
+  String(process.env.NEXT_PUBLIC_ENABLE_PATIENT_DEV_DEMO || "").toLowerCase() === "true" &&
+  process.env.NODE_ENV !== "production";
+
 
 export default function PatientLogin() {
   const [mode, setMode] = useState("code"); // code | email (email apenas se ENABLE_EMAIL_LOGIN)
@@ -49,14 +54,13 @@ export default function PatientLogin() {
   };
 
   const handlePatientLoginCode = async () => {
-    if (!cleanPhone) {
-      alert("Digite seu telefone (DDD + número).");
+    if (!cleanCode || !/^\d{6}$/.test(cleanCode)) {
+      alert("Digite o código de acesso (6 dígitos).");
       return;
     }
-    if (!cleanCode || cleanCode.length < 10) {
-      alert("Digite o código de vinculação.");
-      return;
-    }
+    // Telefone é opcional no MVP (apenas para validação extra quando disponível)
+    // Se preferir obrigar, ajustamos no próximo passo.
+
 
     setLoading(true);
     try {
@@ -65,6 +69,19 @@ export default function PatientLogin() {
     } catch (e) {
       console.error(e);
       alert(e?.message || "Falha ao entrar.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  const handleDevDemo = async () => {
+    setLoading(true);
+    try {
+      await patientLoginDevDemo();
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || "Falha ao entrar (demo). ");
     } finally {
       setLoading(false);
     }
@@ -88,14 +105,14 @@ export default function PatientLogin() {
             </div>
             <div className="text-left">
               <div className="text-[22px] sm:text-[26px] font-extrabold text-slate-900 leading-none">
-                Lembrete Psi
+                AgendaPsi
               </div>
-              <div className="text-xs sm:text-sm text-slate-500 mt-0.5">Constância terapêutica</div>
+              <div className="text-xs sm:text-sm text-slate-500 mt-0.5">Constância do cuidado</div>
             </div>
           </div>
 
           <div className="mt-2 text-sm text-slate-500">
-            Seu painel para lembretes, agenda e registro rápido.
+            Seu painel para acompanhar seus agendamentos.
           </div>
         </div>
 
@@ -146,17 +163,17 @@ export default function PatientLogin() {
             {mode === "code" || !ENABLE_EMAIL_LOGIN ? (
               <div className="space-y-3">
                 <div className="text-sm text-slate-600">
-                  Use seu <b>telefone</b> e o <b>código de vinculação</b> entregue pela clínica.
+                  Use seu <b>telefone</b> e o <b>código de acesso</b> entregue pela clínica.
                   <div className="text-[12px] text-slate-400 mt-0.5">
                     Esse código vincula <b>este aparelho</b> ao seu espaço de cuidado.
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase ml-1">Telefone (DDD + número)</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase ml-1">Telefone (opcional)</label>
                   <input
                     className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200/60 text-slate-700"
-                    placeholder="(11) 99999-9999"
+                    placeholder="(11) 99999-9999 (opcional)"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     inputMode="tel"
@@ -165,7 +182,7 @@ export default function PatientLogin() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase ml-1">Código de vinculação</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase ml-1">Código de acesso</label>
                   <input
                     className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200/60 text-slate-700 tracking-widest"
                     placeholder="XXXX-XXXX-XXXX"
@@ -183,6 +200,18 @@ export default function PatientLogin() {
                 <Button onClick={handlePatientLoginCode} disabled={loading} className="w-full">
                   {loading ? "Vinculando..." : "Vincular e entrar"}
                 </Button>
+            {ENABLE_DEV_DEMO ? (
+              <Button
+                onClick={handleDevDemo}
+                variant="secondary"
+                className="w-full"
+                disabled={loading}
+                icon={Key}
+              >
+                Entrar como demo (dev)
+              </Button>
+            ) : null}
+
               </div>
             ) : (
               <div className="space-y-3">

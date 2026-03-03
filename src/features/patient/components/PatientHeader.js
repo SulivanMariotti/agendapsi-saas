@@ -2,24 +2,38 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../../components/DesignSystem";
-import { LogOut, FileText, X, Phone, BookOpen } from "lucide-react";
+import { LogOut, FileText, X, Phone, BookOpen, StickyNote } from "lucide-react";
 import { formatPhoneBR } from "../lib/phone";
 import { PT } from "../lib/uiTokens";
 import PatientLibraryModal from "./PatientLibraryModal";
+import PatientNotesModal from "./PatientNotesModal";
 
 export default function PatientHeader({
-  patientName,
   patientPhone,
   onLogout,
+
+  // Preferências
+  remindersEnabled = true,
+  remindersBusy = false,
+  onToggleReminders,
+
+  // Contrato
+  onAcceptContract,
 
   // Contrato (leitura futura no menu)
   contractText,
   needsContractAcceptance,
   currentContractVersion,
+
+  // AgendaPsi: permite esconder itens que ainda não existem no MVP
+  showLibrary = true,
+  showContract = true,
+  showNotes = false,
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [contractOpen, setContractOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
 
   const btnMenuRef = useRef(null);
   const btnCloseRef = useRef(null);
@@ -47,22 +61,66 @@ export default function PatientHeader({
       setMobileMenuOpen(true);
     }
     function openLibrary() {
+      if (!showLibrary) return;
       setMobileMenuOpen(false);
       setLibraryOpen(true);
     }
     function openContract() {
+      if (!showContract) return;
       setMobileMenuOpen(false);
       setContractOpen(true);
+    }
+
+    function openNotes() {
+      if (!showNotes) return;
+      setMobileMenuOpen(false);
+      setNotesOpen(true);
     }
 
     window.addEventListener("lp:patient:openMenu", openMenu);
     window.addEventListener("lp:patient:openLibrary", openLibrary);
     window.addEventListener("lp:patient:openContract", openContract);
+    window.addEventListener("lp:patient:openNotes", openNotes);
 
-    return () => {
+  
+  function ToggleRow({ label, value, onChange, disabled = false, hint }) {
+    const on = !!value;
+    return (
+      <div className={`w-full px-4 py-3 rounded-xl ${PT.surfaceSoft} flex items-center justify-between gap-3`}>
+        <div className="min-w-0">
+          <div className="text-sm font-extrabold text-slate-900">{label}</div>
+          {hint ? <div className="text-[12px] text-slate-500 leading-snug mt-0.5">{hint}</div> : null}
+        </div>
+
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange?.(!on)}
+          className={[
+            "w-14 h-8 rounded-full transition relative shrink-0 focus-visible:outline-none",
+            PT.focusRingVisible,
+            disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
+            on ? "bg-violet-950/95" : "bg-slate-200",
+          ].join(" ")}
+          aria-pressed={on ? "true" : "false"}
+          aria-label={label}
+        >
+          <span
+            className={[
+              "absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow transition-transform",
+              on ? "translate-x-6" : "translate-x-0",
+            ].join(" ")}
+          />
+        </button>
+      </div>
+    );
+  }
+
+  return () => {
       window.removeEventListener("lp:patient:openMenu", openMenu);
       window.removeEventListener("lp:patient:openLibrary", openLibrary);
       window.removeEventListener("lp:patient:openContract", openContract);
+      window.removeEventListener("lp:patient:openNotes", openNotes);
     };
   }, []);
 
@@ -94,8 +152,7 @@ export default function PatientHeader({
     <>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="hidden sm:block text-xs text-slate-400 uppercase tracking-wider">Área do Paciente</div>
-          <div className="text-base sm:text-lg font-extrabold text-slate-900 truncate">{patientName}</div>
+          <div className="text-base sm:text-lg font-extrabold text-slate-900 truncate">AgendaPsi - Seu Espaço de cuidado</div>
 
           {patientPhone ? (
             <div className={`mt-1.5 sm:mt-2 inline-flex items-center gap-2 sm:gap-2.5 text-xs px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full ${PT.surfaceSoft} text-slate-800 shadow-sm`}>
@@ -110,13 +167,48 @@ export default function PatientHeader({
 
         {/* Desktop actions */}
         <div className="hidden sm:flex gap-2">
-          <Button onClick={() => setLibraryOpen(true)} variant="secondary" icon={BookOpen}>
-            Biblioteca
-          </Button>
+          {showLibrary ? (
+            <Button onClick={() => setLibraryOpen(true)} variant="secondary" icon={BookOpen}>
+              Biblioteca
+            </Button>
+          ) : null}
 
-          <Button onClick={() => setContractOpen(true)} variant="secondary" icon={FileText}>
-            Contrato
-          </Button>
+          {showContract ? (
+            <Button onClick={() => setContractOpen(true)} variant="secondary" icon={FileText}>
+              Contrato
+            </Button>
+          ) : null}
+
+          {showNotes ? (
+            <Button onClick={() => setNotesOpen(true)} variant="secondary" icon={StickyNote}>
+              Anotações
+            </Button>
+          ) : null}
+
+          {typeof onToggleReminders === "function" ? (
+            <div className="hidden lg:flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="text-xs font-bold text-slate-600">Lembretes</div>
+              <button
+                type="button"
+                disabled={remindersBusy}
+                onClick={() => onToggleReminders(!remindersEnabled)}
+                className={[
+                  "w-12 h-7 rounded-full transition relative shrink-0",
+                  remindersBusy ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
+                  remindersEnabled ? "bg-violet-950/95" : "bg-slate-200",
+                ].join(" ")}
+                aria-pressed={remindersEnabled ? "true" : "false"}
+                aria-label="Ativar lembretes"
+              >
+                <span
+                  className={[
+                    "absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow transition-transform",
+                    remindersEnabled ? "translate-x-5" : "translate-x-0",
+                  ].join(" ")}
+                />
+              </button>
+            </div>
+          ) : null}
 
           <Button
             onClick={onLogout}
@@ -172,6 +264,7 @@ export default function PatientHeader({
             </div>
 
             <div className="p-3 flex-1 overflow-auto">
+              {showLibrary ? (
               <button
                 className={`w-full min-h-[44px] text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2 focus-visible:outline-none ${PT.focusRingVisible}`}
                 onClick={() => {
@@ -181,7 +274,9 @@ export default function PatientHeader({
               >
                 <BookOpen size={16} className="text-slate-600" /> Biblioteca
               </button>
+              ) : null}
 
+              {showContract ? (
               <button
                 className={`mt-1 w-full min-h-[44px] text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2 focus-visible:outline-none ${PT.focusRingVisible}`}
                 onClick={() => {
@@ -191,6 +286,20 @@ export default function PatientHeader({
               >
                 <FileText size={16} className="text-slate-600" /> Contrato
               </button>
+              ) : null}
+
+              {showNotes ? (
+              <button
+                className={`mt-1 w-full min-h-[44px] text-left px-4 py-3 text-sm text-slate-800 font-semibold hover:bg-slate-50 rounded-xl flex items-center gap-2 focus-visible:outline-none ${PT.focusRingVisible}`}
+                onClick={() => {
+                  closeMobileMenu();
+                  setNotesOpen(true);
+                }}
+              >
+                <StickyNote size={16} className="text-slate-600" /> Anotações
+              </button>
+              ) : null}
+
 
               <div className={`mt-4 px-4 py-3 rounded-2xl ${PT.surfaceSoft} text-xs ${PT.textSecondary} leading-relaxed`}>
                 Quando você vem, você não “cumpre uma agenda” — você sustenta um processo.
@@ -216,7 +325,7 @@ export default function PatientHeader({
       )}
 
       {/* Modal: leitura do contrato (sempre disponível) */}
-      {contractOpen && (
+      {showContract && contractOpen && (
         <div className="fixed inset-0 z-50">
           <div
             className="absolute inset-0 bg-slate-900/40"
@@ -261,10 +370,26 @@ export default function PatientHeader({
                 </div>
               </div>
 
-              <div className={`px-5 py-4 border-t ${PT.borderSubtle} flex justify-end`}>
-                <Button variant="secondary" onClick={() => setContractOpen(false)}>
-                  Fechar
-                </Button>
+              <div className={`px-5 py-4 border-t ${PT.borderSubtle} flex items-center justify-between gap-2`}>
+                {needsContractAcceptance && typeof onAcceptContract === "function" ? (
+                  <div className="text-xs text-slate-500">
+                    Para continuar, confirme que você leu e concorda com o termo.
+                  </div>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                  {needsContractAcceptance && typeof onAcceptContract === "function" ? (
+                    <Button onClick={onAcceptContract} disabled={remindersBusy}>
+                      Concordo com o termo
+                    </Button>
+                  ) : null}
+
+                  <Button variant="secondary" onClick={() => setContractOpen(false)}>
+                    Fechar
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -272,7 +397,14 @@ export default function PatientHeader({
       )}
 
       {/* Modal: Biblioteca (psicoeducação) */}
-      <PatientLibraryModal open={libraryOpen} onClose={() => setLibraryOpen(false)} />
+      {showLibrary ? (
+        <PatientLibraryModal open={libraryOpen} onClose={() => setLibraryOpen(false)} />
+      ) : null}
+
+      {/* Modal: Anotações do paciente */}
+      {showNotes ? (
+        <PatientNotesModal open={notesOpen} onClose={() => setNotesOpen(false)} />
+      ) : null}
     </>
   );
 }

@@ -67,6 +67,49 @@ function timeToMinutes(t) {
 }
 
 
+const RECURRENCE_FREQUENCIES = ["daily", "weekly", "biweekly", "monthly"];
+
+function normalizeRecurrenceFrequency(v) {
+  const s = String(v || "").trim().toLowerCase();
+  if (RECURRENCE_FREQUENCIES.includes(s)) return s;
+  return null;
+}
+
+function normalizePlannedTotalSessions(v) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.min(200, n));
+}
+
+function addDaysIso(isoDate, days) {
+  const d = dateMidnightUtc(isoDate);
+  d.setUTCDate(d.getUTCDate() + (parseInt(days, 10) || 0));
+  return d.toISOString().slice(0, 10);
+}
+
+function addMonthsIso(isoDate, months) {
+  const d = dateMidnightUtc(isoDate);
+  d.setUTCMonth(d.getUTCMonth() + (parseInt(months, 10) || 0));
+  return d.toISOString().slice(0, 10);
+}
+
+function buildRecurrenceIsoDates({ startIsoDate, frequency, count }) {
+  const freq = normalizeRecurrenceFrequency(frequency) || "weekly";
+  const n = normalizePlannedTotalSessions(count);
+  const out = [];
+  let cur = startIsoDate;
+  for (let i = 0; i < n; i++) {
+    out.push(cur);
+    if (i === n - 1) break;
+    if (freq === "daily") cur = addDaysIso(cur, 1);
+    else if (freq === "weekly") cur = addDaysIso(cur, 7);
+    else if (freq === "biweekly") cur = addDaysIso(cur, 14);
+    else if (freq === "monthly") cur = addMonthsIso(cur, 1);
+  }
+  return out;
+}
+
+
 function addMinutesToHHMM(hhmm, deltaMin) {
   const base = timeToMinutes(hhmm);
   const next = base + (Number(deltaMin) || 0);
@@ -836,6 +879,470 @@ async function findOccurrenceAtSlot(tenantRef, { isoDate, startTime }) {
   return found || null;
 }
 
+
+async function validateSeriesSlots({
+  tenantRef,
+  schedule,
+  slotIntervalMin,
+  blocks,
+  isoDates,
+  startTime,
+  ignoreSeriesId = null,
+  ignoreGroupIds = [],
+}) {
+  const ignoreGroups = new Set((ignoreGroupIds || []).map((x) => String(x || "")).filter(Boolean));
+
+  for (const isoDate of isoDates) {
+    const weekdayKey = getWeekdayKeyFromIsoDate(isoDate);
+    const ranges = Array.isArray(schedule?.weekAvailability?.[weekdayKey]) ? schedule.weekAvailability[weekdayKey] : [];
+    const openSlots = buildSlotsFromRanges(ranges, slotIntervalMin);
+    const openSet = new Set(openSlots);
+    if (!openSlots.length) throw new Error(`Dia sem horários abertos (${isoDate}).`);
+
+    const occsRaw = await fetchOccurrencesForDay(tenantRef, isoDate);
+    const occs = (occsRaw || []).filter((o) => {
+      if (!o) return false;
+      const sid = String(o.seriesId || "");
+      const gid = String(o.groupId || "");
+      if (ignoreSeriesId && sid && sid === ignoreSeriesId) return false;
+      if (ignoreGroups.size && gid && ignoreGroups.has(gid)) return false;
+      return true;
+    });
+
+    const blocked = computeBlockedTimesForDay({
+      occurrences: occs,
+      slotIntervalMin,
+      scheduleBufferMin: schedule.bufferMin,
+    });
+
+    for (let b = 0; b < blocks; b++) {
+      const slotTime = addMinutesToHHMM(startTime, b * slotIntervalMin);
+      if (!slotTime) throw new Error("Horário inválido");
+      if (!openSet.has(slotTime)) throw new Error(`Horário fora do período de atendimento (${isoDate} ${startTime}).`);
+      if (blocked.has(slotTime)) throw new Error(`Conflito no horário (${isoDate} ${slotTime}).`);
+    }
+
+    if (schedule.bufferMin) {
+      const bufferBlocks = Math.ceil(Number(schedule.bufferMin) / slotIntervalMin);
+      for (let k = 0; k < bufferBlocks; k++) {
+        const t2 = addMinutesToHHMM(startTime, (blocks + k) * slotIntervalMin);
+        if (!t2) continue;
+        if (blocked.has(t2)) throw new Error(`Conflito com buffer/intervalo (${isoDate} ${startTime}).`);
+      }
+    }
+  }
+}
+
+function estimateOccurrenceWrites({ plannedTotalSessions, blocks, extraWrites = 1 }) {
+  const n = normalizePlannedTotalSessions(plannedTotalSessions);
+  const b = Math.max(1, Math.min(8, parseInt(blocks, 10) || 1));
+  return n * b + (parseInt(extraWrites, 10) || 0);
+}
+
+async function createSeriesWithOccurrences({
+  tenantRef,
+  schedule,
+  kind,
+  startIsoDate,
+  startTime,
+  frequency,
+  plannedTotalSessions,
+  blocks,
+  slotIntervalMin,
+  durationMin,
+  bufferMin,
+  patientId = null,
+  leadName = null,
+  leadMobile = null,
+}) {
+  const n = normalizePlannedTotalSessions(plannedTotalSessions);
+  const freq = normalizeRecurrenceFrequency(frequency) || "weekly";
+  const isoDates = buildRecurrenceIsoDates({ startIsoDate, frequency: freq, count: n });
+
+  const writes = estimateOccurrenceWrites({ plannedTotalSessions: n, blocks, extraWrites: 2 });
+  if (writes > 450) throw new Error("Série muito grande para criar de uma vez. Reduza a quantidade de sessões.");
+
+  await validateSeriesSlots({
+    tenantRef,
+    schedule,
+    slotIntervalMin,
+    blocks,
+    isoDates,
+    startTime,
+  });
+
+  const db = admin.firestore();
+  const seriesRef = tenantRef.collection("appointmentSeries").doc();
+  const seriesId = seriesRef.id;
+
+  const startDate = dateMidnightUtc(isoDates[0]);
+  const endDate = dateMidnightUtc(isoDates[isoDates.length - 1]);
+
+  const batch = db.batch();
+  batch.set(seriesRef, {
+    kind,
+    title: kind === "appointment" ? "Sessão" : "Reserva (hold)",
+    startDate,
+    endDate,
+    startTime,
+    frequency: freq,
+    plannedTotalSessions: n,
+    durationBlocks: blocks,
+    slotIntervalMin,
+    durationMin,
+    bufferMin: Number(bufferMin) > 0 ? Number(bufferMin) : 0,
+    patientId: patientId || null,
+    leadName: kind === "hold" ? String(leadName || "").trim() : null,
+    leadMobile: kind === "hold" ? String(leadMobile || "").trim() : null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  const createdIds = [];
+
+  for (let i = 0; i < isoDates.length; i++) {
+    const dIso = isoDates[i];
+    const d = dateMidnightUtc(dIso);
+
+    const mainRef = tenantRef.collection("appointmentOccurrences").doc();
+    const groupId = mainRef.id;
+    createdIds.push(mainRef.id);
+
+    batch.set(mainRef, {
+      seriesId,
+      patientId: patientId || null,
+      groupId,
+      parentOccurrenceId: null,
+      isBlock: false,
+      blockIndex: 1,
+      durationBlocks: blocks,
+      slotIntervalMin,
+      slotKey: makeSlotKey(dIso, startTime),
+      date: d,
+      startTime,
+      durationMin,
+      bufferMin: Number(bufferMin) > 0 ? Number(bufferMin) : 0,
+      sessionIndex: i + 1,
+      plannedTotalSessions: isoDates.length,
+      status: "Agendado",
+      isHold: kind === "hold",
+      leadName: kind === "hold" ? String(leadName || "").trim() : null,
+      leadMobile: kind === "hold" ? String(leadMobile || "").trim() : null,
+      occurrenceCodeId: null,
+      observation: "",
+      progressNote: "",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    for (let b = 1; b < blocks; b++) {
+      const slotTime = addMinutesToHHMM(startTime, b * slotIntervalMin);
+      const blockRef = tenantRef.collection("appointmentOccurrences").doc();
+      batch.set(blockRef, {
+        seriesId,
+        patientId: patientId || null,
+        groupId,
+        parentOccurrenceId: mainRef.id,
+        isBlock: true,
+        blockIndex: b + 1,
+        durationBlocks: blocks,
+        slotIntervalMin,
+        slotKey: makeSlotKey(dIso, slotTime),
+        date: d,
+        startTime: slotTime,
+        durationMin,
+        bufferMin: Number(bufferMin) > 0 ? Number(bufferMin) : 0,
+        sessionIndex: i + 1,
+        plannedTotalSessions: isoDates.length,
+        status: "Agendado",
+        isHold: kind === "hold",
+        leadName: kind === "hold" ? String(leadName || "").trim() : null,
+        leadMobile: kind === "hold" ? String(leadMobile || "").trim() : null,
+        occurrenceCodeId: null,
+        observation: "",
+        progressNote: "",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
+  await batch.commit();
+  return { seriesId, createdIds };
+}
+
+async function pickAnchorOccurrenceFromSeriesMain({ mainOccurrences, todayIso }) {
+  const sorted = (mainOccurrences || [])
+    .slice()
+    .sort((a, b) => {
+      const ad = toIsoDate(safeToDate(a.date) || new Date(0));
+      const bd = toIsoDate(safeToDate(b.date) || new Date(0));
+      if (ad !== bd) return ad < bd ? -1 : 1;
+      const at = String(a.startTime || "");
+      const bt = String(b.startTime || "");
+      return at < bt ? -1 : at > bt ? 1 : 0;
+    });
+
+  const candidate = sorted.find((o) => {
+    const iso = toIsoDate(safeToDate(o.date) || new Date(0));
+    return iso >= todayIso;
+  });
+
+  return candidate || sorted[0] || null;
+}
+
+async function convertHoldToAppointmentSeries({
+  tenantRef,
+  schedule,
+  holdOccurrenceId,
+  isoDate,
+  startTime,
+  blocks,
+  slotIntervalMin,
+  durationMin,
+  bufferMin,
+  patientId,
+  plannedTotalSessions,
+  frequency,
+}) {
+  const db = admin.firestore();
+  const holdRef = holdOccurrenceId ? tenantRef.collection("appointmentOccurrences").doc(holdOccurrenceId) : null;
+  const holdSnap = holdRef ? await holdRef.get() : null;
+
+  let holdDoc = null;
+  if (holdSnap && holdSnap.exists) {
+    holdDoc = { id: holdSnap.id, ...(holdSnap.data() || {}) };
+  } else {
+    const existing = await findOccurrenceAtSlot(tenantRef, { isoDate, startTime });
+    if (!existing) throw new Error("Reserva não encontrada neste horário.");
+    holdDoc = { id: existing.id, ...(existing.data() || {}) };
+  }
+
+  if (holdDoc.isHold !== true) throw new Error("Este item não é uma reserva (hold).");
+
+  const oldSeriesId = holdDoc.seriesId ? String(holdDoc.seriesId) : null;
+  const oldGroupId = String(holdDoc.groupId || holdDoc.id);
+
+  // Fetch existing series occurrences (if any)
+  let seriesOccSnaps = null;
+  if (oldSeriesId) {
+    seriesOccSnaps = await tenantRef.collection("appointmentOccurrences").where("seriesId", "==", oldSeriesId).get();
+  }
+
+  const seriesOccs = seriesOccSnaps ? seriesOccSnaps.docs.map((d) => ({ id: d.id, ref: d.ref, ...(d.data() || {}) })) : [];
+  const mainOccs = (oldSeriesId ? seriesOccs : [{ id: holdDoc.id, ref: holdRef, ...holdDoc }]).filter((o) => o && o.isBlock !== true);
+
+  const todayIso = toIsoDate(new Date());
+  const anchor = await pickAnchorOccurrenceFromSeriesMain({ mainOccurrences: mainOccs, todayIso });
+  if (!anchor) throw new Error("Não foi possível determinar a primeira ocorrência da reserva.");
+
+  const anchorIso = toIsoDate(safeToDate(anchor.date) || new Date(`${isoDate}T00:00:00.000Z`));
+  const anchorStartTime = normalizeTimeHHMM(anchor.startTime) || normalizeTimeHHMM(startTime);
+  if (!anchorStartTime) throw new Error("Horário inválido");
+
+  const n = normalizePlannedTotalSessions(plannedTotalSessions);
+  const freq = normalizeRecurrenceFrequency(frequency) || "weekly";
+  const isoDates = buildRecurrenceIsoDates({ startIsoDate: anchorIso, frequency: freq, count: n });
+  const desiredMainSlotKeys = isoDates.map((dIso) => makeSlotKey(dIso, anchorStartTime));
+  const desiredSlotKeyToSessionIndex = new Map(desiredMainSlotKeys.map((k, idx) => [k, idx + 1]));
+
+  // Validate duration match with hold
+  const holdBlocks = Number(holdDoc.durationBlocks) > 0 ? Number(holdDoc.durationBlocks) : 1;
+  if (holdBlocks !== blocks) {
+    throw new Error("A reserva existe, mas a duração não coincide. Converta com a mesma duração (blocos).");
+  }
+
+  const estimatedWrites = estimateOccurrenceWrites({
+    plannedTotalSessions: n,
+    blocks,
+    extraWrites: oldSeriesId ? 50 : 10, // headroom for deletes/updates
+  });
+  if (estimatedWrites > 450) throw new Error("Série muito grande para converter de uma vez. Reduza a quantidade de sessões.");
+
+  await validateSeriesSlots({
+    tenantRef,
+    schedule,
+    slotIntervalMin,
+    blocks,
+    isoDates,
+    startTime: anchorStartTime,
+    ignoreSeriesId: oldSeriesId,
+    ignoreGroupIds: oldSeriesId ? [] : [oldGroupId],
+  });
+
+  // Build maps for existing holds in the series by main slotKey
+  const existingMainBySlotKey = new Map();
+  const groupDocsByGroupId = new Map();
+
+  if (oldSeriesId) {
+    for (const o of seriesOccs) {
+      const gid = String(o.groupId || "");
+      if (!gid) continue;
+      if (!groupDocsByGroupId.has(gid)) groupDocsByGroupId.set(gid, []);
+      groupDocsByGroupId.get(gid).push(o);
+
+      if (o.isBlock !== true) {
+        const key = String(o.slotKey || makeSlotKey(toIsoDate(safeToDate(o.date) || new Date(0)), o.startTime));
+        existingMainBySlotKey.set(key, o);
+      }
+    }
+  } else {
+    // single hold group
+    const q = await tenantRef.collection("appointmentOccurrences").where("groupId", "==", oldGroupId).limit(30).get();
+    const groupDocs = q.empty ? [{ id: holdDoc.id, ref: holdRef, ...holdDoc }] : q.docs.map((d) => ({ id: d.id, ref: d.ref, ...(d.data() || {}) }));
+    groupDocsByGroupId.set(oldGroupId, groupDocs);
+    const key = String(holdDoc.slotKey || makeSlotKey(anchorIso, anchorStartTime));
+    existingMainBySlotKey.set(key, { id: holdDoc.id, ref: holdRef, ...holdDoc });
+  }
+
+  // Prepare series doc (reuse old seriesId if exists; otherwise create new)
+  const seriesRef = oldSeriesId ? tenantRef.collection("appointmentSeries").doc(oldSeriesId) : tenantRef.collection("appointmentSeries").doc();
+  const seriesId = seriesRef.id;
+
+  const startDate = dateMidnightUtc(isoDates[0]);
+  const endDate = dateMidnightUtc(isoDates[isoDates.length - 1]);
+
+  const batch = db.batch();
+
+  batch.set(
+    seriesRef,
+    {
+      kind: "appointment",
+      title: "Sessão",
+      startDate,
+      endDate,
+      startTime: anchorStartTime,
+      frequency: freq,
+      plannedTotalSessions: n,
+      durationBlocks: blocks,
+      slotIntervalMin,
+      durationMin,
+      bufferMin: Number(bufferMin) > 0 ? Number(bufferMin) : 0,
+      patientId,
+      leadName: admin.firestore.FieldValue.delete(),
+      leadMobile: admin.firestore.FieldValue.delete(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  // Delete old hold groups not in desired schedule (only if oldSeriesId)
+  if (oldSeriesId) {
+    for (const [gid, docs] of groupDocsByGroupId.entries()) {
+      const main = (docs || []).find((x) => x && x.isBlock !== true);
+      if (!main) continue;
+      const mainKey = String(main.slotKey || "");
+      if (!desiredSlotKeyToSessionIndex.has(mainKey)) {
+        // delete all docs of the group (still a hold series)
+        for (const d of docs) {
+          if (!d?.ref) continue;
+          batch.delete(d.ref);
+        }
+      }
+    }
+  }
+
+  // Update or create desired sessions
+  let firstOccurrenceId = null;
+
+  for (let i = 0; i < isoDates.length; i++) {
+    const dIso = isoDates[i];
+    const sessionIndex = i + 1;
+    const mainKey = makeSlotKey(dIso, anchorStartTime);
+
+    const existingMain = existingMainBySlotKey.get(mainKey);
+    if (existingMain) {
+      const gid = String(existingMain.groupId || existingMain.id);
+      const docs = groupDocsByGroupId.get(gid) || [];
+      for (const d of docs) {
+        batch.set(
+          d.ref,
+          {
+            seriesId,
+            patientId,
+            isHold: false,
+            leadName: admin.firestore.FieldValue.delete(),
+            leadMobile: admin.firestore.FieldValue.delete(),
+            durationMin,
+            durationBlocks: blocks,
+            slotIntervalMin,
+            sessionIndex,
+            plannedTotalSessions: isoDates.length,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+      if (sessionIndex === 1) firstOccurrenceId = existingMain.id;
+    } else {
+      // create new occurrence group
+      const d = dateMidnightUtc(dIso);
+
+      const mainRef = tenantRef.collection("appointmentOccurrences").doc();
+      const groupId = mainRef.id;
+      if (sessionIndex === 1) firstOccurrenceId = mainRef.id;
+
+      batch.set(mainRef, {
+        seriesId,
+        patientId,
+        groupId,
+        parentOccurrenceId: null,
+        isBlock: false,
+        blockIndex: 1,
+        durationBlocks: blocks,
+        slotIntervalMin,
+        slotKey: makeSlotKey(dIso, anchorStartTime),
+        date: d,
+        startTime: anchorStartTime,
+        durationMin,
+        bufferMin: Number(bufferMin) > 0 ? Number(bufferMin) : 0,
+        sessionIndex,
+        plannedTotalSessions: isoDates.length,
+        status: "Agendado",
+        isHold: false,
+        occurrenceCodeId: null,
+        observation: "",
+        progressNote: "",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      for (let b = 1; b < blocks; b++) {
+        const slotTime = addMinutesToHHMM(anchorStartTime, b * slotIntervalMin);
+        const blockRef = tenantRef.collection("appointmentOccurrences").doc();
+        batch.set(blockRef, {
+          seriesId,
+          patientId,
+          groupId,
+          parentOccurrenceId: mainRef.id,
+          isBlock: true,
+          blockIndex: b + 1,
+          durationBlocks: blocks,
+          slotIntervalMin,
+          slotKey: makeSlotKey(dIso, slotTime),
+          date: d,
+          startTime: slotTime,
+          durationMin,
+          bufferMin: Number(bufferMin) > 0 ? Number(bufferMin) : 0,
+          sessionIndex,
+          plannedTotalSessions: isoDates.length,
+          status: "Agendado",
+          isHold: false,
+          occurrenceCodeId: null,
+          observation: "",
+          progressNote: "",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    }
+  }
+
+  await batch.commit();
+  return { seriesId, firstOccurrenceId };
+}
+
+
 export async function createHoldOccurrence({
   tenantId,
   isoDate,
@@ -845,6 +1352,8 @@ export async function createHoldOccurrence({
   durationBlocks,
   durationMin,
   replicateDays = 0,
+  plannedTotalSessions,
+  repeatFrequency,
 }) {
   if (!tenantId) throw new Error("tenantId required");
   const iso = normalizeIsoDate(isoDate);
@@ -867,7 +1376,34 @@ export async function createHoldOccurrence({
   const blocks = normalizeBlocks(durationBlocks, slotIntervalMin, durationMin);
   const durMin = blocks * slotIntervalMin;
 
-  const rep = Math.max(0, Math.min(15, parseInt(replicateDays, 10) || 0));
+  
+const freq = normalizeRecurrenceFrequency(repeatFrequency);
+const count = normalizePlannedTotalSessions(plannedTotalSessions);
+
+// Recorrência (série) — suporta diário/semanal/quinzenal/mensal e quantidade (01..30 + "mais")
+// Se não for informado, mantém o comportamento antigo de replicar por dias (MVP legado).
+if ((count && count > 1) || freq) {
+  const n = normalizePlannedTotalSessions(plannedTotalSessions || 1);
+  const f = freq || "weekly";
+  return await createSeriesWithOccurrences({
+    tenantRef,
+    schedule,
+    kind: "hold",
+    startIsoDate: iso,
+    startTime: st,
+    frequency: f,
+    plannedTotalSessions: n,
+    blocks,
+    slotIntervalMin,
+    durationMin: durMin,
+    bufferMin: Number(schedule?.bufferMin) > 0 ? Number(schedule.bufferMin) : 0,
+    patientId: null,
+    leadName: name,
+    leadMobile: mobile,
+  });
+}
+
+const rep = Math.max(0, Math.min(15, parseInt(replicateDays, 10) || 0));
 
   const createdIds = [];
   const skipped = [];
@@ -997,6 +1533,9 @@ export async function createAppointmentAtSlot({
   mobile,
   durationBlocks,
   durationMin,
+  plannedTotalSessions,
+  repeatFrequency,
+  fromHoldOccurrenceId,
 }) {
   if (!tenantId) throw new Error("tenantId required");
   const iso = normalizeIsoDate(isoDate);
@@ -1011,6 +1550,10 @@ export async function createAppointmentAtSlot({
   if (!cpfDigits) throw new Error("CPF obrigatório");
   if (!mob) throw new Error("Celular obrigatório");
 
+  const totalSessions = normalizePlannedTotalSessions(plannedTotalSessions);
+  const freq = normalizeRecurrenceFrequency(repeatFrequency) || "weekly";
+  const wantsSeries = totalSessions > 1;
+
   const db = admin.firestore();
   const tenantRef = db.collection("tenants").doc(tenantId);
 
@@ -1021,23 +1564,46 @@ export async function createAppointmentAtSlot({
   const slotIntervalMin = getSlotIntervalMin(schedule);
   const blocks = normalizeBlocks(durationBlocks, slotIntervalMin, durationMin);
   const durMin = blocks * slotIntervalMin;
+  const bufferMin = Number(schedule?.bufferMin) > 0 ? Number(schedule.bufferMin) : 0;
 
   // Check if slot already has something
   const existing = await findOccurrenceAtSlot(tenantRef, { isoDate: iso, startTime: st });
   if (existing) {
     const d = existing.data() || {};
-    // if it's a hold, we convert it to an appointment (requires contiguous duration match)
+    // If it's a hold, we can convert
     if (d.isHold === true) {
-      const groupId = String(d.groupId || existing.id);
       const holdBlocks = Number(d.durationBlocks) > 0 ? Number(d.durationBlocks) : 1;
       if (holdBlocks !== blocks) {
-        throw new Error("A reserva existe, mas a duração não coincide (refaça a reserva com a mesma duração).");
+        throw new Error("A reserva existe, mas a duração não coincide (use a mesma duração em blocos).");
       }
 
       const pid = await ensurePatientByCpf({ tenantRef, cpfDigits, name, mob });
 
+      // Se pediu série (ex.: hold 2/2 -> agendamento 30 sessões), converte toda a série do hold e estende.
+      if (wantsSeries) {
+        const conv = await convertHoldToAppointmentSeries({
+          tenantRef,
+          schedule,
+          holdOccurrenceId: fromHoldOccurrenceId || existing.id,
+          isoDate: iso,
+          startTime: st,
+          blocks,
+          slotIntervalMin,
+          durationMin: durMin,
+          bufferMin,
+          patientId: pid,
+          plannedTotalSessions: totalSessions,
+          frequency: freq,
+        });
+
+        return { updated: true, occurrenceId: conv.firstOccurrenceId, patientId: pid, seriesId: conv.seriesId };
+      }
+
+      // Conversão simples (uma ocorrência) — mantém comportamento atual
+      const groupId = String(d.groupId || existing.id);
       const snap = await tenantRef.collection("appointmentOccurrences").where("groupId", "==", groupId).limit(20).get();
       const docsToUpdate = snap.empty ? [existing] : snap.docs.map((d) => d);
+
       const batch = db.batch();
       for (const doc of docsToUpdate) {
         batch.set(
@@ -1056,13 +1622,35 @@ export async function createAppointmentAtSlot({
         );
       }
       await batch.commit();
-
       return { updated: true, occurrenceId: existing.id, patientId: pid };
     }
+
     throw Object.assign(new Error("slot already occupied"), { code: "SLOT_OCCUPIED" });
   }
 
-  // Validate contiguous availability
+  // Se for série (recorrência), cria a série inteira a partir do primeiro horário
+  if (wantsSeries) {
+    const patientId = await ensurePatientByCpf({ tenantRef, cpfDigits, name, mob });
+    const created = await createSeriesWithOccurrences({
+      tenantRef,
+      schedule,
+      kind: "appointment",
+      startIsoDate: iso,
+      startTime: st,
+      frequency: freq,
+      plannedTotalSessions: totalSessions,
+      blocks,
+      slotIntervalMin,
+      durationMin: durMin,
+      bufferMin,
+      patientId,
+      leadName: null,
+      leadMobile: null,
+    });
+    return { created: true, seriesId: created.seriesId, occurrenceId: created.createdIds?.[0] || null, patientId };
+  }
+
+  // Validate contiguous availability (caso simples)
   const weekdayKey = getWeekdayKeyFromIsoDate(iso);
   const ranges = Array.isArray(schedule?.weekAvailability?.[weekdayKey]) ? schedule.weekAvailability[weekdayKey] : [];
   const openSlots = buildSlotsFromRanges(ranges, slotIntervalMin);
@@ -1113,7 +1701,7 @@ export async function createAppointmentAtSlot({
     date: d,
     startTime: st,
     durationMin: durMin,
-    bufferMin: Number(schedule?.bufferMin) > 0 ? Number(schedule.bufferMin) : 0,
+    bufferMin,
     sessionIndex: null,
     plannedTotalSessions: null,
     status: "Agendado",
@@ -1141,7 +1729,7 @@ export async function createAppointmentAtSlot({
       date: d,
       startTime: slotTime,
       durationMin: durMin,
-      bufferMin: Number(schedule?.bufferMin) > 0 ? Number(schedule.bufferMin) : 0,
+      bufferMin,
       sessionIndex: null,
       plannedTotalSessions: null,
       status: "Agendado",
@@ -1157,7 +1745,6 @@ export async function createAppointmentAtSlot({
   await batch.commit();
   return { created: true, occurrenceId: mainRef.id, patientId };
 }
-
 
 async function ensurePatientByCpf({ tenantRef, cpfDigits, name, mob }) {
   const db = admin.firestore();
@@ -1209,6 +1796,7 @@ export async function updateOccurrenceStatus({ tenantId, occurrenceId, status })
   if (!snap.exists) throw new Error("not found");
 
   const d = snap.data() || {};
+  if (d.isHold === true) throw new Error("reserva: status travado até converter em agendamento");
   const groupId = String(d.groupId || occurrenceId);
 
   const q = await tenantRef.collection("appointmentOccurrences").where("groupId", "==", groupId).limit(30).get();
@@ -1227,6 +1815,786 @@ export async function updateOccurrenceStatus({ tenantId, occurrenceId, status })
   await batch.commit();
   return { ok: true, groupUpdated: targets.length };
 }
+
+export async function rescheduleOccurrence({
+  tenantId,
+  occurrenceId,
+  newIsoDate,
+  newStartTime,
+  scope = "single", // 'single' | 'future'
+}) {
+  if (!tenantId) throw new Error("tenantId required");
+  if (!occurrenceId) throw new Error("occurrenceId required");
+
+  const iso = normalizeIsoDate(newIsoDate);
+  const st = normalizeTimeHHMM(newStartTime);
+  if (!iso) throw new Error("Data inválida");
+  if (!st) throw new Error("Horário inválido");
+
+  const db = admin.firestore();
+  const tenantRef = db.collection("tenants").doc(tenantId);
+
+  const scheduleSnap = await tenantRef.collection("settings").doc("schedule").get();
+  const scheduleRaw = scheduleSnap.exists ? scheduleSnap.data() : null;
+  const schedule = normalizeScheduleForRead(scheduleRaw || {});
+  const slotIntervalMin = getSlotIntervalMin(schedule);
+
+  // Resolve main occurrence (avoid passing a block doc id)
+  let mainId = String(occurrenceId);
+  let mainSnap = await tenantRef.collection("appointmentOccurrences").doc(mainId).get();
+  if (!mainSnap.exists) throw new Error("not found");
+  let main = { id: mainSnap.id, ...(mainSnap.data() || {}) };
+  if (main.isBlock === true && main.parentOccurrenceId) {
+    mainId = String(main.parentOccurrenceId);
+    mainSnap = await tenantRef.collection("appointmentOccurrences").doc(mainId).get();
+    if (!mainSnap.exists) throw new Error("not found");
+    main = { id: mainSnap.id, ...(mainSnap.data() || {}) };
+  }
+  if (main.isBlock === true) throw new Error("occurrenceId must be a main occurrence");
+
+  const groupId = String(main.groupId || main.id);
+  const blocks = normalizeBlocks(main.durationBlocks, slotIntervalMin, main.durationMin);
+
+  const wantsFuture = String(scope || "").toLowerCase() === "future";
+  const isRecurring =
+    Boolean(main.seriesId) &&
+    Number.isFinite(Number(main.sessionIndex)) &&
+    Number.isFinite(Number(main.plannedTotalSessions)) &&
+    Number(main.plannedTotalSessions) > 1;
+
+  // SINGLE: move only this occurrence group
+  if (!wantsFuture || !isRecurring) {
+    await validateSeriesSlots({
+      tenantRef,
+      schedule,
+      slotIntervalMin,
+      blocks,
+      isoDates: [iso],
+      startTime: st,
+      ignoreGroupIds: [groupId],
+    });
+
+    const q = await tenantRef.collection("appointmentOccurrences").where("groupId", "==", groupId).limit(30).get();
+    const docs = q.empty
+      ? [{ ref: tenantRef.collection("appointmentOccurrences").doc(main.id), ...(main || {}) }]
+      : q.docs.map((d) => ({ ref: d.ref, ...(d.data() || {}) }));
+
+    const d = dateMidnightUtc(iso);
+    const batch = db.batch();
+    for (const doc of docs) {
+      const blockIndex = Number(doc.blockIndex) > 0 ? Number(doc.blockIndex) : 1;
+      const t = addMinutesToHHMM(st, (blockIndex - 1) * slotIntervalMin);
+      if (!t) throw new Error("Horário inválido");
+      batch.set(
+        doc.ref,
+        {
+          date: d,
+          startTime: t,
+          slotKey: makeSlotKey(iso, t),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+    await batch.commit();
+
+    return {
+      ok: true,
+      occurrenceId: main.id,
+      movedToIsoDate: iso,
+      movedToStartTime: st,
+      scopeApplied: "single",
+    };
+  }
+
+  // FUTURE: move this and future occurrences by splitting the series
+  const oldSeriesId = String(main.seriesId);
+  const seriesRef = tenantRef.collection("appointmentSeries").doc(oldSeriesId);
+  const seriesSnap = await seriesRef.get();
+  if (!seriesSnap.exists) {
+    // Fallback to single-move if series doc was deleted
+    return await rescheduleOccurrence({ tenantId, occurrenceId: main.id, newIsoDate: iso, newStartTime: st, scope: "single" });
+  }
+  const series = seriesSnap.data() || {};
+
+  const currentIso = toIsoDate(safeToDate(main.date) || dateMidnightUtc(toIsoDate(new Date())));
+  if (iso < currentIso) {
+    throw new Error('Para aplicar "esta e futuras", escolha uma data igual ou posterior à data atual desta ocorrência.');
+  }
+
+  const total = normalizePlannedTotalSessions(main.plannedTotalSessions || series.plannedTotalSessions || 1);
+  const currentIndex = Math.max(1, parseInt(String(main.sessionIndex || 1), 10) || 1);
+  const remaining = total - currentIndex + 1;
+  if (remaining <= 0) throw new Error("Nada para reagendar.");
+
+  const freq = normalizeRecurrenceFrequency(series.frequency) || "weekly";
+
+  // If applying from session 1, just move the entire series without splitting.
+  if (currentIndex <= 1) {
+    const isoDatesAll = buildRecurrenceIsoDates({ startIsoDate: iso, frequency: freq, count: total });
+    const writes = estimateOccurrenceWrites({ plannedTotalSessions: total, blocks, extraWrites: 10 });
+    if (writes > 450) throw new Error("Série muito grande para reagendar de uma vez. Reduza a quantidade de sessões.");
+
+    await validateSeriesSlots({ tenantRef, schedule, slotIntervalMin, blocks, isoDates: isoDatesAll, startTime: st, ignoreSeriesId: oldSeriesId });
+
+    const occSnap = await tenantRef
+      .collection("appointmentOccurrences")
+      .where("seriesId", "==", oldSeriesId)
+      .limit(2000)
+      .get();
+    const occDocs = occSnap.docs.map((d) => ({ id: d.id, ref: d.ref, ...(d.data() || {}) }));
+
+    const batch = db.batch();
+    batch.set(
+      seriesRef,
+      {
+        startDate: dateMidnightUtc(isoDatesAll[0]),
+        endDate: dateMidnightUtc(isoDatesAll[isoDatesAll.length - 1]),
+        startTime: st,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    for (const o of occDocs) {
+      const si = Number(o.sessionIndex);
+      if (!Number.isFinite(si) || si < 1) continue;
+      const idx = si - 1;
+      const targetIso = isoDatesAll[idx];
+      if (!targetIso) continue;
+      const blockIndex = Number(o.blockIndex) > 0 ? Number(o.blockIndex) : 1;
+      const t = addMinutesToHHMM(st, (blockIndex - 1) * slotIntervalMin);
+      if (!t) throw new Error("Horário inválido");
+
+      batch.set(
+        o.ref,
+        {
+          date: dateMidnightUtc(targetIso),
+          startTime: t,
+          slotKey: makeSlotKey(targetIso, t),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+
+    await batch.commit();
+    return {
+      ok: true,
+      occurrenceId: main.id,
+      movedToIsoDate: iso,
+      movedToStartTime: st,
+      scopeApplied: "future",
+      mode: "series_move",
+      seriesId: oldSeriesId,
+    };
+  }
+
+  const isoDates = buildRecurrenceIsoDates({ startIsoDate: iso, frequency: freq, count: remaining });
+
+  const writes = estimateOccurrenceWrites({ plannedTotalSessions: remaining, blocks, extraWrites: 10 });
+  if (writes > 450) throw new Error("Série muito grande para reagendar de uma vez. Reduza a quantidade de sessões.");
+
+  await validateSeriesSlots({
+    tenantRef,
+    schedule,
+    slotIntervalMin,
+    blocks,
+    isoDates,
+    startTime: st,
+    ignoreSeriesId: oldSeriesId,
+  });
+
+  const occSnap = await tenantRef
+    .collection("appointmentOccurrences")
+    .where("seriesId", "==", oldSeriesId)
+    .limit(2000)
+    .get();
+  const occDocs = occSnap.docs.map((d) => ({ id: d.id, ref: d.ref, ...(d.data() || {}) }));
+
+  const futureDocs = occDocs.filter((o) => {
+    const si = Number(o.sessionIndex);
+    return Number.isFinite(si) && si >= currentIndex;
+  });
+  if (!futureDocs.length) throw new Error("Não encontrei ocorrências futuras desta série.");
+
+  const pastMain = occDocs
+    .filter((o) => o && o.isBlock !== true)
+    .filter((o) => {
+      const si = Number(o.sessionIndex);
+      return Number.isFinite(si) && si < currentIndex;
+    })
+    .sort((a, b) => Number(a.sessionIndex) - Number(b.sessionIndex));
+
+  const lastPast = pastMain.length ? pastMain[pastMain.length - 1] : null;
+  const lastPastIso = lastPast?.date ? toIsoDate(safeToDate(lastPast.date) || dateMidnightUtc(currentIso)) : null;
+
+  const newSeriesRef = tenantRef.collection("appointmentSeries").doc();
+  const newSeriesId = newSeriesRef.id;
+
+  const kind = String(series.kind || (main.isHold === true ? "hold" : "appointment"));
+  const title = String(series.title || (kind === "appointment" ? "Sessão" : "Reserva (hold)"));
+
+  const startDate = dateMidnightUtc(isoDates[0]);
+  const endDate = dateMidnightUtc(isoDates[isoDates.length - 1]);
+
+  const batch = db.batch();
+  batch.set(
+    newSeriesRef,
+    {
+      kind,
+      title,
+      startDate,
+      endDate,
+      startTime: st,
+      frequency: freq,
+      plannedTotalSessions: total,
+      durationBlocks: blocks,
+      slotIntervalMin,
+      durationMin: Number(series.durationMin) > 0 ? Number(series.durationMin) : blocks * slotIntervalMin,
+      bufferMin:
+        Number(series.bufferMin) > 0
+          ? Number(series.bufferMin)
+          : Number(schedule.bufferMin) > 0
+          ? Number(schedule.bufferMin)
+          : 0,
+      patientId: series.patientId || main.patientId || null,
+      leadName: kind === "hold" ? series.leadName || main.leadName || null : null,
+      leadMobile: kind === "hold" ? series.leadMobile || main.leadMobile || null : null,
+      sessionIndexStart: currentIndex,
+      sessionCount: remaining,
+      splitFromSeriesId: oldSeriesId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  batch.set(
+    seriesRef,
+    {
+      // Keep the past occurrences in the old series. Best-effort update of endDate for reporting.
+      endDate: lastPastIso ? dateMidnightUtc(lastPastIso) : series.endDate || series.startDate || null,
+      splitAtSessionIndex: currentIndex,
+      splitNewSeriesId: newSeriesId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  for (const o of futureDocs) {
+    const si = Number(o.sessionIndex);
+    const idx = si - currentIndex;
+    const targetIso = isoDates[idx];
+    if (!targetIso) continue;
+
+    const blockIndex = Number(o.blockIndex) > 0 ? Number(o.blockIndex) : 1;
+    const t = addMinutesToHHMM(st, (blockIndex - 1) * slotIntervalMin);
+    if (!t) throw new Error("Horário inválido");
+
+    batch.set(
+      o.ref,
+      {
+        seriesId: newSeriesId,
+        date: dateMidnightUtc(targetIso),
+        startTime: t,
+        slotKey: makeSlotKey(targetIso, t),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
+  await batch.commit();
+
+  return {
+    ok: true,
+    occurrenceId: main.id,
+    movedToIsoDate: iso,
+    movedToStartTime: st,
+    scopeApplied: "future",
+    oldSeriesId,
+    newSeriesId,
+    mode: "series_split",
+  };
+}
+
+
+
+export async function deleteOccurrence({
+  tenantId,
+  occurrenceId,
+  scope = "single", // 'single' | 'future'
+}) {
+  if (!tenantId) throw new Error("tenantId required");
+  if (!occurrenceId) throw new Error("occurrenceId required");
+
+  const db = admin.firestore();
+  const tenantRef = db.collection("tenants").doc(tenantId);
+
+  // Resolve main occurrence (avoid passing a block doc id)
+  let mainId = String(occurrenceId);
+  let mainSnap = await tenantRef.collection("appointmentOccurrences").doc(mainId).get();
+  if (!mainSnap.exists) throw new Error("not found");
+  let main = { id: mainSnap.id, ...(mainSnap.data() || {}) };
+  if (main.isBlock === true && main.parentOccurrenceId) {
+    mainId = String(main.parentOccurrenceId);
+    mainSnap = await tenantRef.collection("appointmentOccurrences").doc(mainId).get();
+    if (!mainSnap.exists) throw new Error("not found");
+    main = { id: mainSnap.id, ...(mainSnap.data() || {}) };
+  }
+  if (main.isBlock === true) throw new Error("occurrenceId must be a main occurrence");
+
+  const groupId = String(main.groupId || main.id);
+
+  const wantsFuture = String(scope || "").toLowerCase() === "future";
+  const isRecurring =
+    Boolean(main.seriesId) &&
+    Number.isFinite(Number(main.sessionIndex)) &&
+    Number.isFinite(Number(main.plannedTotalSessions)) &&
+    Number(main.plannedTotalSessions) > 1;
+
+  // SINGLE: delete only this occurrence group (main + blocks)
+  if (!wantsFuture || !isRecurring) {
+    const q = await tenantRef.collection("appointmentOccurrences").where("groupId", "==", groupId).limit(80).get();
+    const refs = q.empty ? [tenantRef.collection("appointmentOccurrences").doc(main.id)] : q.docs.map((d) => d.ref);
+
+    const batch = db.batch();
+    for (const ref of refs) batch.delete(ref);
+    await batch.commit();
+
+    return { ok: true, scopeApplied: "single", deletedCount: refs.length };
+  }
+
+  // FUTURE: delete this and future occurrences by truncating the series
+  const oldSeriesId = String(main.seriesId);
+  const seriesRef = tenantRef.collection("appointmentSeries").doc(oldSeriesId);
+  const seriesSnap = await seriesRef.get();
+  if (!seriesSnap.exists) {
+    // Fallback to single-delete if series doc was deleted
+    return await deleteOccurrence({ tenantId, occurrenceId: main.id, scope: "single" });
+  }
+  const series = seriesSnap.data() || {};
+
+  const total = normalizePlannedTotalSessions(main.plannedTotalSessions || series.plannedTotalSessions || 1);
+  const currentIndex = Math.max(1, parseInt(String(main.sessionIndex || 1), 10) || 1);
+  const newTotal = Math.max(0, currentIndex - 1);
+
+  const occSnap = await tenantRef
+    .collection("appointmentOccurrences")
+    .where("seriesId", "==", oldSeriesId)
+    .limit(2000)
+    .get();
+  const occDocs = occSnap.docs.map((d) => ({ id: d.id, ref: d.ref, ...(d.data() || {}) }));
+
+  const toDelete = occDocs.filter((o) => {
+    const si = Number(o.sessionIndex);
+    return Number.isFinite(si) && si >= currentIndex;
+  });
+  if (!toDelete.length) throw new Error("Não encontrei ocorrências desta série para excluir.");
+
+  const toKeep = occDocs.filter((o) => {
+    const si = Number(o.sessionIndex);
+    return Number.isFinite(si) && si < currentIndex;
+  });
+
+  const pastMain = toKeep
+    .filter((o) => o && o.isBlock !== true)
+    .sort((a, b) => Number(a.sessionIndex) - Number(b.sessionIndex));
+  const lastPast = pastMain.length ? pastMain[pastMain.length - 1] : null;
+  const lastPastIso = lastPast?.date ? toIsoDate(safeToDate(lastPast.date) || new Date()) : null;
+
+  const batch = db.batch();
+
+  // Delete all docs for this and future sessions (includes blocks)
+  for (const o of toDelete) batch.delete(o.ref);
+
+  if (newTotal <= 0) {
+    // If deleting from session 1, remove the series doc too
+    batch.delete(seriesRef);
+  } else {
+    // Truncate series metadata and keep past occurrences consistent
+    batch.set(
+      seriesRef,
+      {
+        plannedTotalSessions: newTotal,
+        endDate: lastPastIso ? dateMidnightUtc(lastPastIso) : series.endDate || series.startDate || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    for (const o of toKeep) {
+      batch.set(
+        o.ref,
+        {
+          plannedTotalSessions: newTotal,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+  }
+
+  await batch.commit();
+
+  return {
+    ok: true,
+    scopeApplied: "future",
+    oldSeriesId,
+    deletedCount: toDelete.length,
+    previousPlannedTotalSessions: total,
+    newPlannedTotalSessions: newTotal,
+  };
+}
+
+// =========================
+// Occurrence Codes (AgendaPsi)
+// =========================
+
+export async function listOccurrenceCodes({ tenantId, activeOnly = true } = {}) {
+  const tid = String(tenantId || "").trim();
+  if (!tid) throw new Error("tenantId obrigatório");
+
+  const db = admin.firestore();
+  const ref = db.collection(`tenants/${tid}/occurrenceCodes`);
+
+  const snap = await ref.orderBy("code", "asc").get();
+  const items = snap.docs.map((d) => ({ id: d.id, ...plain(d.data() || {}) }));
+
+  if (!activeOnly) return items;
+
+  return items.filter((c) => c?.isActive !== false);
+}
+
+export async function upsertOccurrenceCode({
+  tenantId,
+  codeId = "",
+  code,
+  description = "",
+  isActive = true,
+} = {}) {
+  const tid = String(tenantId || "").trim();
+  if (!tid) throw new Error("tenantId obrigatório");
+
+  const c = String(code || "").trim();
+  if (!c) throw new Error("code obrigatório");
+
+  const desc = String(description || "").trim();
+
+  const db = admin.firestore();
+  const col = db.collection(`tenants/${tid}/occurrenceCodes`);
+  const normalizedCode = c.toUpperCase();
+
+  // Best-effort uniqueness check
+  const dupSnap = await col.where("code", "==", normalizedCode).limit(5).get();
+  const dup = dupSnap.docs.find((d) => d.id !== String(codeId || "").trim());
+  if (dup) throw new Error("Já existe um código com este valor.");
+
+  const ref = String(codeId || "").trim() ? col.doc(String(codeId || "").trim()) : col.doc();
+
+  const payload = {
+    code: normalizedCode,
+    description: desc,
+    isActive: Boolean(isActive),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  const snap = await ref.get();
+  if (!snap.exists) payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
+
+  await ref.set(payload, { merge: true });
+
+  return { ok: true, codeId: ref.id };
+}
+
+export async function deactivateOccurrenceCode({ tenantId, codeId } = {}) {
+  const tid = String(tenantId || "").trim();
+  const id = String(codeId || "").trim();
+  if (!tid) throw new Error("tenantId obrigatório");
+  if (!id) throw new Error("codeId obrigatório");
+
+  const db = admin.firestore();
+  const ref = db.doc(`tenants/${tid}/occurrenceCodes/${id}`);
+  await ref.set(
+    { isActive: false, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+  return { ok: true, codeId: id };
+}
+
+// =========================
+// Session Evolution (Prontuário por sessão)
+// Stored under patient subcollection to survive appointment deletion.
+// Path: tenants/{tenantId}/patients/{patientId}/sessionEvolutions/{occurrenceId}
+// =========================
+
+function makeEvolutionSortKey(isoDate, startTime) {
+  const iso = normalizeIsoDate(isoDate) || String(isoDate || "").trim();
+  const st = normalizeTimeHHMM(startTime) || String(startTime || "").trim();
+  return `${iso}#${st}`;
+}
+
+export async function getSessionEvolutionForOccurrence({ tenantId, occurrenceId } = {}) {
+  const tid = String(tenantId || "").trim();
+  const oid = String(occurrenceId || "").trim();
+  if (!tid) throw new Error("tenantId obrigatório");
+  if (!oid) throw new Error("occurrenceId obrigatório");
+
+  const db = admin.firestore();
+
+  const occRef = db.doc(`tenants/${tid}/appointmentOccurrences/${oid}`);
+  const occSnap = await occRef.get();
+  if (!occSnap.exists) throw new Error("Ocorrência não encontrada.");
+
+  const occ = plain(occSnap.data() || {});
+  if (occ?.isBlock === true) throw new Error("Ocorrência de bloco não suporta prontuário.");
+
+  const patientId = String(occ?.patientId || "").trim();
+  if (!patientId) {
+    return { ok: true, patientId: null, evolution: null };
+  }
+
+  const evoRef = db.doc(`tenants/${tid}/patients/${patientId}/sessionEvolutions/${oid}`);
+  const evoSnap = await evoRef.get();
+  if (!evoSnap.exists) return { ok: true, patientId, evolution: null };
+
+  const raw = plain(evoSnap.data() || {});
+  const isoDate = normalizeIsoDate(raw?.isoDate || occ?.isoDate) || null;
+  const startTime = normalizeTimeHHMM(raw?.startTime || occ?.startTime) || null;
+
+  const evolution = {
+    id: evoSnap.id,
+    occurrenceId: oid,
+    seriesId: raw?.seriesId ?? occ?.seriesId ?? null,
+    isoDate,
+    startTime,
+    sortKey: String(raw?.sortKey || makeEvolutionSortKey(isoDate || "", startTime || "") || ""),
+    sessionIndex: Number.isFinite(Number(raw?.sessionIndex))
+      ? Number(raw.sessionIndex)
+      : Number.isFinite(Number(occ?.sessionIndex))
+      ? Number(occ.sessionIndex)
+      : null,
+    plannedTotalSessions: Number.isFinite(Number(raw?.plannedTotalSessions))
+      ? Number(raw.plannedTotalSessions)
+      : Number.isFinite(Number(occ?.plannedTotalSessions))
+      ? Number(occ.plannedTotalSessions)
+      : null,
+    text: String(raw?.text ?? raw?.evolutionText ?? ""),
+    createdAt: raw?.createdAt ?? null,
+    createdBy: raw?.createdBy ?? null,
+    updatedAt: raw?.updatedAt ?? null,
+    updatedBy: raw?.updatedBy ?? null,
+  };
+
+  return { ok: true, patientId, evolution };
+}
+
+export async function upsertSessionEvolutionForOccurrence({
+  tenantId,
+  occurrenceId,
+  text = "",
+  actorUid = "",
+} = {}) {
+  const tid = String(tenantId || "").trim();
+  const oid = String(occurrenceId || "").trim();
+  if (!tid) throw new Error("tenantId obrigatório");
+  if (!oid) throw new Error("occurrenceId obrigatório");
+
+  const body = String(text ?? "").trim();
+
+  const db = admin.firestore();
+  const occRef = db.doc(`tenants/${tid}/appointmentOccurrences/${oid}`);
+
+  const occSnap = await occRef.get();
+  if (!occSnap.exists) throw new Error("Ocorrência não encontrada.");
+
+  const occ = plain(occSnap.data() || {});
+  if (occ?.isBlock === true) throw new Error("Ocorrência de bloco não suporta prontuário.");
+
+  const patientId = String(occ?.patientId || "").trim();
+  if (!patientId) throw new Error("Este item não possui paciente (lead/hold).");
+
+  const isoDate = normalizeIsoDate(occ?.isoDate) || toIsoDate(safeToDate(occ?.date) || new Date());
+  const startTime = normalizeTimeHHMM(occ?.startTime) || "00:00";
+  const sortKey = makeEvolutionSortKey(isoDate, startTime);
+
+  const evoRef = db.doc(`tenants/${tid}/patients/${patientId}/sessionEvolutions/${oid}`);
+
+  await db.runTransaction(async (tx) => {
+    const current = await tx.get(evoRef);
+
+    const payload = {
+      occurrenceId: oid,
+      seriesId: occ?.seriesId || null,
+      isoDate,
+      startTime,
+      sortKey,
+      sessionIndex: Number.isFinite(Number(occ?.sessionIndex)) ? Number(occ.sessionIndex) : null,
+      plannedTotalSessions: Number.isFinite(Number(occ?.plannedTotalSessions)) ? Number(occ.plannedTotalSessions) : null,
+      text: body,
+      // limpeza de campos legados (se existirem)
+      occurrenceCodeId: admin.firestore.FieldValue.delete(),
+      occurrenceCode: admin.firestore.FieldValue.delete(),
+      evolutionText: admin.firestore.FieldValue.delete(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: String(actorUid || "").trim() || null,
+    };
+
+    if (!current.exists) {
+      payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      payload.createdBy = String(actorUid || "").trim() || null;
+    }
+
+    tx.set(evoRef, payload, { merge: true });
+  });
+
+  return { ok: true, patientId, occurrenceId: oid };
+}
+
+export async function listOccurrenceLogsForOccurrence({ tenantId, occurrenceId, limit = 20 } = {}) {
+  const tid = String(tenantId || "").trim();
+  const oid = String(occurrenceId || "").trim();
+  if (!tid) throw new Error("tenantId obrigatório");
+  if (!oid) throw new Error("occurrenceId obrigatório");
+
+  const n = Math.max(1, Math.min(50, parseInt(limit, 10) || 20));
+
+  const db = admin.firestore();
+
+  // ✅ Nova estrutura (sem índice composto): logs como subcoleção da ocorrência
+  const col = db.collection(`tenants/${tid}/appointmentOccurrences/${oid}/occurrenceLogs`);
+  const snap = await col.orderBy("createdAt", "desc").limit(n).get();
+
+  if (!snap.empty) {
+    return snap.docs.map((d) => {
+      const raw = plain(d.data() || {});
+      return { id: d.id, ...raw };
+    });
+  }
+
+  // ♻️ Fallback best-effort (legado): tenants/{tenantId}/occurrenceLogs
+  // Não usa orderBy para evitar exigir índice composto em projetos já em andamento.
+  const legacyCol = db.collection(`tenants/${tid}/occurrenceLogs`);
+  const legacySnap = await legacyCol.where("occurrenceId", "==", oid).limit(n).get();
+
+  const docs = legacySnap.docs
+    .map((d) => {
+      const raw = plain(d.data() || {});
+      return { id: d.id, ...raw };
+    })
+    .sort((a, b) => {
+      const da = safeToDate(a?.createdAt)?.getTime() || 0;
+      const dbt = safeToDate(b?.createdAt)?.getTime() || 0;
+      return dbt - da;
+    });
+
+  return docs;
+}
+
+export async function createOccurrenceLogForOccurrence({
+  tenantId,
+  occurrenceId,
+  codeId,
+  description = "",
+  actorUid = "",
+} = {}) {
+  const tid = String(tenantId || "").trim();
+  const oid = String(occurrenceId || "").trim();
+  const cid = String(codeId || "").trim();
+  if (!tid) throw new Error("tenantId obrigatório");
+  if (!oid) throw new Error("occurrenceId obrigatório");
+  if (!cid) throw new Error("codeId obrigatório");
+
+  const desc = String(description || "").trim();
+
+  const db = admin.firestore();
+  const occRef = db.doc(`tenants/${tid}/appointmentOccurrences/${oid}`);
+  const occSnap = await occRef.get();
+  if (!occSnap.exists) throw new Error("Ocorrência não encontrada.");
+
+  const occ = plain(occSnap.data() || {});
+  if (occ?.isBlock === true) throw new Error("Ocorrência de bloco não suporta ocorrências.");
+
+  const patientId = String(occ?.patientId || "").trim();
+  if (!patientId) throw new Error("Este item não possui paciente (lead/hold).");
+
+  const codeRef = db.doc(`tenants/${tid}/occurrenceCodes/${cid}`);
+  const codeSnap = await codeRef.get();
+  if (!codeSnap.exists) throw new Error("Código de ocorrência inválido.");
+
+  const codeData = plain(codeSnap.data() || {});
+  if (codeData?.isActive === false) throw new Error("Código de ocorrência inativo.");
+
+  const isoDate = normalizeIsoDate(occ?.isoDate) || toIsoDate(safeToDate(occ?.date) || new Date());
+  const startTime = normalizeTimeHHMM(occ?.startTime) || "00:00";
+
+  // ✅ Nova estrutura (sem índice composto):
+  // - Subcoleção da ocorrência (para listar no detalhe do agendamento)
+  // - Subcoleção do paciente (para histórico/relatórios futuros sem collectionGroup)
+  const occLogRef = db.collection(`tenants/${tid}/appointmentOccurrences/${oid}/occurrenceLogs`).doc();
+  const patientLogRef = db.doc(`tenants/${tid}/patients/${patientId}/occurrenceLogs/${occLogRef.id}`);
+
+  await db.runTransaction(async (tx) => {
+    const payload = {
+      patientId,
+      occurrenceId: oid,
+      seriesId: occ?.seriesId || null,
+      isoDate,
+      startTime,
+      sessionIndex: Number.isFinite(Number(occ?.sessionIndex)) ? Number(occ.sessionIndex) : null,
+      codeId: cid,
+      code: String(codeData?.code || "").trim() || null,
+      codeDescription: String(codeData?.description || "").trim() || null,
+      description: desc,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdBy: String(actorUid || "").trim() || null,
+    };
+
+    tx.set(occLogRef, payload, { merge: false });
+    tx.set(patientLogRef, payload, { merge: false });
+  });
+
+  return { ok: true, logId: occLogRef.id, patientId, occurrenceId: oid };
+}
+
+export async function listPatientEvolutions({ tenantId, patientId, limit = 10 } = {}) {
+  const tid = String(tenantId || "").trim();
+  const pid = String(patientId || "").trim();
+  if (!tid) throw new Error("tenantId obrigatório");
+  if (!pid) throw new Error("patientId obrigatório");
+
+  const n = Math.max(1, Math.min(50, parseInt(limit, 10) || 10));
+
+  const db = admin.firestore();
+  const col = db.collection(`tenants/${tid}/patients/${pid}/sessionEvolutions`);
+
+  const snap = await col.orderBy("sortKey", "desc").limit(n).get();
+  return snap.docs.map((d) => {
+    const raw = plain(d.data() || {});
+    return { id: d.id, ...raw, text: String(raw?.text ?? raw?.evolutionText ?? "") };
+  });
+}
+
+
+export async function listPatientOccurrenceLogs({ tenantId, patientId, limit = 12 } = {}) {
+  const tid = String(tenantId || "").trim();
+  const pid = String(patientId || "").trim();
+  if (!tid) throw new Error("tenantId obrigatório");
+  if (!pid) throw new Error("patientId obrigatório");
+
+  const n = Math.max(1, Math.min(50, parseInt(limit, 10) || 12));
+
+  const db = admin.firestore();
+  const col = db.collection(`tenants/${tid}/patients/${pid}/occurrenceLogs`);
+
+  const snap = await col.orderBy("createdAt", "desc").limit(n).get();
+  return snap.docs.map((d) => {
+    const raw = plain(d.data() || {});
+    return { id: d.id, ...raw };
+  });
+}
+
+
 
 export { ALLOWED_STATUS };
 
