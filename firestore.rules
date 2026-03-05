@@ -2,126 +2,181 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ========= HELPERS =========
+    // ==========================================================
+    // AgendaPsi — Firestore Rules (multi-tenant + least privilege)
+    //
+    // Padrões oficiais:
+    // - membership: tenants/{tenantId}/users/{uid}
+    // - índice: userTenantIndex/{uid}
+    //
+    // Papéis:
+    // - Admin global (claim): request.auth.token.role == "admin"
+    // - Tenant roles (doc): owner | admin | professional
+    //
+    // Portal do Paciente (MVP):
+    // - NÃO usa Firestore no client (somente APIs server-side com Admin SDK)
+    // - Por segurança, tokens com role="patient" NÃO devem ter permissões aqui.
+    // ==========================================================
+
     function signedIn() { return request.auth != null; }
-    function isAdmin()  { return signedIn() && request.auth.token.role == "admin"; }
-    function isOwner(userId) { return signedIn() && request.auth.uid == userId; }
 
-    // Paciente só pode atualizar (no próprio users/{uid}) campos estritamente necessários
-    // para UX/contrato (evitar escalonamento e sequestro de agenda via troca de telefone/email).
-    function allowedUserSelfUpdateKeys() {
-      return ["lastSeen", "contractAcceptedVersion", "contractAcceptedAt"]; // mínimo
+    function isAdminClaim() {
+      return signedIn() && request.auth.token.role == "admin";
     }
 
-    // ========= CONFIG (global) =========
-    // Mantém o comportamento que você descreveu: leitura liberada, escrita só admin.
+    function isPatientClaim() {
+      return signedIn() && request.auth.token.role == "patient";
+    }
+
+    function memberDoc(tenantId) {
+      return get(/databases/$(database)/documents/tenants/$(tenantId)/users/$(request.auth.uid));
+    }
+
+    function isTenantMemberActive(tenantId) {
+      // paciente nunca é "membro" do tenant para fins de rules
+      return signedIn()
+        && !isPatientClaim()
+        && memberDoc(tenantId).exists
+        && memberDoc(tenantId).data.isActive != false;
+    }
+
+    function tenantRole(tenantId) {
+      return isTenantMemberActive(tenantId) ? memberDoc(tenantId).data.role : "";
+    }
+
+    function isTenantProfessional(tenantId) {
+      return isTenantMemberActive(tenantId)
+        && (tenantRole(tenantId) in ["owner", "professional", "admin"]);
+    }
+
+    function isTenantAdmin(tenantId) {
+      return isTenantMemberActive(tenantId)
+        && (tenantRole(tenantId) in ["owner", "admin"]);
+    }
+
+    // ---------------------------
+    // Global (público)
+    // ---------------------------
     match /config/{id} {
-      allow read: if true;        // pode ler sem login
-      allow write: if isAdmin();  // só admin altera
+      allow read: if true;
+      allow write: if isAdminClaim();
     }
 
-    // ========= USERS (perfil) =========
-    match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      // ✅ Segurança: criação do perfil é responsabilidade do Admin (whitelist).
-      // Evita que um usuário crie users/{uid} forjado com phoneCanonical de terceiros.
-      allow create: if isAdmin();
-
-      // ✅ Segurança: o paciente não pode editar identidade (role/phone/email/status/etc.).
-      // Apenas campos mínimos (lastSeen + aceite de contrato).
-      allow update: if isAdmin()
-        || (isOwner(userId)
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly(allowedUserSelfUpdateKeys())
-        );
-      allow delete: if isAdmin();
+    // ---------------------------
+    // Global (índices e sistema)
+    // ---------------------------
+    match /userTenantIndex/{uid} {
+      allow read: if isAdminClaim() || (signedIn() && !isPatientClaim() && request.auth.uid == uid);
+      allow write: if isAdminClaim();
     }
 
-    // ========= APPOINTMENTS =========
-    match /appointments/{appointmentId} {
-      // ✅ Segurança + constância:
-      // O painel do paciente NÃO lê `appointments` direto do Firestore (client).
-      // Ele usa API server-side (Admin SDK) para evitar `permission-denied` e reduzir superfície.
-      allow read: if isAdmin();
-
-      allow write: if isAdmin(); // só admin sobe agenda
+    match /_rate_limits/{id} {
+      allow read, write: if false;
     }
 
-    // ========= PATIENT NOTES =========
-    match /patient_notes/{noteId} {
-      // Admin vê tudo
-      // Paciente vê apenas o que for patientId == uid
-      allow read: if isAdmin()
-        || (signedIn() && resource.data.patientId == request.auth.uid);
+    // ---------------------------
+    // Tenant-scoped
+    // ---------------------------
+    match /tenants/{tenantId} {
 
-      // Paciente pode criar nota apenas para si mesmo
-      allow create: if signedIn() && request.resource.data.patientId == request.auth.uid;
+      // Documento do tenant (metadados)
+      allow read: if isAdminClaim() || isTenantMemberActive(tenantId);
+      allow write: if isAdminClaim() || isTenantAdmin(tenantId);
 
-      // ✅ Segurança: paciente pode editar apenas suas notas e NÃO pode trocar patientId no update.
-      allow update: if isAdmin()
-        || (signedIn()
-          && resource.data.patientId == request.auth.uid
-          && request.resource.data.patientId == request.auth.uid
-        );
+      // Membership
+      match /users/{uid} {
+        allow read: if isAdminClaim()
+          || (isTenantMemberActive(tenantId) && request.auth.uid == uid)
+          || isTenantAdmin(tenantId);
 
-      // Paciente pode apagar apenas suas notas
-      allow delete: if isAdmin()
-        || (signedIn() && resource.data.patientId == request.auth.uid);
+        allow create, update, delete: if isAdminClaim() || isTenantAdmin(tenantId);
+      }
+
+      // Settings
+      match /settings/{docId} {
+        allow read: if isAdminClaim() || isTenantMemberActive(tenantId);
+        allow write: if isAdminClaim() || isTenantAdmin(tenantId);
+      }
+
+      // Catálogo de códigos de ocorrência
+      match /occurrenceCodes/{codeId} {
+        allow read: if isAdminClaim() || isTenantMemberActive(tenantId);
+        allow write: if isAdminClaim() || isTenantAdmin(tenantId);
+      }
+
+      match /whatsappTemplates/{templateId} {
+        allow read: if isAdminClaim() || isTenantMemberActive(tenantId);
+        allow write: if isAdminClaim() || isTenantAdmin(tenantId);
+      }
+
+      // Pacientes
+      match /patients/{patientId} {
+        allow read: if isAdminClaim() || isTenantMemberActive(tenantId);
+        allow create, update: if isAdminClaim() || isTenantProfessional(tenantId);
+        allow delete: if isAdminClaim() || isTenantAdmin(tenantId);
+
+        // CLÍNICO (bloqueado para paciente)
+        match /sessionEvolutions/{occurrenceId} {
+          allow read, write: if isAdminClaim() || isTenantProfessional(tenantId);
+        }
+
+        match /occurrenceLogs/{logId} {
+          allow read, write: if isAdminClaim() || isTenantProfessional(tenantId);
+        }
+
+        // Portal (MVP via API; staff permitido)
+        match /patientNotes/{noteId} {
+          allow read, write: if isAdminClaim() || isTenantProfessional(tenantId);
+        }
+      }
+
+      // Séries e ocorrências
+      match /appointmentSeries/{seriesId} {
+        allow read, write: if isAdminClaim() || isTenantProfessional(tenantId);
+      }
+
+      match /appointmentOccurrences/{occurrenceId} {
+        allow read, write: if isAdminClaim() || isTenantProfessional(tenantId);
+
+        match /occurrenceLogs/{logId} {
+          allow read, write: if isAdminClaim() || isTenantProfessional(tenantId);
+        }
+      }
+
+      // Mapeamento interno do portal (server-only)
+      match /patientsPortal/{patientId} {
+        allow read, write: if isAdminClaim();
+      }
     }
 
+    // ---------------------------
+    // Globais (admin-only)
+    // ---------------------------
+    match /patientAccessCodes/{code} {
+      allow read, write: if isAdminClaim();
+    }
 
-    // ========= BIBLIOTECA (ARTIGOS) =========
     match /library_articles/{id} {
-      // Admin gerencia (CRUD) via API/claim admin
-      allow read, write: if isAdmin();
+      allow read, write: if isAdminClaim();
     }
-
-    // ========= BIBLIOTECA (CATEGORIAS) =========
     match /library_categories/{id} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAdminClaim();
     }
 
-    // ========= SUBSCRIBERS (whitelist/push) =========
     match /subscribers/{id} {
-      // ✅ Segurança: paciente NÃO acessa subscribers no client.
-      // Push é registrado via API server-side (Admin SDK).
-      allow read, write: if isAdmin();
+      allow read, write: if isAdminClaim();
     }
 
-    // ========= HISTORY =========
-    match /history/{id} {
-      allow read, write: if isAdmin();
-    }
+    // Coleções legadas / administrativas (bloqueadas exceto admin claim)
+    match /users/{uid} { allow read, write: if isAdminClaim(); }
+    match /history/{id} { allow read, write: if isAdminClaim(); }
+    match /attendance_logs/{id} { allow read, write: if isAdminClaim(); }
+    match /fat_nfse_invoices/{id} { allow read, write: if isAdminClaim(); }
+    match /fat_nfse_import_batches/{id} { allow read, write: if isAdminClaim(); }
+    match /admins/{id} { allow read: if isAdminClaim(); allow write: if false; }
+    match /audit_logs/{id} { allow read, write: if isAdminClaim(); }
 
-    // ========= ATTENDANCE LOGS (Presença/Faltas) =========
-    // Importados via Admin SDK (API server-side). Mantemos explícito aqui para clareza,
-    // embora o fallback final já bloqueie tudo por padrão.
-    match /attendance_logs/{id} {
-      allow read, write: if isAdmin();
-    }
-
-    // ========= FAT (ANÁLISE FAT / NFS-e) =========
-    // Armazenamento administrativo de NFS-e importadas (para análises futuras).
-    // Não aparece no painel do paciente.
-    match /fat_nfse_invoices/{id} {
-      allow read, write: if isAdmin();
-    }
-
-    match /fat_nfse_import_batches/{id} {
-      allow read, write: if isAdmin();
-    }
-
-    // ========= ADMINS =========
-    match /admins/{id} {
-      allow read: if isAdmin();
-      allow write: if false;
-    }
-
-    // ========= AUDIT LOGS =========
-    match /audit_logs/{id} {
-      allow read, write: if isAdmin();
-    }
-
-    // fallback
+    // Default deny
     match /{document=**} {
       allow read, write: if false;
     }

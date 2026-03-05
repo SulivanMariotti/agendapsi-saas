@@ -17,7 +17,8 @@ function resolveTenantIdFromReq(req) {
 export async function GET(req) {
   try {
     await rateLimit(req, { limit: 120, windowMs: 60_000 });
-    await requireAdmin();
+    const auth = await requireAdmin(req);
+    if (!auth.ok) return auth.res;
 
     const tenantId = resolveTenantIdFromReq(req);
 
@@ -31,7 +32,8 @@ export async function GET(req) {
 export async function PUT(req) {
   try {
     await rateLimit(req, { limit: 120, windowMs: 60_000 });
-    await requireAdmin();
+    const auth = await requireAdmin(req);
+    if (!auth.ok) return auth.res;
 
     const tenantId = resolveTenantIdFromReq(req);
 
@@ -58,7 +60,8 @@ export async function PUT(req) {
 export async function DELETE(req) {
   try {
     await rateLimit(req, { limit: 120, windowMs: 60_000 });
-    await requireAdmin();
+    const auth = await requireAdmin(req);
+    if (!auth.ok) return auth.res;
 
     const tenantId = resolveTenantIdFromReq(req);
     const { searchParams } = new URL(req.url);

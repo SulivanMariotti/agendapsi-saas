@@ -49,6 +49,9 @@ export default function AgendaPsiPatientFlow({ user, onLogout }) {
   const [patient, setPatient] = useState(null);
   const [portal, setPortal] = useState(null);
   const [occurrences, setOccurrences] = useState([]);
+  const [activeTenantId, setActiveTenantId] = useState(null);
+  const [tenantSuspended, setTenantSuspended] = useState(false);
+  const [tenantSuspendedMsg, setTenantSuspendedMsg] = useState("");
 
   const showToast = (message, type = "success") => setToast({ msg: message, type });
 
@@ -65,15 +68,29 @@ export default function AgendaPsiPatientFlow({ user, onLogout }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.ok) {
+        if (data?.code === "TENANT_SUSPENDED" || String(data?.error || "").toLowerCase().includes("tenant-suspended")) {
+          setTenantSuspended(true);
+          setTenantSuspendedMsg(
+            "Este serviço está temporariamente suspenso para sua clínica. Fale com a clínica/suporte para regularizar o acesso."
+          );
+          throw new Error("tenant-suspended");
+        }
         throw new Error(data?.error || "Falha ao carregar agenda.");
       }
+      setTenantSuspended(false);
+      setTenantSuspendedMsg("");
       setPatient(data.patient || null);
       setPortal(data.portal || null);
+      setActiveTenantId(data.tenantId || null);
       setOccurrences(Array.isArray(data.occurrences) ? data.occurrences : []);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(e);
-      showToast(e?.message || "Erro ao carregar.", "error");
+      if (String(e?.message || "").toLowerCase().includes("tenant-suspended")) {
+        // Mensagem será mostrada na tela dedicada.
+      } else {
+        showToast(e?.message || "Erro ao carregar.", "error");
+      }
     } finally {
       setBusy(false);
       setLoading(false);
@@ -86,7 +103,50 @@ export default function AgendaPsiPatientFlow({ user, onLogout }) {
   }, [user?.uid]);
 
   const appointments = useMemo(() => {
-    return (occurrences || [])
+    if (tenantSuspended) {
+    return (
+      <>
+        {toast?.msg ? (
+          <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />
+        ) : null}
+
+        <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-3">
+            <div className="text-sm text-slate-500">AgendaPsi</div>
+            <h2 className="text-xl font-semibold text-slate-900">Acesso temporariamente suspenso</h2>
+            <p className="text-sm text-slate-600">
+              {tenantSuspendedMsg ||
+                "Este serviço está temporariamente suspenso para sua clínica. Fale com a clínica/suporte para reativar o acesso."}
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    loadAgenda();
+                  } catch (_) {}
+                }}
+                className="flex-1 rounded-xl bg-slate-900 text-white py-2.5 text-sm font-medium hover:bg-slate-800 active:bg-slate-900 disabled:opacity-60"
+                disabled={busy}
+              >
+                {busy ? "Verificando…" : "Tentar novamente"}
+              </button>
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex-1 rounded-xl bg-white text-slate-900 py-2.5 text-sm font-medium border border-slate-200 hover:bg-slate-50 active:bg-white disabled:opacity-60"
+                disabled={busy}
+              >
+                Sair
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (occurrences || [])
       .map((o) => ({
         id: o.id,
         isoDate: o.dateIso,
@@ -117,9 +177,15 @@ export default function AgendaPsiPatientFlow({ user, onLogout }) {
   const contractText = useMemo(() => portal?.contract?.text || "", [portal]);
   const contractVersion = useMemo(() => Number(portal?.contract?.version || 1), [portal]);
   const needsContractAcceptance = useMemo(() => portal?.contract?.needsAcceptance === true, [portal]);
-  const remindersEnabled = useMemo(() => portal?.features?.remindersEnabled === true, [portal]);
+  const remindersModuleEnabled = useMemo(() => portal?.features?.remindersModuleEnabled !== false, [portal]);
+  const remindersEnabled = useMemo(() => {
+    if (typeof portal?.remindersEnabled === "boolean") return portal.remindersEnabled;
+    if (typeof portal?.features?.remindersEnabled === "boolean") return portal.features.remindersEnabled;
+    return false;
+  }, [portal]);
   const libraryEnabled = useMemo(() => portal?.features?.libraryEnabled !== false, [portal]);
   const notesEnabled = useMemo(() => portal?.features?.notesEnabled === true, [portal]);
+  const showDevTenantBadge = useMemo(() => process.env.NODE_ENV !== "production", []);
 
   const updatePortal = async (payload) => {
     if (!user) throw new Error("Sessão inválida.");
@@ -134,6 +200,13 @@ export default function AgendaPsiPatientFlow({ user, onLogout }) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data?.ok) {
+      if (data?.code === "TENANT_SUSPENDED" || String(data?.error || "").toLowerCase().includes("tenant-suspended")) {
+        setTenantSuspended(true);
+        setTenantSuspendedMsg(
+          "Este serviço está temporariamente suspenso para sua clínica. Fale com a clínica/suporte para regularizar o acesso."
+        );
+        throw new Error("tenant-suspended");
+      }
       throw new Error(data?.error || "Falha ao salvar.");
     }
     if (data.portal) setPortal(data.portal);
@@ -148,7 +221,11 @@ export default function AgendaPsiPatientFlow({ user, onLogout }) {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(e);
-      showToast(e?.message || "Não foi possível salvar.", "error");
+      if (String(e?.message || "").toLowerCase().includes("tenant-suspended")) {
+        // Mensagem será mostrada na tela dedicada.
+      } else {
+        showToast(e?.message || "Não foi possível salvar.", "error");
+      }
     } finally {
       setBusy(false);
     }
@@ -162,7 +239,11 @@ export default function AgendaPsiPatientFlow({ user, onLogout }) {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(e);
-      showToast(e?.message || "Não foi possível salvar.", "error");
+      if (String(e?.message || "").toLowerCase().includes("tenant-suspended")) {
+        // Mensagem será mostrada na tela dedicada.
+      } else {
+        showToast(e?.message || "Não foi possível salvar.", "error");
+      }
     } finally {
       setBusy(false);
     }
@@ -183,7 +264,8 @@ export default function AgendaPsiPatientFlow({ user, onLogout }) {
         <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />
       ) : null}
 
-      {/*
+
+            {/*
         Mobile: reserva espaço real para o bottom-nav + safe-area (iOS).
         Mantemos a mesma "pegada" do painel do Lembrete Psi (reuso de UI),
         mas com dados do AgendaPsi e sem ações de cancelar/remarcar.
@@ -203,6 +285,14 @@ export default function AgendaPsiPatientFlow({ user, onLogout }) {
         />
 
         <div className="max-w-5xl mx-auto px-[var(--pad)] pt-[calc(env(safe-area-inset-top)+64px)] sm:pt-6 space-y-2 sm:space-y-6">
+          {showDevTenantBadge && activeTenantId ? (
+            <div className="text-[11px] text-slate-500">
+              <span className="inline-flex items-center rounded-full bg-slate-200 px-2 py-1 font-mono">
+                tenantId: {activeTenantId}
+              </span>
+            </div>
+          ) : null}
+
           {/* Header (menu + sair) */}
           <PatientHeader
             patientName={patient?.fullName || user?.displayName || "Paciente"}
@@ -213,7 +303,7 @@ export default function AgendaPsiPatientFlow({ user, onLogout }) {
             currentContractVersion={contractVersion}
             remindersEnabled={remindersEnabled}
             remindersBusy={busy}
-            onToggleReminders={handleToggleReminders}
+            onToggleReminders={remindersModuleEnabled ? handleToggleReminders : null}
             onAcceptContract={handleAcceptContract}
             showLibrary={libraryEnabled}
             showContract={true}

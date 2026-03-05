@@ -72,3 +72,19 @@ Evitar que o Admin UI conecte listeners client em coleções que:
 
 Padrão recomendado:
 - Admin consome dados via rotas `/api/admin/...` usando Admin SDK.
+
+
+---
+
+## Portal do Paciente (MVP) — diretrizes de segurança
+
+- O portal `/paciente` deve operar por **APIs server-side** (Admin SDK) e **não** via listeners Firestore no client.
+- O usuário com `role="patient"` deve ter **privilégios mínimos**:
+  - idealmente **nenhuma leitura direta** de `tenants/*` via client SDK, exceto se existir uma coleção “portal segura” explicitamente projetada para isso.
+- Dados clínicos (evolução, ocorrência extra, prontuário) **não devem** ser expostos ao paciente no MVP.
+- Biblioteca no paciente deve filtrar **somente published** (fonte Admin).
+- Anotações do paciente (`patientNotes`) são dados sensíveis: limitar tamanho, evitar logs e aplicar exclusão lógica.
+
+Checklist para endurecimento (produção):
+- Regras Firestore: garantir que `role="patient"` não consiga ler `appointmentOccurrences`, `appointmentSeries`, `sessionEvolutions`, `occurrenceLogs`.
+- Validar APIs: sempre verificar `tenantId` + `patientId` dos claims; nunca aceitar do client.

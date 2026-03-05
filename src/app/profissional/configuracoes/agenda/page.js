@@ -9,9 +9,9 @@ export default async function ProfissionalAgendaSettingsPage() {
   const next = `/login?next=${encodeURIComponent("/profissional/configuracoes/agenda")}`;
   const session = await requireProfessionalSession({ redirectTo: next });
 
-  // Decisão de produto: configurações da agenda ficam no Painel Admin.
+  // Decisão de produto: configurações do tenant ficam no Admin do tenant.
   if (["owner", "admin"].includes(String(session?.role || ""))) {
-    redirect("/admin");
+    redirect("/admin-tenant");
   }
 
   return (
@@ -20,7 +20,7 @@ export default async function ProfissionalAgendaSettingsPage() {
         <p className="text-xs font-extrabold text-slate-400">AgendaPsi</p>
         <h1 className="text-lg font-extrabold tracking-tight text-slate-900">Configuração da agenda</h1>
         <p className="mt-2 text-sm text-slate-600">
-          As configurações de grade/horários/buffer/almoço são definidas pelo Admin do sistema.
+          As configurações de grade/horários/buffer/almoço são definidas pelo Admin do tenant.
         </p>
         <p className="mt-4 text-sm">
           <Link className="font-bold text-violet-700 hover:underline" href="/profissional">

@@ -15,6 +15,8 @@ import {
   BookOpen,
   FileText,
   Tag,
+  MessageCircle,
+  Building2,
   ChevronDown,
   ChevronRight,
   LogOut,
@@ -32,6 +34,9 @@ import AdminLibraryTab from './AdminLibraryTab';
 import AdminFatAnalysisTab from './AdminFatAnalysisTab';
 import AdminAgendaPsiScheduleTab from './AdminAgendaPsiScheduleTab';
 import AdminAgendaPsiOccurrenceCodesTab from './AdminAgendaPsiOccurrenceCodesTab';
+import AdminAgendaPsiPatientPortalTab from './AdminAgendaPsiPatientPortalTab';
+import AdminAgendaPsiWhatsappTemplatesTab from './AdminAgendaPsiWhatsappTemplatesTab';
+import AdminSaasTenantsTab from './AdminSaasTenantsTab';
 
 export default function AdminPanelView({
   onLogout,
@@ -43,21 +48,26 @@ export default function AdminPanelView({
   initialTab,
 }) {
   const [adminTab, setAdminTab] = useState(initialTab || 'dashboard');
-  const [menuOpen, setMenuOpen] = useState({ lembretes: true, agendapsi: true });
+  const [menuOpen, setMenuOpen] = useState({ lembretes: true, agendapsi: true, saas: false });
 
   const isLembretesTab = useMemo(() => {
     return ['schedule', 'attendance', 'history', 'audit', 'library', 'config', 'manual', 'fat'].includes(adminTab);
   }, [adminTab]);
 
   const isAgendaPsiTab = useMemo(() => {
-    return ['agendapsi_schedule', 'agendapsi_occurrence_codes'].includes(adminTab);
+    return ['agendapsi_schedule', 'agendapsi_occurrence_codes', 'agendapsi_patient_portal', 'agendapsi_whatsapp_templates'].includes(adminTab);
+  }, [adminTab]);
+
+  const isSaasTab = useMemo(() => {
+    return ['saas_tenants'].includes(adminTab);
   }, [adminTab]);
 
   useEffect(() => {
     // Abre automaticamente o grupo do menu relacionado ao tab ativo
     if (isLembretesTab) setMenuOpen((prev) => ({ ...prev, lembretes: true }));
     if (isAgendaPsiTab) setMenuOpen((prev) => ({ ...prev, agendapsi: true }));
-  }, [isLembretesTab, isAgendaPsiTab]);
+    if (isSaasTab) setMenuOpen((prev) => ({ ...prev, saas: true }));
+  }, [isLembretesTab, isAgendaPsiTab, isSaasTab]);
 
   // Jump para Histórico filtrado por batchId (evita caça manual no histórico)
   const [historyJump, setHistoryJump] = useState(null);
@@ -703,6 +713,56 @@ export default function AdminPanelView({
                   >
                     <Tag size={16} /> Códigos de Ocorrência
                   </button>
+
+                  <button
+                    onClick={() => setAdminTab('agendapsi_patient_portal')}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      adminTab === 'agendapsi_patient_portal'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <FileText size={16} /> Portal do Paciente
+                  </button>
+
+                  <button
+                    onClick={() => setAdminTab('agendapsi_whatsapp_templates')}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      adminTab === 'agendapsi_whatsapp_templates'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <MessageCircle size={16} /> Templates WhatsApp
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Menu: SaaS */}
+            <div>
+              <button
+                onClick={() => setMenuOpen((prev) => ({ ...prev, saas: !prev.saas }))}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-sm font-extrabold bg-white border border-slate-200 hover:bg-slate-50"
+              >
+                <span className="inline-flex items-center gap-3 text-slate-900">
+                  <Building2 size={18} /> SaaS
+                </span>
+                {menuOpen.saas ? <ChevronDown size={18} className="text-slate-500" /> : <ChevronRight size={18} className="text-slate-500" />}
+              </button>
+
+              {menuOpen.saas ? (
+                <div className="mt-2 space-y-2 pl-2">
+                  <button
+                    onClick={() => setAdminTab('saas_tenants')}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                      adminTab === 'saas_tenants'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Building2 size={16} /> Tenants
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -845,6 +905,18 @@ export default function AdminPanelView({
 
         {adminTab === 'agendapsi_occurrence_codes' && (
           <AdminAgendaPsiOccurrenceCodesTab showToast={showToast} />
+        )}
+
+        {adminTab === 'agendapsi_patient_portal' && (
+          <AdminAgendaPsiPatientPortalTab showToast={showToast} />
+        )}
+
+        {adminTab === 'agendapsi_whatsapp_templates' && (
+          <AdminAgendaPsiWhatsappTemplatesTab showToast={showToast} />
+        )}
+
+        {adminTab === 'saas_tenants' && (
+          <AdminSaasTenantsTab showToast={showToast} />
         )}
       </div>
     </div>

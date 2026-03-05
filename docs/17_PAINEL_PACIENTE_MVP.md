@@ -132,6 +132,19 @@ Campos mínimos:
 
 ---
 
+## UI/UX (MVP) — padrão “Lembrete Psi” adaptado
+- Manter o visual/organização do paciente inspirado no Lembrete Psi (reuso de UI), porém com **dados do AgendaPsi**.
+- Topo do portal: título **“AgendaPsi - Seu Espaço de cuidado”** (sem repetir o nome do paciente no topo).
+- Card **“Seu cadastro”** fica em posição de destaque (preferência: topo) e mostra **subset mínimo** (ex.: nome/telefone).
+- Menu do paciente (MVP):
+  - Biblioteca (somente publicados)
+  - Contrato/Termo (visualizar + concordar)
+  - Preferências: “Ativar lembretes”
+  - Anotações
+- Proibido CTA de cancelar/remarcar. Qualquer texto/ação deve reforçar presença/constância.
+
+---
+
 ## Critérios de aceitação (MVP)
 - [ ] `/paciente` exige sessão válida e role `patient`.
 - [ ] Paciente vê apenas agendamentos do seu `patientId`.

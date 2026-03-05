@@ -1,4 +1,5 @@
 import admin from "@/lib/firebaseAdmin";
+import { getTenantPlan, getLimit } from "@/lib/server/tenantPlan";
 
 function toIsoDate(d) {
   try {
@@ -65,6 +66,53 @@ function timeToMinutes(t) {
   const [h, m] = String(t || "0:0").split(":").map((x) => parseInt(x, 10));
   return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
 }
+
+// ------------------------------------------------------------
+// Billing/Planos — enforcement (Pós-MVP)
+// - Limites por tenant são definidos em src/lib/server/tenantPlan.js
+// - Aplicamos enforcement no momento de criação de:
+//   - pacientes (tenants/{tenantId}/patients)
+//   - séries (tenants/{tenantId}/appointmentSeries) — inclui holds
+// ------------------------------------------------------------
+
+async function getQueryCount(q) {
+  try {
+    if (typeof q?.count === "function") {
+      const snap = await q.count().get();
+      const data = snap?.data?.() || {};
+      const n = Number(data?.count);
+      return Number.isFinite(n) ? n : 0;
+    }
+  } catch {
+    // fallback abaixo
+  }
+
+  // Fallback seguro (best-effort): busca pequena amostra.
+  // Em ambientes modernos, o Admin SDK já suporta count().
+  const snap = await q.limit(2000).get();
+  return (snap?.docs || []).length;
+}
+
+async function enforcePlanLimitMaxDocs({ tenantRef, tenantId, limitKey, collectionName, friendlyName }) {
+  const plan = await getTenantPlan(tenantId);
+  const max = getLimit(plan, limitKey, null);
+  if (!Number.isFinite(Number(max))) return;
+
+  const q = tenantRef.collection(collectionName);
+  const total = await getQueryCount(q);
+
+  if (total >= Number(max)) {
+    const err = new Error(`Limite do plano atingido (máx. ${max} ${friendlyName}).`);
+    err.code = "PLAN_LIMIT_EXCEEDED";
+    err.planId = plan.planId;
+    err.limitKey = limitKey;
+    err.limit = Number(max);
+    err.current = total;
+    throw err;
+  }
+}
+
+
 
 
 const RECURRENCE_FREQUENCIES = ["daily", "weekly", "biweekly", "monthly"];
@@ -352,6 +400,14 @@ export async function getProfessionalWeekData({ tenantId, isoDate }) {
     );
   }
 
+
+  // whatsapp templates
+  const waSnap = await tenantRef.collection("whatsappTemplates").get();
+  const whatsappTemplates = waSnap.docs
+    .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }))
+    .filter((t) => t && t.isActive !== false)
+    .sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
+
   return plain({
     tenantId,
     isoDate: anchorIso,
@@ -360,6 +416,7 @@ export async function getProfessionalWeekData({ tenantId, isoDate }) {
     schedule,
     days,
     patientsById,
+    whatsappTemplates,
   });
 }
 
@@ -472,6 +529,14 @@ export async function getProfessionalMonthData({ tenantId, isoDate }) {
       })
     );
   }
+
+
+  // whatsapp templates
+  const waSnap = await tenantRef.collection("whatsappTemplates").get();
+  const whatsappTemplates = waSnap.docs
+    .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }))
+    .filter((t) => t && t.isActive !== false)
+    .sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
 
   return plain({
     tenantId,
@@ -848,6 +913,54 @@ function normalizeMobile(m) {
   return String(m || "").replace(/\D+/g, "");
 }
 
+function onlyDigits(v) {
+  return String(v || "").replace(/\D+/g, "").replace(/^0+/, "");
+}
+
+/**
+ * Canonical phone (projeto): DDD + número (10/11 dígitos), SEM 55
+ * - Aceita entradas com +55 / 55 / 0..., etc. (best-effort).
+ */
+function toPhoneCanonical(raw) {
+  let d = onlyDigits(raw);
+  if (!d) return "";
+  if (d.startsWith("55") && (d.length === 12 || d.length === 13)) d = d.slice(2);
+  if (d.length === 10 || d.length === 11) return d;
+  if (d.length > 11) return d.slice(-11);
+  return d;
+}
+
+function toPhoneE164(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (s.startsWith("+")) return s;
+  const canon = toPhoneCanonical(s);
+  if (!canon) return "";
+  // MVP: assume BR (+55). Ajustável por tenant no futuro.
+  return `+55${canon}`;
+}
+
+function isValidCpfDigits(cpfDigits) {
+  const cpf = String(cpfDigits || "").replace(/\D+/g, "");
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+
+  // calc check digits
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i], 10) * (10 - i);
+  let d1 = 11 - (sum % 11);
+  if (d1 >= 10) d1 = 0;
+  if (d1 !== parseInt(cpf[9], 10)) return false;
+
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i], 10) * (11 - i);
+  let d2 = 11 - (sum % 11);
+  if (d2 >= 10) d2 = 0;
+  if (d2 !== parseInt(cpf[10], 10)) return false;
+
+  return true;
+}
+
 function dateMidnightUtc(iso) {
   const i = normalizeIsoDate(iso) || String(iso || "").slice(0, 10);
   return new Date(`${i}T00:00:00.000Z`);
@@ -972,6 +1085,9 @@ async function createSeriesWithOccurrences({
   });
 
   const db = admin.firestore();
+
+  await enforcePlanLimitMaxDocs({ tenantRef, tenantId: tenantRef.id, limitKey: "seriesMax", collectionName: "appointmentSeries", friendlyName: "séries" });
+
   const seriesRef = tenantRef.collection("appointmentSeries").doc();
   const seriesId = seriesRef.id;
 
@@ -1195,6 +1311,10 @@ async function convertHoldToAppointmentSeries({
   }
 
   // Prepare series doc (reuse old seriesId if exists; otherwise create new)
+  if (!oldSeriesId) {
+    await enforcePlanLimitMaxDocs({ tenantRef, tenantId: tenantRef.id, limitKey: "seriesMax", collectionName: "appointmentSeries", friendlyName: "séries" });
+  }
+
   const seriesRef = oldSeriesId ? tenantRef.collection("appointmentSeries").doc(oldSeriesId) : tenantRef.collection("appointmentSeries").doc();
   const seriesId = seriesRef.id;
 
@@ -1545,10 +1665,16 @@ export async function createAppointmentAtSlot({
 
   const name = String(fullName || "").trim();
   const cpfDigits = normalizeCpf(cpf);
-  const mob = normalizeMobile(mobile);
+  const mobRaw = normalizeMobile(mobile);
+  const phoneCanonical = toPhoneCanonical(mobRaw);
+  const phoneE164 = toPhoneE164(mobile || mobRaw);
   if (!name) throw new Error("Nome obrigatório");
-  if (!cpfDigits) throw new Error("CPF obrigatório");
-  if (!mob) throw new Error("Celular obrigatório");
+  if (!phoneCanonical) throw new Error("Celular obrigatório");
+
+  // CPF é opcional no MVP (pré-cadastro rápido). Se informado, validamos.
+  if (cpfDigits && !isValidCpfDigits(cpfDigits)) throw new Error("CPF inválido");
+
+  const mob = phoneCanonical; // compat (campo legado `mobile` e WhatsApp)
 
   const totalSessions = normalizePlannedTotalSessions(plannedTotalSessions);
   const freq = normalizeRecurrenceFrequency(repeatFrequency) || "weekly";
@@ -1577,7 +1703,9 @@ export async function createAppointmentAtSlot({
         throw new Error("A reserva existe, mas a duração não coincide (use a mesma duração em blocos).");
       }
 
-      const pid = await ensurePatientByCpf({ tenantRef, cpfDigits, name, mob });
+      const pid = cpfDigits
+        ? await ensurePatientByCpf({ tenantRef, cpfDigits, name, phoneCanonical: mob, phoneE164 })
+        : await ensurePatientByPhone({ tenantRef, phoneCanonical: mob, name, phoneE164 });
 
       // Se pediu série (ex.: hold 2/2 -> agendamento 30 sessões), converte toda a série do hold e estende.
       if (wantsSeries) {
@@ -1630,7 +1758,9 @@ export async function createAppointmentAtSlot({
 
   // Se for série (recorrência), cria a série inteira a partir do primeiro horário
   if (wantsSeries) {
-    const patientId = await ensurePatientByCpf({ tenantRef, cpfDigits, name, mob });
+    const patientId = cpfDigits
+    ? await ensurePatientByCpf({ tenantRef, cpfDigits, name, phoneCanonical: mob, phoneE164 })
+    : await ensurePatientByPhone({ tenantRef, phoneCanonical: mob, name, phoneE164 });
     const created = await createSeriesWithOccurrences({
       tenantRef,
       schedule,
@@ -1680,7 +1810,9 @@ export async function createAppointmentAtSlot({
     }
   }
 
-  const patientId = await ensurePatientByCpf({ tenantRef, cpfDigits, name, mob });
+  const patientId = cpfDigits
+    ? await ensurePatientByCpf({ tenantRef, cpfDigits, name, phoneCanonical: mob, phoneE164 })
+    : await ensurePatientByPhone({ tenantRef, phoneCanonical: mob, name, phoneE164 });
 
   const mainRef = tenantRef.collection("appointmentOccurrences").doc();
   const groupId = mainRef.id;
@@ -1746,25 +1878,73 @@ export async function createAppointmentAtSlot({
   return { created: true, occurrenceId: mainRef.id, patientId };
 }
 
-async function ensurePatientByCpf({ tenantRef, cpfDigits, name, mob }) {
-  const db = admin.firestore();
-  const indexRef = tenantRef.collection("patientCpfIndex").doc(cpfDigits);
+async function ensurePatientByPhone({ tenantRef, phoneCanonical, name, phoneE164 }) {
+  const canon = toPhoneCanonical(phoneCanonical);
+  if (!canon) throw new Error("Celular obrigatório");
+
+  const indexRef = tenantRef.collection("patientPhoneIndex").doc(canon);
   const indexSnap = await indexRef.get();
   if (indexSnap.exists && indexSnap.data()?.patientId) {
     return String(indexSnap.data().patientId);
   }
 
+  // Fallback (legado): procurar por `mobile` (seed antigo) antes de criar duplicado
+  try {
+    const q = await tenantRef.collection("patients").where("mobile", "==", canon).limit(1).get();
+    if (!q.empty) {
+      const pid = q.docs[0].id;
+
+      // Best-effort: cria índice para acelerar próximos acessos
+      try {
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        await indexRef.set({ phoneCanonical: canon, patientId: pid, createdAt: now, updatedAt: now }, { merge: true });
+        await tenantRef
+          .collection("patients")
+          .doc(pid)
+          .set(
+            {
+              phoneCanonical: canon,
+              phoneE164: toPhoneE164(phoneE164 || canon) || null,
+              mobile: canon,
+              updatedAt: now,
+            },
+            { merge: true }
+          );
+      } catch {
+        // ignore
+      }
+
+      return pid;
+    }
+  } catch {
+    // ignore
+  }
+
   // create patient
+  await enforcePlanLimitMaxDocs({
+    tenantRef,
+    tenantId: tenantRef.id,
+    limitKey: "patientsMax",
+    collectionName: "patients",
+    friendlyName: "pacientes",
+  });
+
   const patientRef = tenantRef.collection("patients").doc();
   const now = admin.firestore.FieldValue.serverTimestamp();
+
+  const e164 = toPhoneE164(phoneE164 || canon) || null;
+
   await patientRef.set(
     {
-      fullName: name,
-      cpf: cpfDigits,
-      mobile: mob,
+      fullName: String(name || "").trim(),
+      mobile: canon,
+      phoneCanonical: canon,
+      phoneE164: e164,
       createdAt: now,
       updatedAt: now,
+      profileStatus: "incomplete",
       profileCompleted: false,
+      generalNotes: "",
       notes: "",
     },
     { merge: true }
@@ -1772,7 +1952,7 @@ async function ensurePatientByCpf({ tenantRef, cpfDigits, name, mob }) {
 
   await indexRef.set(
     {
-      cpf: cpfDigits,
+      phoneCanonical: canon,
       patientId: patientRef.id,
       createdAt: now,
       updatedAt: now,
@@ -1781,6 +1961,226 @@ async function ensurePatientByCpf({ tenantRef, cpfDigits, name, mob }) {
   );
 
   return patientRef.id;
+}
+
+async function ensurePatientByCpf({ tenantRef, cpfDigits, name, phoneCanonical, phoneE164 }) {
+  const cpf = normalizeCpf(cpfDigits);
+  if (!cpf) throw new Error("CPF inválido");
+  if (!isValidCpfDigits(cpf)) throw new Error("CPF inválido");
+
+  const indexRef = tenantRef.collection("patientCpfIndex").doc(cpf);
+  const indexSnap = await indexRef.get();
+  if (indexSnap.exists && indexSnap.data()?.patientId) {
+    const pid = String(indexSnap.data().patientId);
+
+    // Best-effort: atualizar telefone/índices para evitar duplicidade futura
+    const canon = toPhoneCanonical(phoneCanonical);
+    if (canon) {
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      try {
+        await tenantRef
+          .collection("patients")
+          .doc(pid)
+          .set(
+            {
+              mobile: canon,
+              phoneCanonical: canon,
+              phoneE164: toPhoneE164(phoneE164 || canon) || null,
+              updatedAt: now,
+            },
+            { merge: true }
+          );
+
+        await tenantRef
+          .collection("patientPhoneIndex")
+          .doc(canon)
+          .set({ phoneCanonical: canon, patientId: pid, createdAt: now, updatedAt: now }, { merge: true });
+      } catch {
+        // ignore
+      }
+    }
+
+    return pid;
+  }
+
+  // create patient
+  await enforcePlanLimitMaxDocs({
+    tenantRef,
+    tenantId: tenantRef.id,
+    limitKey: "patientsMax",
+    collectionName: "patients",
+    friendlyName: "pacientes",
+  });
+
+  const patientRef = tenantRef.collection("patients").doc();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const canon = toPhoneCanonical(phoneCanonical);
+  const e164 = toPhoneE164(phoneE164 || canon || "") || null;
+
+  await patientRef.set(
+    {
+      fullName: String(name || "").trim(),
+      cpf,
+      mobile: canon || null,
+      phoneCanonical: canon || null,
+      phoneE164: e164,
+      createdAt: now,
+      updatedAt: now,
+      profileStatus: "incomplete",
+      profileCompleted: false,
+      generalNotes: "",
+      notes: "",
+    },
+    { merge: true }
+  );
+
+  await indexRef.set(
+    {
+      cpf,
+      patientId: patientRef.id,
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+
+  if (canon) {
+    try {
+      await tenantRef
+        .collection("patientPhoneIndex")
+        .doc(canon)
+        .set({ phoneCanonical: canon, patientId: patientRef.id, createdAt: now, updatedAt: now }, { merge: true });
+    } catch {
+      // ignore
+    }
+  }
+
+  return patientRef.id;
+}
+
+
+export async function getPatientProfile({ tenantId, patientId }) {
+  if (!tenantId) throw new Error("tenantId required");
+  if (!patientId) throw new Error("patientId required");
+
+  const db = admin.firestore();
+  const tenantRef = db.collection("tenants").doc(tenantId);
+  const ref = tenantRef.collection("patients").doc(patientId);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    const err = new Error("Paciente não encontrado.");
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+
+  return { id: snap.id, ...plain(snap.data() || {}) };
+}
+
+export async function updatePatientProfile({ tenantId, patientId, patch = {}, updatedByUid }) {
+  if (!tenantId) throw new Error("tenantId required");
+  if (!patientId) throw new Error("patientId required");
+
+  const db = admin.firestore();
+  const tenantRef = db.collection("tenants").doc(tenantId);
+  const ref = tenantRef.collection("patients").doc(patientId);
+
+  const snap = await ref.get();
+  if (!snap.exists) {
+    const err = new Error("Paciente não encontrado.");
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+
+  const prev = snap.data() || {};
+
+  const fullName = String(patch?.fullName ?? prev?.fullName ?? "").trim();
+  if (!fullName) throw new Error("Nome obrigatório");
+
+  const cpfDigits = normalizeCpf(patch?.cpf ?? prev?.cpf ?? "");
+  const cpf = cpfDigits ? String(cpfDigits) : "";
+  if (cpf && !isValidCpfDigits(cpf)) throw new Error("CPF inválido");
+
+  const phoneRaw = String(patch?.phoneE164 || patch?.mobile || patch?.phone || patch?.phoneCanonical || prev?.phoneE164 || prev?.mobile || prev?.phoneCanonical || "").trim();
+  const phoneCanonical = toPhoneCanonical(phoneRaw);
+  const phoneE164 = toPhoneE164(patch?.phoneE164 || phoneRaw || "") || null;
+
+  const generalNotes = String(patch?.generalNotes ?? prev?.generalNotes ?? "").trim();
+  const preferredName = String(patch?.preferredName ?? prev?.preferredName ?? "").trim();
+  const email = String(patch?.email ?? prev?.email ?? "").trim().toLowerCase();
+  const gender = String(patch?.gender ?? prev?.gender ?? "").trim();
+  const birthDate = String(patch?.birthDate ?? prev?.birthDate ?? "").trim();
+
+  // birthDate validation (best-effort)
+  if (birthDate) {
+    const d = new Date(`${birthDate}T00:00:00.000Z`);
+    if (!Number.isFinite(d.getTime())) throw new Error("birthDate inválida");
+    const now = new Date();
+    if (d.getTime() > now.getTime()) throw new Error("birthDate não pode ser futura");
+  }
+
+  const address = typeof patch?.address === "object" && patch.address ? patch.address : prev?.address || null;
+  const legalGuardian = typeof patch?.legalGuardian === "object" && patch.legalGuardian ? patch.legalGuardian : prev?.legalGuardian || null;
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  const data = {
+    fullName,
+    preferredName: preferredName || null,
+    cpf: cpf || null,
+    birthDate: birthDate || null,
+    gender: gender || null,
+    phoneCanonical: phoneCanonical || null,
+    phoneE164: phoneE164 || null,
+    mobile: phoneCanonical || null, // compat
+    email: email || null,
+    address: address || null,
+    legalGuardian: legalGuardian || null,
+    generalNotes,
+    // compat: overlay antigo lê `notes`
+    notes: generalNotes || String(prev?.notes || ""),
+    profileStatus: "complete",
+    profileCompleted: true,
+    updatedAt: now,
+    updatedByUid: updatedByUid || null,
+  };
+
+  await ref.set(data, { merge: true });
+
+  // índices (best-effort)
+  try {
+    if (phoneCanonical) {
+      await tenantRef.collection("patientPhoneIndex").doc(phoneCanonical).set(
+        {
+          phoneCanonical,
+          patientId,
+          createdAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    if (cpf) {
+      await tenantRef.collection("patientCpfIndex").doc(cpf).set(
+        {
+          cpf,
+          patientId,
+          createdAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    }
+  } catch {
+    // ignore
+  }
+
+  const after = await ref.get();
+  return { id: after.id, ...plain(after.data() || {}) };
 }
 
 export async function updateOccurrenceStatus({ tenantId, occurrenceId, status }) {
@@ -2028,6 +2428,8 @@ export async function rescheduleOccurrence({
 
   const lastPast = pastMain.length ? pastMain[pastMain.length - 1] : null;
   const lastPastIso = lastPast?.date ? toIsoDate(safeToDate(lastPast.date) || dateMidnightUtc(currentIso)) : null;
+
+  await enforcePlanLimitMaxDocs({ tenantRef, tenantId: tenantRef.id, limitKey: "seriesMax", collectionName: "appointmentSeries", friendlyName: "séries" });
 
   const newSeriesRef = tenantRef.collection("appointmentSeries").doc();
   const newSeriesId = newSeriesRef.id;

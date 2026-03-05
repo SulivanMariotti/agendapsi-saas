@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { getProfessionalApiSession } from "@/lib/server/getProfessionalApiSession";
+import { requireProfessionalApi } from "@/lib/server/requireProfessionalApi";
 import { findNextAvailableSlots } from "@/lib/server/agendapsiData";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
-  const session = await getProfessionalApiSession();
+  const auth = await requireProfessionalApi(request, { bucket: "professional:next-available", limit: 240, windowMs: 60_000 });
+  if (!auth.ok) return auth.res;
+  const session = auth.session;
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);

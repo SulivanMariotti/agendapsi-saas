@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { getProfessionalApiSession } from "@/lib/server/getProfessionalApiSession";
+import { requireProfessionalApi } from "@/lib/server/requireProfessionalApi";
 import { getSessionEvolutionForOccurrence, upsertSessionEvolutionForOccurrence } from "@/lib/server/agendapsiData";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
-  const session = await getProfessionalApiSession();
+  const auth = await requireProfessionalApi(request, { bucket: "professional:occurrence-evolution", limit: 60, windowMs: 60_000 });
+  if (!auth.ok) return auth.res;
+  const session = auth.session;
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -27,7 +29,9 @@ export async function GET(request) {
 }
 
 export async function PUT(request) {
-  const session = await getProfessionalApiSession();
+  const auth = await requireProfessionalApi(request, { bucket: "professional:occurrence-evolution", limit: 60, windowMs: 60_000 });
+  if (!auth.ok) return auth.res;
+  const session = auth.session;
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   let body = {};

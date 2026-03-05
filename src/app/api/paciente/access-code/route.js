@@ -40,10 +40,11 @@ export async function POST(req) {
   if (!originCheck.ok) return originCheck.res;
 
   const limited = await rateLimit(req, {
-    keyPrefix: "paciente:access-code",
+    bucket: "paciente:access-code",
+    limit: 20,
     windowMs: 60_000,
-    max: 20,
     global: true,
+    errorMessage: "Muitas tentativas. Aguarde um pouco e tente novamente.",
   });
   if (!limited.ok) return limited.res;
 
@@ -99,6 +100,18 @@ export async function POST(req) {
 
       const tenantId = data.tenantId;
       const patientId = data.patientId;
+
+      // Bloqueio SaaS: tenant suspenso/ausente
+      const tenantRef = admin.firestore().doc(`tenants/${tenantId}`);
+      const tenantSnap = await tx.get(tenantRef);
+      if (!tenantSnap.exists) {
+        throw new Error("tenant-missing");
+      }
+      const tenantStatus = String((tenantSnap.data() || {}).status || "active").toLowerCase().trim();
+      if (tenantStatus && tenantStatus !== "active") {
+        throw new Error("tenant-suspended");
+      }
+
 
       // Resolve/Cria "portal user"
       const portalRef = admin.firestore().doc(`tenants/${tenantId}/patientsPortal/${patientId}`);

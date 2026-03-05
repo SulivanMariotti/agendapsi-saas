@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import admin from "@/lib/firebaseAdmin";
-import { getProfessionalApiSession } from "@/lib/server/getProfessionalApiSession";
+import { requireProfessionalApi } from "@/lib/server/requireProfessionalApi";
 import { getProfessionalSchedule } from "@/lib/server/agendapsiData";
 
 export const dynamic = "force-dynamic";
@@ -123,8 +123,10 @@ function validateAndBuildSchedule(body) {
   };
 }
 
-export async function GET() {
-  const session = await getProfessionalApiSession();
+export async function GET(request) {
+  const auth = await requireProfessionalApi(request, { bucket: "professional:schedule", limit: 120, windowMs: 60_000 });
+  if (!auth.ok) return auth.res;
+  const session = auth.session;
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
     const schedule = await getProfessionalSchedule({ tenantId: session.tenantId });
@@ -135,7 +137,9 @@ export async function GET() {
 }
 
 export async function PUT(request) {
-  const session = await getProfessionalApiSession();
+  const auth = await requireProfessionalApi(request, { bucket: "professional:schedule", limit: 120, windowMs: 60_000 });
+  if (!auth.ok) return auth.res;
+  const session = auth.session;
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   // Decisão de produto: alterações de schedule são feitas pelo Admin (owner/admin).

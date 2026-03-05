@@ -201,6 +201,42 @@ Campos:
 
 ---
 
+#### 3.4.0.3 Acesso do paciente (código one-time) — opcional (MVP recomendado)
+Se o login do paciente for feito via **código de acesso (6 dígitos)** emitido pelo Profissional/Admin:
+
+Coleção global (evita collectionGroup):
+- `patientAccessCodes/{code}`
+
+Campos sugeridos (MVP):
+- `tenantId` (string)
+- `patientId` (string)
+- `issuedByUid` (string) — profissional/admin que gerou
+- `expiresAt` (timestamp)
+- `usedAt` (timestamp|null)
+- `usedByUid` (string|null) — uid do paciente após consumo
+- `createdAt` (timestamp)
+
+Regras:
+- Código é **one-time**: ao consumir, setar `usedAt`.
+- Expiração curta (ex.: 15 min; configurável por env).
+- Em produção, recomendado armazenar **hash do código** (hardening), se necessário.
+
+---
+
+#### 3.4.0.4 Lembretes (portal) — link ao Admin (quando aplicável)
+A preferência do paciente fica no doc do paciente (`patients.portal.remindersEnabled`).  
+Se o painel Admin de lembretes do projeto depender de uma estrutura global, espelhar opt-in/out (best-effort) em:
+
+- `subscribers/{phoneCanonical}` (global)
+  - `tenantId` (string)
+  - `patientId` (string)
+  - `status` ("active" | "disabled")
+  - `updatedAt` (timestamp)
+
+> Observação: a coleção exata pode variar conforme o módulo Admin existente. O portal deve **mapear para a fonte de verdade do Admin**, sem criar um sistema paralelo.
+
+---
+
 ## 4) Operações críticas
 ### 4.1 Criar Agendar / Hold
 - Respeitar schedule + buffer + multi-bloco.

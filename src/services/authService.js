@@ -10,6 +10,14 @@ import {
 
 const provider = new GoogleAuthProvider();
 
+function mapAuthApiError(data, fallback) {
+  if (data?.code === "TENANT_SUSPENDED" || String(data?.error || "").toLowerCase().includes("tenant-suspended")) {
+    return "Este tenant está suspenso no momento. Fale com a clínica/suporte para reativar o acesso.";
+  }
+  return data?.error || fallback || "Falha ao entrar.";
+}
+
+
 export async function loginWithGoogle() {
   const auth = getAuth(app);
   const result = await signInWithPopup(auth, provider);
@@ -52,7 +60,7 @@ export async function patientLoginByEmail(email) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok || !data?.ok || !data?.token) {
-    throw new Error(data?.error || "Falha no login do paciente");
+    throw new Error(mapAuthApiError(data, "Falha no login do paciente"));
   }
 
   const cred = await signInWithCustomToken(auth, data.token);
@@ -80,7 +88,7 @@ export async function patientLoginByPairCode(phone, code) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok || !data?.ok || !data?.token) {
-    throw new Error(data?.error || "Falha ao entrar.");
+    throw new Error(mapAuthApiError(data, "Falha ao entrar."));
   }
 
   const cred = await signInWithCustomToken(auth, data.token);
@@ -106,7 +114,7 @@ export async function patientLoginDevDemo() {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok || !data?.ok || !data?.token) {
-    throw new Error(data?.error || "Falha no login demo do paciente");
+    throw new Error(mapAuthApiError(data, "Falha no login demo do paciente"));
   }
 
   const cred = await signInWithCustomToken(auth, data.token);

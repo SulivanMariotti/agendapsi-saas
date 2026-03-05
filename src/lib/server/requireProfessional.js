@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 
 import admin from "@/lib/firebaseAdmin";
 import { resolveMembershipByUid, upsertUserTenantIndex } from "@/lib/server/tenantMembership";
+import { ensureTenantActive } from "@/lib/server/tenantStatus";
+import { computeBillingStateFromTenantData } from "@/lib/server/tenantBilling";
 
 const SESSION_COOKIE_NAME = "__session";
 
@@ -21,6 +23,9 @@ export async function requireProfessionalSession({ redirectTo = "/login" } = {})
 
     if (membership.isActive === false) redirect(redirectTo);
 
+    const tenantCheck = await ensureTenantActive(membership.tenantId);
+    if (!tenantCheck.ok) redirect(redirectTo);
+
     const role = String(membership?.role || "");
     if (!role || !["owner", "professional", "admin"].includes(role)) {
       redirect(redirectTo);
@@ -29,12 +34,19 @@ export async function requireProfessionalSession({ redirectTo = "/login" } = {})
     // garante índice atualizado
     await upsertUserTenantIndex({ uid, ...membership });
 
+    const tenantData = tenantCheck?.data || {};
+
+    const billing = computeBillingStateFromTenantData(tenantData);
+    const planId = String(tenantData?.planId || "").trim().toLowerCase() || "pro";
+
     return {
       uid,
       email: decoded?.email || null,
       tenantId: membership.tenantId,
       role,
       membership,
+      planId,
+      billing,
     };
   } catch {
     redirect(redirectTo);

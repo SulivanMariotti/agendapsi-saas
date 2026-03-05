@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../../components/DesignSystem";
 import { X, Trash2, Loader2, StickyNote, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { getAuth } from "firebase/auth";
+import { patientApp } from "@/app/firebasePatient";
 import { PT } from "../lib/uiTokens";
 
 function fmtDateTime(ms) {
@@ -35,7 +36,7 @@ export default function PatientNotesModal({ open, onClose }) {
   };
 
   const fetchNotes = async () => {
-    const auth = getAuth();
+    const auth = getAuth(patientApp);
     const user = auth.currentUser;
     if (!user) return;
 
@@ -57,7 +58,7 @@ export default function PatientNotesModal({ open, onClose }) {
   };
 
   const saveNote = async () => {
-    const auth = getAuth();
+    const auth = getAuth(patientApp);
     const user = auth.currentUser;
     if (!user) return;
 
@@ -89,7 +90,7 @@ export default function PatientNotesModal({ open, onClose }) {
   };
 
   const deleteNote = async (noteId) => {
-    const auth = getAuth();
+    const auth = getAuth(patientApp);
     const user = auth.currentUser;
     if (!user) return;
 

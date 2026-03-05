@@ -231,6 +231,7 @@ async function main() {
     startDate,
     endDate: null,
     status: "active",
+      planId: "pro",
   });
 
   const occCol = tenantRef.collection("appointmentOccurrences");

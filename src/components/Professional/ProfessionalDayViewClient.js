@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   CalendarDays,
   Layers,
@@ -23,10 +22,12 @@ import {
   Loader2,
 } from "lucide-react";
 
-import { Button, Card } from "@/components/DesignSystem";
+import { Button, Card, Toast } from "@/components/DesignSystem";
 import ReschedulePanel from "@/components/Professional/ReschedulePanel";
 import SessionEvolutionPanel from "@/components/Professional/SessionEvolutionPanel";
 import OccurrenceLogPanel from "@/components/Professional/OccurrenceLogPanel";
+import PatientProfileModal from "@/components/Professional/PatientProfileModal";
+import ProfessionalAgendaHeader from "@/components/Professional/ProfessionalAgendaHeader";
 import WhatsAppIcon from "@/components/Icons/WhatsAppIcon";
 
 function toDateFromIso(iso) {
@@ -38,6 +39,30 @@ function addDaysIso(iso, deltaDays) {
   const d = toDateFromIso(iso);
   d.setUTCDate(d.getUTCDate() + deltaDays);
   return d.toISOString().slice(0, 10);
+}
+
+function todayIsoSP() {
+  // hoje no fuso de SP (evita virar o dia por UTC)
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const y = parts.find((p) => p.type === "year")?.value || "";
+  const m = parts.find((p) => p.type === "month")?.value || "";
+  const d = parts.find((p) => p.type === "day")?.value || "";
+  const iso = `${y}-${m}-${d}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : new Date().toISOString().slice(0, 10);
+}
+
+function nowMinutesSP() {
+  // minutos do dia em SP (hora local do usuário)
+  const now = new Date();
+  const hh = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
+  const [h, m] = String(hh || "00:00").split(":").map((x) => parseInt(x, 10));
+  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
 }
 
 function fmtDatePt(iso) {
@@ -355,6 +380,75 @@ export default function ProfessionalDayViewClient({ initialData }) {
   const [deleteOcc, setDeleteOcc] = useState(null); // occurrence object for delete confirmation
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = "success") => setToast({ msg, type });
+  const [patientProfilePatientId, setPatientProfilePatientId] = useState("");
+  const [patientSearch, setPatientSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const patientSearchItems = useMemo(() => {
+    const items = [];
+    const occs = Array.isArray(data?.occurrences) ? data.occurrences : [];
+    for (const o of occs) {
+      if (!o?.id || o?.isBlock) continue;
+      const pid = o?.patientId;
+      const label = pid ? String(data?.patientsById?.[pid]?.fullName || "") : String(o?.leadName || "");
+      if (!label) continue;
+      items.push({ key: String(o.id), label, occId: String(o.id) });
+    }
+    const seen = new Set();
+    const out = [];
+    for (const it of items) {
+      const k = it.label.trim().toLowerCase();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push(it);
+    }
+    out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    return out;
+  }, [data?.occurrences, data?.patientsById]);
+
+  const patientSearchResults = useMemo(() => {
+    const q = patientSearch.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return patientSearchItems.filter((it) => it.label.toLowerCase().includes(q)).slice(0, 8);
+  }, [patientSearch, patientSearchItems]);
+
+  function onSelectPatientSearch(it) {
+    if (!it?.occId) return;
+    setSelectedOccId(String(it.occId));
+  }
+
+  function matchesStatusFilter(o, filter) {
+    if (!o) return true;
+    const f = String(filter || "all");
+    if (f === "all") return true;
+    if (f === "holds") return Boolean(o.isHold);
+    if (Boolean(o.isHold)) return false;
+    const st = o.status || "Agendado";
+    if (f === "confirmed") return st === "Confirmado";
+    if (f === "scheduled") return st !== "Confirmado";
+    return true;
+  }
+
+
+  const dayStats = useMemo(() => {
+    const occs = Array.isArray(data?.occurrences) ? data.occurrences : [];
+    let scheduled = 0;
+    let confirmed = 0;
+    let holds = 0;
+    for (const o of occs) {
+      if (!o || o.isBlock) continue;
+      if (o.isHold) {
+        holds += 1;
+        continue;
+      }
+      const st = o.status || "Agendado";
+      if (st === "Confirmado") confirmed += 1;
+      else scheduled += 1;
+    }
+    return { scheduled, confirmed, holds };
+  }, [data?.occurrences]);
   const [editStatus, setEditStatus] = useState("Agendado");
 
 // Paciente (MVP): gerar código de acesso (one-time) para o portal /paciente
@@ -417,11 +511,100 @@ useEffect(() => {
   const tenantId = data?.tenantId;
   const isoDate = data?.isoDate;
 
+  const todayIso = useMemo(() => todayIsoSP(), []);
+  const isToday = String(isoDate || "") === String(todayIso || "");
+
+  const [nowMin, setNowMin] = useState(() => nowMinutesSP());
+  const nowRowRef = useRef(null);
+  const [showNowButton, setShowNowButton] = useState(false);
+
+  useEffect(() => {
+    if (!isToday) return;
+    setNowMin(nowMinutesSP());
+    const t = setInterval(() => setNowMin(nowMinutesSP()), 60 * 1000);
+    return () => clearInterval(t);
+  }, [isToday]);
+
+
+  const nextDayOcc = useMemo(() => {
+    const occs = Array.isArray(data?.occurrences) ? data.occurrences : [];
+    const baseMin = isToday ? Number(nowMin) : -1;
+
+    let best = null; // { occId, startTime, startMin }
+    for (const o of occs) {
+      const st = String(o?.startTime || "").slice(0, 5);
+      if (!st) continue;
+      if (String(o?.status || "") === "Cancelado") continue;
+
+      const m = timeToMinutes(st);
+      if (isToday && Number.isFinite(baseMin) && m <= baseMin) continue;
+
+      if (!best || m < best.startMin) best = { occId: o?.id || "", startTime: st, startMin: m };
+    }
+
+    return best;
+  }, [data?.occurrences, isToday, nowMin]);
+
+  const scrollToNow = () => {
+    try {
+      nowRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch {
+      // ignore
+    }
+  };
+
+  const scrollToNextAppointment = () => {
+    try {
+      const occ = nextDayOcc;
+      if (!occ?.startTime) return;
+      const el = document.querySelector(`[data-slot-row="${occ.startTime}"]`);
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (occ?.occId) setSelectedOccId(String(occ.occId));
+    } catch {
+      // ignore
+    }
+  };
+
+
+
   const slotIntervalMin = useMemo(() => {
     const v = Number(data?.schedule?.slotIntervalMin);
     if (Number.isFinite(v) && v > 0) return v;
     return 30;
   }, [data?.schedule?.slotIntervalMin]);
+
+  // Mostrar "Ir para agora" apenas quando a tela estiver longe do horário atual (ex.: > 2h).
+  useEffect(() => {
+    if (!isToday) {
+      setShowNowButton(false);
+      return;
+    }
+
+    function compute() {
+      const el = nowRowRef.current;
+      if (!el) return setShowNowButton(false);
+
+      const rect = el.getBoundingClientRect();
+      const slotH = rect.height || 40;
+      const pxPerMin = slotH / Math.max(1, Number(slotIntervalMin || 30));
+      const thresholdPx = 120 * pxPerMin; // 2 horas
+
+      const nowY = rect.top + window.scrollY + slotH / 2;
+      const viewCenterY = window.scrollY + window.innerHeight / 2;
+      const dist = Math.abs(nowY - viewCenterY);
+
+      setShowNowButton(dist > thresholdPx);
+    }
+
+    compute();
+    window.addEventListener("scroll", compute, { passive: true });
+    window.addEventListener("resize", compute);
+    return () => {
+      window.removeEventListener("scroll", compute);
+      window.removeEventListener("resize", compute);
+    };
+  }, [isToday, slotIntervalMin, nowMin]);
+
 
   const defaultDurationBlocks = useMemo(() => {
     const v = Number(data?.schedule?.defaultDurationBlocks ?? data?.schedule?.defaultBlocks);
@@ -442,6 +625,32 @@ useEffect(() => {
       : [{ start: data?.dayBounds?.start || "07:00", end: data?.dayBounds?.end || "20:00" }];
     return buildSlotsFromRanges(ranges, slotIntervalMin);
   }, [data?.dayRanges, data?.dayBounds?.start, data?.dayBounds?.end, slotIntervalMin]);
+  const nowSlotKey = useMemo(() => {
+    if (!isToday) return "";
+    if (!Array.isArray(slots) || !slots.length) return "";
+    const minutes = Number(nowMin);
+    if (!Number.isFinite(minutes)) return "";
+    // Find the slot that contains "now" (start <= now < nextStart)
+    let best = slots[0];
+    for (let i = 0; i < slots.length; i++) {
+      const t = slots[i];
+      const tMin = timeToMinutes(t);
+      const nextMin = i + 1 < slots.length ? timeToMinutes(slots[i + 1]) : tMin + slotIntervalMin;
+      if (minutes >= tMin && minutes < nextMin) return t;
+      if (minutes >= tMin) best = t;
+    }
+    return best;
+  }, [isToday, slots, nowMin, slotIntervalMin]);
+
+  const nowFraction = useMemo(() => {
+    if (!isToday || !nowSlotKey) return 0;
+    const base = timeToMinutes(nowSlotKey);
+    const frac = (Number(nowMin) - base) / Number(slotIntervalMin || 30);
+    if (!Number.isFinite(frac)) return 0;
+    return Math.min(0.98, Math.max(0.02, frac));
+  }, [isToday, nowSlotKey, nowMin, slotIntervalMin]);
+
+
 
   const occByStart = useMemo(() => {
     const map = new Map();
@@ -487,12 +696,14 @@ useEffect(() => {
   const effectiveTemplate = templates.find((t) => t.id === effectiveTemplateId) || templates?.[0] || null;
 
   const messagePreview = useMemo(() => {
-    if (!effectiveTemplate) return "";
-    const nome = selectedPatient?.fullName || selectedOcc?.leadName || "";
+    const nome = selectedPatient?.fullName || selectedOcc?.leadName || "tudo bem?";
     const dataStr = fmtDateShortPt(isoDate);
     const hora = selectedOcc?.startTime || "";
-    return applyTemplate(effectiveTemplate.body, { nome, data: dataStr, hora });
-  }, [effectiveTemplate, selectedPatient?.fullName, selectedOcc?.leadName, isoDate, selectedOcc?.startTime]);
+    if (effectiveTemplate?.body) return applyTemplate(effectiveTemplate.body, { nome, data: dataStr, hora });
+    return selectedOcc?.isHold
+      ? `Olá, ${nome}! Segurei um horário em ${dataStr} às ${hora}.`
+      : `Olá, ${nome}! Passando para confirmar nosso horário em ${dataStr} às ${hora}. Até lá 🙂`;
+  }, [effectiveTemplate?.body, selectedPatient?.fullName, selectedOcc?.leadName, isoDate, selectedOcc?.startTime, selectedOcc?.isHold]);
 
   const hasWhatsappPhone = Boolean(selectedPatient?.mobile || selectedOcc?.leadMobile);
 
@@ -672,66 +883,61 @@ useEffect(() => {
 
 
   return (
-    <div className="mx-auto max-w-7xl p-3 sm:p-6 text-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-3">
-            <CalendarDays className="text-violet-700" size={22} />
-          </div>
-          <div>
-            <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">Agenda (Profissional)</h1>
-            <p className="text-xs text-slate-400">
-              Tenant: <span className="font-mono">{tenantId}</span>
-            </p>
-          </div>
-        </div>
+    <div className="mx-auto max-w-7xl px-3 sm:px-6 pb-6 pt-0 text-sm">
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-            <button
-              type="button"
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-600 text-white"
-              onClick={() => {
-                // already on day
-              }}
-            >
-              Dia
-            </button>
-            <button
-              type="button"
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 hover:bg-slate-50"
-              onClick={() => {
-                router.push(`/profissional?view=week&date=${encodeURIComponent(isoDate)}`);
-              }}
-            >
-              Semana
-            </button>
-            <button
-              type="button"
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 hover:bg-slate-50"
-              onClick={() => {
-                router.push(`/profissional?view=month&date=${encodeURIComponent(isoDate)}`);
-              }}
-            >
-              Mês
-            </button>
-          </div>
+      {toast?.msg ? <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} /> : null}
 
-          <Button variant="secondary" icon={ChevronLeft} onClick={() => goDelta(-1)} />
-          <Button variant="secondary" onClick={goToday}>
-            Hoje
-          </Button>
-          <Button variant="secondary" icon={ChevronRight} onClick={() => goDelta(1)} />
+      {patientProfilePatientId ? (
+        <PatientProfileModal
+          patientId={patientProfilePatientId}
+          onClose={() => setPatientProfilePatientId("")}
+          onSaved={async () => {
+            try { router.refresh(); } catch { /* ignore */ }
+          }}
+          showToast={(m, t) => showToast(m, t)}
+        />
+      ) : null}
 
-          <Button variant="secondary" icon={Search} onClick={() => findNextAvailableAndOpen("appointment")} disabled={busy}>
+      <ProfessionalAgendaHeader
+        view="day"
+        periodLabel={dayLabel}
+        isoDate={isoDate}
+        tenantId={tenantId}
+        onChangeView={(v) => {
+          if (v === "day") return;
+          if (v === "week") router.push(`/profissional?view=week&date=${encodeURIComponent(isoDate)}`);
+          if (v === "month") router.push(`/profissional?view=month&date=${encodeURIComponent(isoDate)}`);
+        }}
+        onPrev={() => goDelta(-1)}
+        onNext={() => goDelta(1)}
+        onToday={goToday}
+        showNow={isToday && showNowButton}
+        onNow={scrollToNow}
+        showNextAppt={Boolean(nextDayOcc?.occId)}
+        onNextAppt={scrollToNextAppointment}
+        onGoToDate={(d) => router.push(`/profissional?view=day&date=${encodeURIComponent(String(d || isoDate))}`)}
+        onLogout={logout}
+        searchValue={patientSearch}
+        onSearchChange={setPatientSearch}
+        searchResults={patientSearchResults}
+        onSelectSearchItem={(it) => {
+          onSelectPatientSearch(it);
+          setPatientSearch("");
+        }}
+        stats={dayStats}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        rightActions={
+          <Button
+            variant="secondary"
+            icon={Search}
+            onClick={() => findNextAvailableAndOpen("appointment")}
+            disabled={busy}
+          >
             Próximo horário
           </Button>
-
-          <Button variant="secondary" onClick={logout}>
-            Sair
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       {errorMsg ? (
         <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-800">
@@ -740,11 +946,13 @@ useEffect(() => {
       ) : null}
 
       <div className="mt-4 flex flex-col gap-4">
-  <Card title="Horários do dia" className="min-h-[60vh]">
-          <div className="mb-2 text-[11px] text-slate-600 capitalize">{dayLabel}</div>
+  <Card className="min-h-[60vh]">
           {!slots.length ? (
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-xs font-semibold text-slate-500">
-              Sem horários abertos neste dia (verifique a configuração da agenda).
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>Sem horários abertos neste dia (verifique a configuração da agenda).</span>
+                
+              </div>
             </div>
           ) : (
             <div className="rounded-2xl border border-slate-100 overflow-hidden">
@@ -753,15 +961,34 @@ useEffect(() => {
                 const patient = occ?.patientId ? data?.patientsById?.[occ.patientId] : null;
                 const series = occ?.seriesId ? data?.seriesById?.[occ.seriesId] : null;
                 const isSelected = !!occ && occ.id === selectedOccId;
+                const matchesFilter = occ ? matchesStatusFilter(occ, statusFilter) : true;
+                const keepStrong = !!occ && (isSelected || (selectedOccId && (selectedOccId === occ.parentOccurrenceId || selectedOccId === occ.id)));
+                const dimOcc = !!occ && statusFilter !== "all" && !matchesFilter && !keepStrong;
 
                 return (
                   <div
                     key={t}
-                    className="grid grid-cols-[50px_1fr] sm:grid-cols-[54px_1fr] gap-1 items-stretch px-2 py-0.5 bg-white border-b border-slate-100 last:border-b-0"
+                    data-slot-row={t}
+                    ref={isToday && nowSlotKey && t === nowSlotKey ? nowRowRef : null}
+                    className="relative grid grid-cols-[50px_1fr] sm:grid-cols-[54px_1fr] gap-1 items-stretch px-2 py-0.5 bg-white border-b border-slate-100 last:border-b-0"
                   >
                     <div className="flex items-center justify-center text-slate-500">
                       <span className="font-mono text-[10px]">{t}</span>
                     </div>
+
+                    {isToday && nowSlotKey && t === nowSlotKey ? (
+                      <div
+                        className="pointer-events-none absolute left-0 right-0 z-10"
+                        style={{ top: `${nowFraction * 100}%` }}
+                        aria-hidden="true"
+                      >
+                        <div className="relative">
+                          <div className="absolute left-1 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-rose-500 shadow-sm" />
+                          <div className="h-px bg-rose-500/80" />
+                        </div>
+                      </div>
+                    ) : null}
+
 
                     {occ ? (
                       occ.isBlock ? (
@@ -770,7 +997,7 @@ useEffect(() => {
                             selectedOccId && (selectedOccId === occ.parentOccurrenceId || selectedOccId === occ.id)
                               ? "ring-2 ring-violet-100"
                               : ""
-                          }`}
+                          } ${dimOcc ? "opacity-25" : ""}`}
                           title="Continuação (ocupado)"
                         >
                           <div className="px-2 py-1 leading-tight">
@@ -787,7 +1014,7 @@ useEffect(() => {
                           }
                           className={`w-full text-left rounded-xl border border-l-4 overflow-hidden hover:brightness-[0.99] transition ${occCardSoftClass(occ)} ${occAccentBorderClass(occ)} ${
                             isSelected ? "ring-2 ring-violet-100" : ""
-                          }`}
+                          } ${dimOcc ? "opacity-25" : ""}`}
                           title="Abrir detalhes"
                         >
                           <div className="px-2 py-1 flex items-start justify-between gap-2 leading-tight">
@@ -949,7 +1176,28 @@ useEffect(() => {
         <p className="text-base font-extrabold text-slate-900">
           {selectedPatient?.fullName || selectedOcc?.leadName || "(sem paciente)"}
         </p>
-        {selectedPatient?.notes ? <p className="mt-1 text-xs text-slate-600">{selectedPatient.notes}</p> : null}
+        {(selectedPatient?.generalNotes || selectedPatient?.notes) ? (
+          <p className="mt-1 text-xs text-slate-600">{selectedPatient.generalNotes || selectedPatient.notes}</p>
+        ) : null}
+
+
+        {selectedOcc?.patientId ? (
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            {selectedPatient && (selectedPatient.profileStatus === "incomplete" || selectedPatient.profileCompleted === false) ? (
+              <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-extrabold text-amber-800">
+                Cadastro incompleto
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setPatientProfilePatientId(String(selectedOcc?.patientId || ""))}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-extrabold text-slate-700 hover:bg-slate-50"
+            >
+              Editar cadastro
+            </button>
+          </div>
+        ) : null}
+
 
 {selectedOcc?.patientId ? (
   <div className="mt-3 rounded-2xl border border-slate-100 bg-white p-3">
@@ -1067,12 +1315,15 @@ useEffect(() => {
                 className="mt-1 h-9 w-full sm:w-[240px] rounded-xl border border-slate-200 bg-white px-3 text-xs"
                 value={effectiveTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
+                disabled={!templates.length}
               >
-                {templates.map((t) => (
+                {templates.length ? templates.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.title}
                   </option>
-                ))}
+                )) : (
+                  <option value="">Nenhum template</option>
+                )}
               </select>
             </div>
 
@@ -1516,7 +1767,7 @@ function CreateModal({ modal, isoDate, slotIntervalMin, defaultDurationBlocks = 
               className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
               value={cpf}
               onChange={(e) => setCpf(e.target.value)}
-              placeholder="Somente números"
+              placeholder="Opcional (somente números)"
             />
           </div>
           <div>
@@ -1544,7 +1795,7 @@ function CreateModal({ modal, isoDate, slotIntervalMin, defaultDurationBlocks = 
           <Button variant="secondary" onClick={onClose} className="flex-1" disabled={busy}>
             Cancelar
           </Button>
-          <Button variant="primary" onClick={submitAppointment} disabled={busy || !fullName || !cpf} className="flex-1">
+          <Button variant="primary" onClick={submitAppointment} disabled={busy || !fullName || !mobile} className="flex-1">
             Agendar
           </Button>
         </div>

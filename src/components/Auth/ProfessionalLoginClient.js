@@ -9,6 +9,11 @@ import { app } from "@/app/firebase";
 function safeErrMsg(e) {
   const msg = String(e?.message || "");
   if (!msg) return "Falha ao entrar.";
+  const norm = msg.toLowerCase();
+  // Tenant suspenso (bloqueio SaaS)
+  if (norm.includes("tenant-suspended") || norm.includes("tenant_suspended")) {
+    return "Este tenant está suspenso no momento. Fale com o suporte para reativar o acesso.";
+  }
   // Avoid leaking internal error details.
   if (/permission|denied|unauthorized|forbidden/i.test(msg)) return "Acesso não autorizado.";
   return msg;
@@ -33,6 +38,9 @@ export default function ProfessionalLoginClient({ nextPath = "/profissional" }) 
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok || !data?.ok) {
+      if (data?.code === "TENANT_SUSPENDED") {
+        throw new Error("tenant-suspended");
+      }
       throw new Error(data?.error || "Acesso não autorizado.");
     }
 

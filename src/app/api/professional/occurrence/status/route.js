@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { getProfessionalApiSession } from "@/lib/server/getProfessionalApiSession";
+import { requireProfessionalApi } from "@/lib/server/requireProfessionalApi";
 import { updateOccurrenceStatus, ALLOWED_STATUS } from "@/lib/server/agendapsiData";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request) {
-  const session = await getProfessionalApiSession();
+  const auth = await requireProfessionalApi(request, { bucket: "professional:occurrence-status", limit: 60, windowMs: 60_000 });
+  if (!auth.ok) return auth.res;
+  const session = auth.session;
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   let body = {};

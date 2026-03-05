@@ -4,6 +4,7 @@ import admin from "@/lib/firebaseAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { enforceSameOrigin } from "@/lib/server/originGuard";
 import { requireAuth } from "@/lib/server/requireAuth";
+import { ensureTenantActive } from "@/lib/server/tenantStatus";
 import { getPatientPortalConfig } from "@/lib/server/patientPortalConfig";
 import { toPhoneCanonical } from "@/lib/server/subscriberLookup";
 
@@ -118,6 +119,15 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: "Sessão do paciente sem contexto." }, { status: 403 });
     }
 
+
+    const tenantCheck = await ensureTenantActive(tenantId);
+    if (!tenantCheck.ok) {
+      return NextResponse.json(
+        { ok: false, error: "tenant-suspended", code: "TENANT_SUSPENDED" },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const action = norm(body?.action || "");
 
@@ -125,6 +135,7 @@ export async function POST(req) {
     const patientRef = tenantRef.collection("patients").doc(patientId);
 
     const portalCfg = await getPatientPortalConfig(tenantId);
+    const remindersModuleEnabled = portalCfg.remindersEnabled !== false;
 
     const patch = {};
     let remindersToggleValue = null;
@@ -138,9 +149,17 @@ export async function POST(req) {
       if (enabled === null) {
         return NextResponse.json({ ok: false, error: "remindersEnabled inválido." }, { status: 400 });
       }
-      remindersToggleValue = !!enabled;
-      patch["portal.remindersEnabled"] = remindersToggleValue;
-      patch["portal.updatedAt"] = nowServer();
+
+      // Se o tenant desativou o módulo de lembretes, força false e não permite ativar.
+      if (!remindersModuleEnabled) {
+        remindersToggleValue = false;
+        patch["portal.remindersEnabled"] = false;
+        patch["portal.updatedAt"] = nowServer();
+      } else {
+        remindersToggleValue = !!enabled;
+        patch["portal.remindersEnabled"] = remindersToggleValue;
+        patch["portal.updatedAt"] = nowServer();
+      }
     } else {
       return NextResponse.json({ ok: false, error: "Ação inválida." }, { status: 400 });
     }
@@ -155,8 +174,10 @@ export async function POST(req) {
     const acceptedVersion = Number(portal.termsAcceptedVersion || 0) || 0;
     const needsContractAcceptance = acceptedVersion < Number(portalCfg.termsVersion || 1);
 
-    const remindersEnabled =
+    const remindersPreference =
       typeof portal.remindersEnabled === "boolean" ? portal.remindersEnabled : portalCfg.remindersEnabled;
+
+    const remindersEnabled = remindersModuleEnabled ? remindersPreference : false;
 
     // espelha opt-in/out para o painel Admin (best-effort)
     if (remindersToggleValue !== null) {
@@ -181,7 +202,8 @@ export async function POST(req) {
         features: {
           libraryEnabled: portalCfg.libraryEnabled,
           notesEnabled: portalCfg.notesEnabled,
-          remindersEnabled: portalCfg.remindersEnabled,
+          remindersModuleEnabled,
+          remindersEnabled,
         },
         remindersEnabled,
       },

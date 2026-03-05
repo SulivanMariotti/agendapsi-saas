@@ -1,209 +1,213 @@
-# Backlog consolidado — AgendaPsi (SaaS)
+# AgendaPsi — Requisitos & Backlog (fonte da verdade)
 
-Atualizado: **2026-03-02**
+Data atualização: **2026-03-04**  
+Timezone: **America/Sao_Paulo**
 
-## Premissas e decisões (produto)
-- **CSV descartado**: não haverá importação/upload de agenda por CSV. A **fonte da verdade** é sempre o que o **Profissional** cadastra e agenda dentro do AgendaPsi.
-- **Paciente**: proibido CTA de **cancelar/remarcar**. Comunicação deve reforçar compromisso/constância.
-- **Separação total do Lembrete Psi**: reuso apenas de UI/código/padrões — nunca Firebase/coleções/rules/dados.
+Este documento consolida requisitos em:
+**Épicos → Funcionalidades → Regras de negócio → Critérios de aceitação**, marcando **MVP / Pós‑MVP**, dependências e riscos.
 
-## Como ler este backlog
-- Etiquetas: **[MVP]** e **[PÓS-MVP]**
-- Status: **Pronto / Em andamento / Pendente**
-- Cada funcionalidade lista: **Regras de negócio**, **Critérios de aceitação**, **Dependências** e **Riscos/Atenção**.
+> Convenção de status: ✅ concluído | 🟨 em andamento | ⬜ pendente
 
 ---
 
-## ÉPICO A — Fundação do SaaS (separação, auth, tenant)
-### A1 — Separação total do Lembrete Psi **[MVP]** → **Pronto**
-- Regras de negócio:
-  - AgendaPsi tem Firebase Project e Rules próprios.
-- Critérios de aceitação:
-  - Deploy/URL e Firebase do AgendaPsi não se misturam com o Lembrete Psi.
-- Dependências: nenhuma.
-- Riscos/Atenção: **Segurança/LGPD**.
+## ÉPICO A — Fundamentos (✅)
+**Objetivo:** base técnica e isolamento por tenant.
 
-### A2 — Auth + sessão server-side (Profissional) **[MVP]** → **Pronto**
-- Regras de negócio:
-  - Sessão server-side para rotas protegidas.
-- Critérios de aceitação:
-  - `/login` autentica e redireciona para `/profissional`.
-- Dependências: Firebase Auth.
-- Riscos/Atenção: Segurança (cookies, CSRF, leaks).
+Funcionalidades:
+- Seed Firestore (tenant demo, paciente teste, séries + ocorrências)
+- Sessão server-side do Profissional
+- Isolamento por tenant via `userTenantIndex/{uid}` (sem `collectionGroup`)
 
-### A3 — Isolamento por tenant via `userTenantIndex/{uid}` **[MVP]** → **Pronto**
-- Regras de negócio:
-  - Sem `collectionGroup` como base de autorização.
-- Critérios de aceitação:
-  - Todo acesso a dados do tenant depende do índice do usuário.
-- Dependências: seed/índice.
-- Riscos/Atenção: Segurança (least privilege).
-
-### A4 — Hardening completo de Rules (produção) **[PÓS-MVP]** → **Pendente**
-- Regras de negócio:
-  - Princípio do menor privilégio, auditoria mínima, negar por padrão.
-- Critérios de aceitação:
-  - Paciente não lê coleções internas; Profissional/Admin apenas no tenant.
-- Dependências: modelagem final do Portal do Paciente + subcoleções clínicas.
-- Riscos/Atenção: **Segurança/LGPD**.
+Critérios de aceitação:
+- Seed cria dados consistentes
+- Login do profissional cria sessão server-side
+- Usuário sem tenant não acessa rotas protegidas
 
 ---
 
-## ÉPICO B — Admin (desktop)
-### B1 — Schedule (ranges, almoço, buffer, slot interval) **[MVP]** → **Pronto**
-- Critérios de aceitação:
-  - Persistir em `tenants/{tenantId}/settings/schedule` e refletir na agenda do profissional.
+## ÉPICO B — Painéis, Rotas e UX Base (✅)
+**Objetivo:** separar claramente papéis e reduzir confusão.
 
-### B2 — Menus + Submenus (Dashboard default) **[MVP]** → **Pronto**
+Funcionalidades:
+- `/admin` (Super Admin SaaS)
+- `/admin-tenant` (Admin do consultório: owner/admin)
+- `/profissional` (rotina/agenda)
+- `/paciente` (portal via API)
+- Deep link por aba no `/admin-tenant` (`?tab=...`)
 
-### B3 — Catálogo de Códigos de Ocorrência (registro extra) **[MVP]** → **Pronto**
+Critérios de aceitação:
+- Profissional comum não acessa `/admin-tenant`
+- Owner/Admin acessa `/admin-tenant`
+- Portal do paciente sem Firestore no client
 
-### B4 — Templates WhatsApp (CRUD) **[MVP]** → **Pendente**
-- Regras de negócio:
-  - Templates por tenant; seleção no detalhe do Profissional.
-- Critérios de aceitação:
-  - Admin cria/edita/exclui; Profissional seleciona no agendamento/hold.
-- Dependências: Firestore + Rules + UI admin.
-- Riscos/Atenção: UX (templates úteis), Segurança (expor telefone).
-
-### B5 — Gestão avançada (cadastros, permissões finas, auditoria) **[PÓS-MVP]** → **Pendente**
+Doc: `docs/34_PANEIS_ROTAS_PERMISSOES.md`
 
 ---
 
-## ÉPICO C — Agenda do Profissional (Dia/Semana/Mês)
-### C1 — Dia/Semana/Mês + navegação por granularidade **[MVP]** → **Pronto**
-### C2 — Status manual + cores **[MVP]** → **Pronto**
-### C3 — Holds/Reservas (`isHold=true`, status travado) **[MVP]** → **Pronto**
-### C4 — Multi-bloco + buffer **[MVP]** → **Pronto**
-### C5 — Próximos horários (3 sugestões) **[MVP]** → **Pronto**
-### C6 — Recorrência + plano (materializa ocorrências) **[MVP]** → **Pronto**
-### C7 — Converter hold → agendamento (+ extensão) **[MVP]** → **Pronto**
-### C8 — Reagendar recorrente (só esta vs esta e futuras) + week picker **[MVP]** → **Pronto**
-### C9 — Excluir (só esta vs esta e futuras) **[MVP]** → **Pronto**
-### C10 — Detalhe em overlay + abas clínicas + “Salvar alterações” unificado **[MVP]** → **Pronto**
+## ÉPICO C — Admin do consultório (Owner/Admin) (✅)
+**Objetivo:** o próprio consultório gerenciar configurações do tenant.
+
+Funcionalidades:
+- Configurar agenda (`tenants/{tenantId}/settings/schedule`)
+- Códigos de ocorrência (`tenants/{tenantId}/occurrenceCodes`)
+- Settings Portal do Paciente (`tenants/{tenantId}/settings/patientPortal`)
+- Templates WhatsApp (`tenants/{tenantId}/whatsappTemplates`)
+
+Critérios de aceitação:
+- CRUD completo via `/admin-tenant`
+- Permissão somente `owner|admin`
 
 ---
 
-## ÉPICO D — Pacientes (fonte da verdade = Profissional)
-### D0 — Decisão: sem CSV (fonte da verdade = AgendaPsi) **[MVP]** → **Pronto**
-- Critérios de aceitação:
-  - Não existe fluxo de upload/import CSV no Admin.
-  - Agenda e painel do paciente refletem somente dados criados no AgendaPsi.
+## ÉPICO D — Profissional / Agenda (✅)
+**Objetivo:** rotina de agenda e registro clínico por ocorrência.
 
-### D1 — Cadastro completo do paciente no Painel do Profissional **[MVP]** → **Pendente**
-- Funcionalidades:
-  - Criar/editar paciente com campos obrigatórios do projeto.
-  - **Pré-cadastro rápido** ao clicar em slot vazio (mínimo necessário) + **completar depois**.
-  - Tela/lista “Pacientes” no painel do Profissional (não depender do Admin).
-  - Exibir **observações gerais** do paciente no detalhe do agendamento.
-- Regras de negócio:
-  - Dados do paciente pertencem ao tenant; somente Profissional/Admin podem editar.
-  - Validação de entrada/saída (telefone, data, campos obrigatórios).
-- Critérios de aceitação:
-  - Profissional consegue criar paciente completo sem ir ao Admin.
-  - Pré-cadastro cria paciente “mínimo” e marca pendências (ex.: `isDraft`/`missingFields`).
-  - Ao abrir paciente, existe CTA “Completar cadastro” (Profissional, não Paciente).
-- Dependências:
-  - Modelo `patients` + Rules + UI.
-- Riscos/Atenção:
-  - **LGPD** (dados pessoais), UX (não travar fluxo de agenda).
+Funcionalidades:
+- Visões Dia/Semana/Mês
+- Holds + conversão
+- Recorrência (plano 1..30)
+- Editar recorrente: “só esta” vs “esta e futuras”
+- Status: Agendado, Confirmado, Finalizado, Não comparece, Cancelado, Reagendado
+- Evolução por sessão + histórico do paciente
+- WhatsApp no detalhe com templates selecionáveis
 
-### D2 — Painel do Paciente (Portal) — base informativa **[MVP]** → **Em andamento**
-- Funcionalidades:
-  - Login do paciente (mecanismo a definir: código de acesso / link mágico / etc.).
-  - Ver **próxima sessão** e **agenda** (somente leitura).
-  - Sem cancelamento/remarcação; mensagens de constância.
-- Regras de negócio:
-  - Paciente não acessa prontuário/evolução nem dados internos do tenant.
-  - Dados do portal minimizados (ex.: `patientsPortal`/API server-side).
-- Critérios de aceitação:
-  - Paciente entra e vê agenda real; sem qualquer CTA de alterar compromisso.
-- Dependências:
-  - Auth/claims role=patient + API de leitura.
-- Riscos/Atenção:
-  - **Segurança/LGPD** (minimização e isolamento).
-
-### D3 — “Seu cadastro” (módulo do Paciente) — reposicionado para o topo **[MVP]** → **Pendente**
-- Funcionalidades:
-  - Exibir bloco “Seu cadastro” no topo do painel do paciente (ao invés de barra inferior).
-  - Exibir subset de dados (nome, telefone, preferências), com leitura/edição limitada.
-- Regras de negócio:
-  - Paciente pode editar apenas campos permitidos (ex.: preferências, observações pessoais se aprovado).
-- Critérios de aceitação:
-  - Bloco aparece no topo; edição respeita regras de permissão.
-- Dependências:
-  - Modelagem `patientsPortal` (ou API) + Rules.
-- Riscos/Atenção:
-  - UX (clareza do que é editável), LGPD.
-
-### D4 — Termo/Contrato no Paciente (visualizar + aceitar) **[MVP]** → **Pendente**
-- Funcionalidades:
-  - Visualizar termo vigente do tenant.
-  - Aceitar (registrar `acceptedAt`, versão/hash).
-- Regras de negócio:
-  - Aceite é auditável; sem “obrigar” a aceitar para ver agenda (decisão de produto), mas pode bloquear recursos extras.
-- Critérios de aceitação:
-  - Aceite persiste e fica visível para o Profissional/Admin.
-- Dependências:
-  - Storage/Firestore para termo + UI paciente.
-- Riscos/Atenção:
-  - **LGPD/Legal**, integridade (versão do termo).
-
-### D5 — Preferências: “Ativar lembrete” **[MVP]** → **Pendente**
-- Funcionalidades:
-  - Toggle para o paciente ativar/desativar lembretes.
-  - Persistir preferência (mesmo que envio automático seja pós-MVP).
-- Regras de negócio:
-  - Preferência não deve induzir cancelamento; textos reforçam constância.
-- Critérios de aceitação:
-  - Toggle salva e reflete imediatamente.
-- Dependências:
-  - Modelagem preferências + (Pós-MVP) job/notificação.
-- Riscos/Atenção:
-  - UX (prometer notificação sem entregar) — avaliar feature flag.
-
-### D6 — Anotações do paciente **[PÓS-MVP]** → **Pendente**
-- Funcionalidades:
-  - Paciente registra notas próprias (ex.: “o que quero levar para a sessão”).
-  - Política de visibilidade a definir (somente paciente vs compartilhado com profissional).
-- Regras de negócio:
-  - Notas não substituem prontuário; cuidado com dados sensíveis.
-- Critérios de aceitação:
-  - CRUD básico; histórico.
-- Dependências:
-  - Modelagem + Rules + UX de consentimento.
-- Riscos/Atenção:
-  - **LGPD/Ética/UX** (expectativa de resposta).
-
-### D7 — Biblioteca de artigos **[PÓS-MVP]** → **Pendente**
-- Funcionalidades:
-  - Admin publica artigos por tenant; paciente consome.
-- Regras de negócio:
-  - Conteúdo deve reforçar constância/psicoeducação; evitar tom “marketing”.
-- Critérios de aceitação:
-  - Lista, detalhe, marcação de leitura.
-- Dependências:
-  - CMS simples (Firestore/Storage) + Rules.
-- Riscos/Atenção:
-  - Curadoria, copyright.
-
-### D8 — Semana de aniversário (destaque na agenda do Profissional) **[PÓS-MVP]** → **Pendente**
+Critérios de aceitação:
+- Fluxos críticos funcionam sem perda de consistência (série/ocorrência)
+- Sem regressões de UX (overlay, salvar unificado)
 
 ---
 
-## ÉPICO E — Registros clínicos (Evolução vs Ocorrência extra)
-### E1 — Evolução por sessão (texto livre) **[MVP]** → **Pronto**
-### E2 — Ocorrência “extra” (código + descrição) **[MVP]** → **Pronto**
-### E3 — Histórico do paciente (apresentação) **[MVP]** → **Em andamento**
-- Critérios de aceitação:
-  - Profissional vê histórico completo por paciente sem ruído excessivo.
-- Riscos/Atenção: UX.
+## ÉPICO E — Paciente / Portal (✅)
+**Objetivo:** portal informativo sem CTA de cancelar/remarcar, via APIs.
 
-### E4 — Relatório por código de ocorrência **[PÓS-MVP]** → **Pendente**
+Funcionalidades MVP:
+- Agenda (informativo)
+- Seu cadastro (subset)
+- Termo/Contrato (visualizar + aceitar)
+- Lembretes (opt-in/out)
+- Biblioteca (somente published)
+- Anotações do paciente (criar/listar/remover com exclusão lógica)
+
+Regras:
+- Proibido CTA de cancelar/remarcar
+- Sem Firestore no client; tudo via API server-side
+- Sessão isolada em `patientApp`
+
+Critérios de aceitação:
+- Sem `permission-denied` no `/paciente`
+- Aceite de termo versionado
+- Toggle de lembretes persiste após F5
 
 ---
 
-## ÉPICO F — WhatsApp
-### F1 — Botão WhatsApp no detalhe do agendamento/hold **[MVP]** → **Pronto**
-### F2 — Templates WhatsApp (Admin) + seleção no Profissional **[MVP]** → **Pendente**
-- Ver também: B4.
+## ÉPICO F — SaaS (Super Admin) (✅)
+**Objetivo:** operar multi-tenant com controle e auditoria mínima.
+
+Funcionalidades:
+- Tenants: criar/listar/suspender/reativar
+- Vincular Owner: email/uid; convite quando email não existir
+- Bloqueio real quando tenant suspenso (profissional + paciente)
+- Auditoria mínima (`audit_logs`)
+
+Critérios de aceitação:
+- Suspensão bloqueia `/api/paciente/*` e `/api/auth/session`
+- Owner link cria membership + `userTenantIndex`
+
+---
+
+## ÉPICO G — Segurança, LGPD e Sigilo (⬜) — Implementar depois
+**Objetivo:** tratar corretamente dados pessoais sensíveis e conteúdo sigiloso.
+
+Funcionalidades:
+- G1 Classificação de dados + minimização (PII vs clínico/sigiloso)
+- G2 Criptografia de campo (evolução + patientNotes) com chaves no servidor (KMS/envelope)
+- G3 Auditoria ampliada sem vazar conteúdo (read/write)
+- G4 Retenção/purge seguro (política e job)
+- G5 App Check + CSP + cache-control e hardening contínuo
+
+Riscos/atenção:
+- LGPD (saúde = dado sensível), confidencialidade clínica e segurança operacional.
+
+---
+
+## ÉPICO H — Hardening de APIs (✅)
+**Objetivo:** reduzir superfície de ataque e abuso.
+
+Funcionalidades:
+- `enforceSameOrigin` (produção) em rotas cookie-based
+- `rateLimit` por bucket + uid nas APIs do profissional e admin do consultório
+- Retornos early quando `ok=false`
+
+Critérios de aceitação:
+- Abuso retorna 429 com `Retry-After`
+- Cross-site POST/PATCH/DELETE é bloqueado em produção
+
+---
+
+## ÉPICO I — Planos & Billing (🟨)
+**Objetivo:** base de SaaS para planos e billing sem gateway ainda.
+
+Funcionalidades:
+- `planId` por tenant + limites (pacientes/séries/templates)
+- `billingStatus` (`trial/active/past_due/canceled`) + grace period
+- Bloqueio gradual: past_due após carência e canceled bloqueiam writes; reads seguem
+
+Critérios de aceitação:
+- `PLAN_LIMIT_EXCEEDED` e `BILLING_WRITE_BLOCKED` padronizados
+- UX (banner) consistente em `/profissional` e `/admin-tenant`
+
+Docs:
+- `docs/37_BILLING_PLANOS_FEATURE_FLAGS.md`
+- `docs/39_BILLING_STATUS_TRIAL_PASTDUE.md`
+- `docs/40_BILLING_GRACE_PERIOD.md`
+- `docs/41_BILLING_MATRIZ_FINAL_E_MENSAGENS.md`
+
+---
+
+## ÉPICO J — Cadastro Completo do Paciente (🟨) — MVP concluído, Pós‑MVP pendente
+**Objetivo:** permitir cadastro **completo** do paciente com campos obrigatórios, mantendo **pré‑cadastro rápido** no agendamento.
+
+**Status (MVP): ✅ concluído (2026-03-04)**  
+**Status (Pós‑MVP): ⬜ pendente**
+
+### Funcionalidades (MVP)
+J1. ✅ **Ficha completa do paciente (Profissional)** (2026-03-04)
+- Tela de cadastro/edição completa do paciente (mobile/desktop)
+- Campos obrigatórios do projeto (ver doc J0)
+- Validação de entrada/saída + normalização (CPF, telefone, datas)
+
+J2. ✅ **Pré‑cadastro rápido a partir da agenda** (2026-03-04)
+- Ao clicar em horário vazio: criar paciente com **mínimo necessário**
+- Permitir completar depois sem bloquear o uso da agenda
+- Marcar paciente como `profileStatus="incomplete|complete"`
+
+J3. ✅ **Observações gerais do paciente no agendamento** (2026-03-04)
+- Exibir observações gerais (não prontuário) no detalhe do agendamento/overlay
+
+### Funcionalidades (Pós‑MVP)
+J4. Campos opcionais avançados (convênio, responsável legal, preferências)
+J5. Upload de documentos (com regras rígidas e LGPD) — se necessário
+J6. Multi‑profissional: atribuição de paciente a profissionais e restrição de acesso
+
+### Regras de negócio
+- Pré‑cadastro não deve salvar campos clínicos; apenas identificação/contato mínimo
+- Campos sensíveis (saúde) e sigilosos (evolução/anotações) continuam separados do cadastro
+- Auditoria de alterações na ficha do paciente (metadados, sem conteúdo clínico)
+
+### Critérios de aceitação
+- Criar paciente “mínimo” a partir da agenda e depois completar
+- Validação robusta: não aceitar CPF inválido quando obrigatório
+- Ficha completa persiste corretamente e aparece no agendamento
+- Permissões: somente membros do tenant; paciente nunca edita ficha completa (portal mantém subset)
+
+Dependências:
+- Modelo de dados do paciente (campos oficiais)
+- UX: rotas/telas de pacientes no Profissional
+
+Riscos/atenção:
+- LGPD (dado sensível e confidencialidade)
+- Evitar campos clínicos na ficha geral (prontuário fica na evolução por sessão)
+
+Doc: `docs/42_CADASTRO_COMPLETO_PACIENTE.md`
+
+---

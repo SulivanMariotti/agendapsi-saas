@@ -4,6 +4,7 @@ import admin from "@/lib/firebaseAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { enforceSameOrigin } from "@/lib/server/originGuard";
 import { requireAuth } from "@/lib/server/requireAuth";
+import { ensureTenantActive } from "@/lib/server/tenantStatus";
 import { getPatientPortalConfig } from "@/lib/server/patientPortalConfig";
 
 export const runtime = "nodejs";
@@ -95,6 +96,15 @@ export async function GET(req) {
       );
     }
 
+
+    const tenantCheck = await ensureTenantActive(tenantId);
+    if (!tenantCheck.ok) {
+      return NextResponse.json(
+        { ok: false, error: "tenant-suspended", code: "TENANT_SUSPENDED" },
+        { status: 403 }
+      );
+    }
+
     const tenantRef = admin.firestore().collection("tenants").doc(tenantId);
     const patientRef = tenantRef.collection("patients").doc(patientId);
 
@@ -177,8 +187,12 @@ export async function GET(req) {
     const acceptedVersion = Number(portal.termsAcceptedVersion || 0) || 0;
     const needsContractAcceptance = acceptedVersion < Number(portalCfg.termsVersion || 1);
 
-    const remindersEnabled =
+    const remindersModuleEnabled = portalCfg.remindersEnabled !== false;
+
+    const remindersPreference =
       typeof portal.remindersEnabled === "boolean" ? portal.remindersEnabled : portalCfg.remindersEnabled;
+
+    const remindersEnabled = remindersModuleEnabled ? remindersPreference : false;
 
     const portalPublic = {
       contract: {
@@ -190,6 +204,7 @@ export async function GET(req) {
       features: {
         libraryEnabled: portalCfg.libraryEnabled,
         notesEnabled: portalCfg.notesEnabled,
+        remindersModuleEnabled,
         remindersEnabled,
       },
     };

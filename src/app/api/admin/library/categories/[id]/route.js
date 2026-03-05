@@ -8,6 +8,21 @@ import { logAdminAudit } from "@/lib/server/auditLog";
 
 export const runtime = "nodejs";
 
+function extractIdFromReq(req, ctx) {
+  const fromCtx = String(ctx?.params?.id || "").trim();
+  if (fromCtx) return fromCtx;
+
+  try {
+    const u = new URL(req.url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    const last = parts[parts.length - 1] || "";
+    return decodeURIComponent(String(last || "").trim());
+  } catch {
+    return "";
+  }
+}
+
+
 function safeInt(v, defVal = 0) {
   const n = parseInt(String(v ?? ""), 10);
   return Number.isFinite(n) ? n : defVal;
@@ -31,7 +46,7 @@ export async function PATCH(req, ctx) {
   if (!rl.ok) return rl.res;
 
   try {
-    const id = String(ctx?.params?.id || "").trim();
+    const id = String(extractIdFromReq(req, ctx) || "").trim();
     if (!id) {
       return NextResponse.json({ ok: false, error: "ID inválido." }, { status: 400 });
     }
@@ -91,7 +106,7 @@ export async function DELETE(req, ctx) {
   if (!rl.ok) return rl.res;
 
   try {
-    const id = String(ctx?.params?.id || "").trim();
+    const id = String(extractIdFromReq(req, ctx) || "").trim();
     if (!id) {
       return NextResponse.json({ ok: false, error: "ID inválido." }, { status: 400 });
     }

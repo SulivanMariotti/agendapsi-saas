@@ -19,13 +19,15 @@ import {
   X,
   KeyRound,
   Copy,
-  Loader2,
-} from "lucide-react";
+Settings,
+  Loader2,} from "lucide-react";
 
-import { Button } from "@/components/DesignSystem";
+import { Button, Toast } from "@/components/DesignSystem";
 import ReschedulePanel from "@/components/Professional/ReschedulePanel";
 import SessionEvolutionPanel from "@/components/Professional/SessionEvolutionPanel";
 import OccurrenceLogPanel from "@/components/Professional/OccurrenceLogPanel";
+import PatientProfileModal from "@/components/Professional/PatientProfileModal";
+import ProfessionalAgendaHeader from "@/components/Professional/ProfessionalAgendaHeader";
 import WhatsAppIcon from "@/components/Icons/WhatsAppIcon";
 
 function toDateFromIso(iso) {
@@ -44,6 +46,15 @@ function normalizePhoneBR(input) {
   return digits;
 }
 
+
+function applyTemplate(body, vars) {
+  let out = String(body || "");
+  for (const [k, v] of Object.entries(vars || {})) {
+    out = out.replaceAll(`{${k}}`, String(v ?? ""));
+  }
+  return out;
+}
+
 function buildWhatsAppHref({ phone, text }) {
   const normalized = normalizePhoneBR(phone);
   if (!normalized) return "";
@@ -52,11 +63,12 @@ function buildWhatsAppHref({ phone, text }) {
 }
 
 
-function OccurrenceDetailModal({ data, detail, slotIntervalMin, patientsById, busy, onClose, onOpenDay, onSaveStatus, onConvertHold, onReschedule, onAskDelete }) {
+function OccurrenceDetailModal({ data, detail, slotIntervalMin, patientsById, busy, onClose, onOpenDay, onSaveStatus, onConvertHold, onReschedule, onAskDelete, onEditPatient }) {
   const isoDate = detail?.isoDate;
   const occId = detail?.occId;
 
 const [clinicalTab, setClinicalTab] = useState("evolution"); // "evolution" | "logs"
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
 
 useEffect(() => {
   if (occId) setClinicalTab("evolution");
@@ -182,14 +194,23 @@ const handleCopyPatientAccessCode = async () => {
   const plannedTotal = Number.isFinite(occ?.plannedTotalSessions) ? Number(occ.plannedTotalSessions) : null;
   const progressLabel = sessionIndex && plannedTotal ? `${sessionIndex}/${plannedTotal}` : null;
 
-  const patientNotes = String(patient?.notes || "").trim();
+  const patientNotes = String(patient?.generalNotes || patient?.notes || "").trim();
 
-  const whatsappHref = phone ? buildWhatsAppHref({
-    phone,
-    text: isHold
-      ? `Olá, ${displayName || "tudo bem?"}! Segurei um horário em ${fmtDateShortPt(isoDate)} às ${startTime}.`
-      : `Olá, ${displayName || "tudo bem?"}! Passando para confirmar nosso horário em ${fmtDateShortPt(isoDate)} às ${startTime}. Até lá 🙂`,
-  }) : "";
+  const templates = data?.whatsappTemplates || [];
+  const effectiveTemplateId = selectedTemplateId || templates?.[0]?.id || "";
+  const effectiveTemplate = templates.find((t) => t.id === effectiveTemplateId) || templates?.[0] || null;
+
+  const whatsappMessage = useMemo(() => {
+    const nome = displayName || "tudo bem?";
+    const dataStr = fmtDateShortPt(isoDate);
+    const hora = startTime || "";
+    if (effectiveTemplate?.body) return applyTemplate(effectiveTemplate.body, { nome, data: dataStr, hora });
+    return isHold
+      ? `Olá, ${nome}! Segurei um horário em ${dataStr} às ${hora}.`
+      : `Olá, ${nome}! Passando para confirmar nosso horário em ${dataStr} às ${hora}. Até lá 🙂`;
+  }, [effectiveTemplate?.body, displayName, isoDate, startTime, isHold]);
+
+  const whatsappHref = phone ? buildWhatsAppHref({ phone, text: whatsappMessage }) : "";
 
   return (
     <ModalShell
@@ -387,6 +408,24 @@ const handleCopyPatientAccessCode = async () => {
             <div className="mt-2">
               <p className="text-[11px] font-bold text-slate-400">Nome</p>
               <p className="text-sm font-extrabold text-slate-900">{displayName || "(sem nome)"}</p>
+            {occ?.patientId ? (
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                {patient && (patient.profileStatus === "incomplete" || patient.profileCompleted === false) ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-extrabold text-amber-800">
+                    Cadastro incompleto
+                  </span>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => onEditPatient?.(String(occ.patientId || ""))}
+                  className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-extrabold text-slate-700 hover:bg-slate-50"
+                >
+                  Editar cadastro
+                </button>
+              </div>
+            ) : null}
+
             </div>
 
             {progressLabel ? (
@@ -400,26 +439,62 @@ const handleCopyPatientAccessCode = async () => {
 
             <div className="mt-3">
               <p className="text-[11px] font-bold text-slate-400">WhatsApp</p>
-              {phone ? (
-                <a
-                  href={whatsappHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-extrabold text-slate-800 hover:bg-slate-50"
-                  title="Abrir conversa no WhatsApp"
-                >
-                  <WhatsAppIcon size={16} /> WhatsApp
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-extrabold text-slate-400"
-                  disabled
-                  title="Sem telefone cadastrado"
-                >
-                  <WhatsAppIcon size={16} /> Sem telefone
-                </button>
-              )}
+
+              <div className="mt-2 flex flex-col gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+                  <div className="flex-1">
+                    <label className="text-xs text-slate-500 font-semibold">Template</label>
+                    <select
+                      className="mt-1 h-9 w-full sm:w-[240px] rounded-xl border border-slate-200 bg-white px-3 text-xs"
+                      value={effectiveTemplateId}
+                      onChange={(e) => setSelectedTemplateId(e.target.value)}
+                      disabled={!templates.length}
+                    >
+                      {templates.length ? (
+                        templates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.title}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">Nenhum template</option>
+                      )}
+                    </select>
+                  </div>
+
+                  {phone ? (
+                    <a
+                      href={whatsappHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 sm:mt-0 inline-flex h-9 w-full sm:w-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-0 text-xs font-extrabold text-slate-800 hover:bg-slate-50"
+                      title="Abrir conversa no WhatsApp"
+                      aria-label="Abrir WhatsApp"
+                    >
+                      <WhatsAppIcon size={18} />
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mt-1 sm:mt-0 inline-flex h-9 w-full sm:w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-0 text-xs font-extrabold text-slate-400"
+                      disabled
+                      title="Sem telefone cadastrado"
+                      aria-label="Sem telefone"
+                    >
+                      <WhatsAppIcon size={18} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="mt-1">
+                  <p className="text-xs text-slate-500 font-semibold">Prévia</p>
+                  <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 whitespace-pre-wrap max-h-24 overflow-y-auto">
+                    {whatsappMessage || "—"}
+                  </div>
+                </div>
+
+                {!phone ? <p className="text-xs text-amber-600 font-semibold">Sem celular cadastrado.</p> : null}
+              </div>
             </div>
 
             <div className="mt-3">
@@ -598,7 +673,7 @@ function CreateModal({ modal, slotIntervalMin, defaultDurationBlocks = 2, onClos
                   className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
                   value={cpf}
                   onChange={(e) => setCpf(e.target.value)}
-                  placeholder="Somente números"
+                  placeholder="Opcional (somente números)"
                 />
               </div>
               <div>
@@ -725,7 +800,7 @@ function CreateModal({ modal, slotIntervalMin, defaultDurationBlocks = 2, onClos
               type="button"
               className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-xs font-extrabold text-white hover:bg-violet-700"
               onClick={submitAppointment}
-              disabled={busy || !fullName || !cpf}
+              disabled={busy || !fullName || !mobile}
             >
               Agendar
             </button>
@@ -908,11 +983,11 @@ function ModalShell({ title, onClose, children, footer = null, maxWidthClass = "
 
 const STATUSES = ["Agendado", "Confirmado", "Finalizado", "Não comparece", "Cancelado", "Reagendado"];
 
-function computeWeekBounds(days, slotIntervalMin) {
+function computeWeekBounds(weekDays, slotIntervalMin) {
   const starts = [];
   const ends = [];
 
-  for (const day of days || []) {
+  for (const day of weekDays || []) {
     const ranges = Array.isArray(day?.dayRanges) ? day.dayRanges : [];
     if (ranges.length) {
       for (const r of ranges) {
@@ -965,8 +1040,26 @@ function todayIsoSP() {
   return y && m && d ? `${y}-${m}-${d}` : new Date().toISOString().slice(0, 10);
 }
 
-export default function ProfessionalWeekViewClient({ initialData }) {
+function nowMinutesSP() {
+  const now = new Date();
+  const hh = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
+  const [h, m] = String(hh || "00:00").split(":").map((x) => parseInt(x, 10));
+  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+}
+
+export default function ProfessionalWeekViewClient({initialData, canTenantAdmin = false}) {
   const router = useRouter();
+
+
+  async function logout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // ignore
+    } finally {
+      window.location.href = "/login";
+    }
+  }
 
   // Keep a copy in state so router.refresh() updates the UI when props change.
   const [data, setData] = useState(initialData);
@@ -981,27 +1074,236 @@ export default function ProfessionalWeekViewClient({ initialData }) {
   const [rescheduleOcc, setRescheduleOcc] = useState(null); // occurrence object
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = "success") => setToast({ msg, type });
+  const [patientProfilePatientId, setPatientProfilePatientId] = useState("");
+  const [patientSearch, setPatientSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+
 
   const overlayRef = useRef(null);
 
   const weekStartIso = data?.weekStartIso;
+  const weekEndIso = useMemo(() => (weekStartIso ? addDaysIso(String(weekStartIso), 6) : ""), [weekStartIso]);
   const weekRangeLabel = useMemo(() => (weekStartIso ? fmtWeekRangePt(weekStartIso) : ""), [weekStartIso]);
-
-  const days = Array.isArray(data?.days) ? data.days : [];
+  const weekDays = Array.isArray(data?.days) ? data.days : [];
   const patientsById = data?.patientsById || {};
+
+  const patientSearchItems = useMemo(() => {
+    const items = [];
+    for (const day of Array.isArray(weekDays) ? weekDays : []) {
+      const iso = day?.isoDate;
+      const occs = Array.isArray(day?.occurrences) ? day.occurrences : [];
+      for (const o of occs) {
+        if (!o?.id || o?.isBlock) continue;
+        const pid = o?.patientId;
+        const label = pid ? String(patientsById?.[pid]?.fullName || "") : String(o?.leadName || "");
+        if (!label) continue;
+        items.push({ key: String(o.id), label, isoDate: iso });
+      }
+    }
+    const seen = new Set();
+    const out = [];
+    for (const it of items) {
+      const k = it.label.trim().toLowerCase();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push(it);
+    }
+    out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    return out;
+  }, [weekDays, patientsById]);
+
+  const patientSearchResults = useMemo(() => {
+    const q = patientSearch.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return patientSearchItems.filter((it) => it.label.toLowerCase().includes(q)).slice(0, 8);
+  }, [patientSearch, patientSearchItems]);
+
+  
+  function matchesStatusFilter(o, filter) {
+    if (!o) return true;
+    const f = String(filter || "all");
+    if (f === "all") return true;
+    if (f === "holds") return Boolean(o.isHold);
+    if (Boolean(o.isHold)) return false;
+    const st = o.status || "Agendado";
+    if (f === "confirmed") return st === "Confirmado";
+    if (f === "scheduled") return st !== "Confirmado";
+    return true;
+  }
+
+const weekStats = useMemo(() => {
+    let scheduled = 0;
+    let confirmed = 0;
+    let holds = 0;
+    for (const day of Array.isArray(weekDays) ? weekDays : []) {
+      const occs = Array.isArray(day?.occurrences) ? day.occurrences : [];
+      for (const o of occs) {
+        if (!o || o.isBlock) continue;
+        if (o.isHold) {
+          holds += 1;
+          continue;
+        }
+        const st = o.status || "Agendado";
+        if (st === "Confirmado") confirmed += 1;
+        else scheduled += 1;
+      }
+    }
+    return { scheduled, confirmed, holds };
+  }, [weekDays]);
+
 
   const slotIntervalMin = useMemo(() => {
     const v = Number(data?.schedule?.slotIntervalMin);
     return Number.isFinite(v) && v > 0 ? v : 30;
   }, [data?.schedule?.slotIntervalMin]);
 
-  const bounds = useMemo(() => computeWeekBounds(days, slotIntervalMin), [days, slotIntervalMin]);
+  const bounds = useMemo(() => computeWeekBounds(weekDays, slotIntervalMin), [weekDays, slotIntervalMin]);
   const rows = useMemo(
     () => buildTimeRows({ startMin: bounds.startMin, endMin: bounds.endMin, slotIntervalMin }),
     [bounds.startMin, bounds.endMin, slotIntervalMin]
   );
 
   const todayIso = useMemo(() => todayIsoSP(), []);
+
+  const isTodayWeek = useMemo(() => {
+    // If the current visible week includes today, we can show "Agora"
+    const s = String(weekStartIso || "");
+    const e = String(weekEndIso || "");
+    const t = String(todayIso || "");
+    if (!s || !e || !t) return false;
+    return t >= s && t <= e;
+  }, [todayIso, weekStartIso, weekEndIso]);
+
+  const [nowMin, setNowMin] = useState(() => nowMinutesSP());
+  const nowRowRef = useRef(null);
+  const [showNowButton, setShowNowButton] = useState(false);
+
+  const nextWeekOcc = useMemo(() => {
+    const days = Array.isArray(data?.days) ? data.days : [];
+    if (!days.length) return null;
+
+    const tIso = String(todayIso || "");
+    const baseMin = Number(nowMin);
+
+    let best = null; // { isoDate, occId, startTime, startMin }
+    for (const day of days) {
+      const iso = String(day?.isoDate || "");
+      if (!iso) continue;
+
+      // If the visible week includes today, jump relative to "agora".
+      if (isTodayWeek) {
+        if (tIso && iso < tIso) continue;
+      }
+
+      const occs = Array.isArray(day?.occurrences) ? day.occurrences : [];
+      for (const o of occs) {
+        const st = String(o?.startTime || "").slice(0, 5);
+        if (!st) continue;
+        if (String(o?.status || "") === "Cancelado") continue;
+
+        const m = timeToMinutes(st);
+        if (isTodayWeek && tIso && iso === tIso && Number.isFinite(baseMin) && m <= baseMin) continue;
+
+        if (!best || iso < best.isoDate || (iso === best.isoDate && m < best.startMin)) {
+          best = { isoDate: iso, occId: o?.id || "", startTime: st, startMin: m };
+        }
+      }
+    }
+
+    return best;
+  }, [data?.days, isTodayWeek, todayIso, nowMin]);
+
+
+  useEffect(() => {
+    if (!isTodayWeek) return;
+    setNowMin(nowMinutesSP());
+    const t = setInterval(() => setNowMin(nowMinutesSP()), 60 * 1000);
+    return () => clearInterval(t);
+  }, [isTodayWeek]);
+
+  const nowRowIndex = useMemo(() => {
+    if (!isTodayWeek) return -1;
+    const minutes = Number(nowMin);
+    if (!Number.isFinite(minutes)) return -1;
+    if (minutes < bounds.startMin || minutes > bounds.endMin) return -1;
+    const idx = Math.floor((minutes - bounds.startMin) / slotIntervalMin);
+    const max = Math.max(0, (rows?.length || 0) - 1);
+    return Math.min(max, Math.max(0, idx));
+  }, [isTodayWeek, nowMin, bounds.startMin, bounds.endMin, slotIntervalMin, rows?.length]);
+
+  const nowFraction = useMemo(() => {
+    if (!isTodayWeek) return 0;
+    const minutes = Number(nowMin);
+    if (!Number.isFinite(minutes)) return 0;
+    const base = bounds.startMin + Math.max(0, nowRowIndex) * slotIntervalMin;
+    const frac = (minutes - base) / slotIntervalMin;
+    if (!Number.isFinite(frac)) return 0;
+    return Math.min(0.98, Math.max(0.02, frac));
+  }, [isTodayWeek, nowMin, bounds.startMin, nowRowIndex, slotIntervalMin]);
+
+  const scrollToNow = () => {
+    try {
+      nowRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch {
+      // ignore
+    }
+  };
+
+  const scrollToNextAppointment = () => {
+    try {
+      const occ = nextWeekOcc;
+      if (!Number.isFinite(occ?.startMin) || occ.startMin < 0) return;
+
+      // Scroll the left time column to the matching row.
+      const el = document.querySelector(`[data-time-row="${occ.startMin}"]`);
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      // Open details (most helpful, even if it's not on today).
+      if (occ?.isoDate && occ?.occId) {
+        setDetail({ isoDate: String(occ.isoDate), occId: String(occ.occId) });
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+
+  // Mostrar "Ir para agora" apenas quando a tela estiver longe do horário atual (ex.: > 2h).
+  useEffect(() => {
+    if (!isTodayWeek) {
+      setShowNowButton(false);
+      return;
+    }
+
+    function compute() {
+      const el = nowRowRef.current;
+      if (!el) return setShowNowButton(false);
+
+      const rect = el.getBoundingClientRect();
+      const slotH = rect.height || 40;
+      const pxPerMin = slotH / Math.max(1, Number(slotIntervalMin || 30));
+      const thresholdPx = 120 * pxPerMin; // 2 horas
+
+      const nowY = rect.top + window.scrollY + slotH / 2;
+      const viewCenterY = window.scrollY + window.innerHeight / 2;
+      const dist = Math.abs(nowY - viewCenterY);
+
+      setShowNowButton(dist > thresholdPx);
+    }
+
+    compute();
+    window.addEventListener("scroll", compute, { passive: true });
+    window.addEventListener("resize", compute);
+    return () => {
+      window.removeEventListener("scroll", compute);
+      window.removeEventListener("resize", compute);
+    };
+  }, [isTodayWeek, slotIntervalMin, nowMin]);
+
+
 
   function goWeek(deltaWeeks) {
     const nextDate = addDaysIso(weekStartIso, deltaWeeks * 7);
@@ -1076,53 +1378,58 @@ export default function ProfessionalWeekViewClient({ initialData }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-3 py-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white">
-            <CalendarDays className="h-5 w-5 text-slate-700" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-900">Semana</p>
-            <p className="text-xs text-slate-600">{weekRangeLabel}</p>
-          </div>
-        </div>
+    <div className="mx-auto max-w-7xl px-3 sm:px-6 pb-6 pt-0 text-sm">
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-            <button
-              type="button"
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 hover:bg-slate-50"
-              onClick={() => goDay(weekStartIso)}
-            >
-              Dia
-            </button>
-            <button
-              type="button"
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-600 text-white"
-              onClick={() => {
-                // already on week
-              }}
-            >
-              Semana
-            </button>
-            <button
-              type="button"
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 hover:bg-slate-50"
-              onClick={() => router.push(`/profissional?view=month&date=${encodeURIComponent(data?.isoDate || weekStartIso)}`)}
-            >
-              Mês
-            </button>
-          </div>
+      {toast?.msg ? <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} /> : null}
 
-          <Button variant="secondary" onClick={() => goWeek(-1)} title="Semana anterior">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button variant="secondary" onClick={() => goWeek(1)} title="Próxima semana">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      {patientProfilePatientId ? (
+        <PatientProfileModal
+          patientId={patientProfilePatientId}
+          onClose={() => setPatientProfilePatientId("")}
+          onSaved={async () => {
+            try { router.refresh(); } catch { /* ignore */ }
+          }}
+          showToast={(m, t) => showToast(m, t)}
+        />
+      ) : null}
+
+      <ProfessionalAgendaHeader
+        view="week"
+        periodLabel={weekRangeLabel}
+        isoDate={data?.isoDate || weekStartIso || todayIso}
+        tenantId={data?.tenantId || ""}
+        onChangeView={(v) => {
+          if (v === "week") return;
+          if (v === "day") return goDay(weekStartIso || todayIso);
+          if (v === "month") return router.push(`/profissional?view=month&date=${encodeURIComponent(data?.isoDate || weekStartIso || todayIso)}`);
+        }}
+        onPrev={() => goWeek(-1)}
+        onNext={() => goWeek(1)}
+        onGoToDate={(d) => {
+          router.push(`/profissional?view=week&date=${encodeURIComponent(String(d || data?.isoDate || weekStartIso || todayIso))}`);
+          router.refresh();
+        }}
+        onToday={() => {
+          router.push(`/profissional?view=week&date=${encodeURIComponent(todayIso)}`);
+          router.refresh();
+        }}
+        showNow={isTodayWeek && showNowButton}
+        onNow={scrollToNow}
+        showNextAppt={Boolean(nextWeekOcc?.occId)}
+        onNextAppt={scrollToNextAppointment}
+        onLogout={logout}
+        searchValue={patientSearch}
+        onSearchChange={setPatientSearch}
+        searchResults={patientSearchResults}
+        onSelectSearchItem={(it) => {
+          if (it?.isoDate) goDay(it.isoDate);
+          setPatientSearch("");
+        }}
+        stats={weekStats}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+      />
+
 
       {errorMsg ? (
         <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-800">
@@ -1131,7 +1438,21 @@ export default function ProfessionalWeekViewClient({ initialData }) {
       ) : null}
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white" ref={overlayRef}>
-        <div style={gridStyle} className="min-w-[980px]">
+        <div style={gridStyle} className="relative min-w-[980px]">
+
+          {isTodayWeek && nowRowIndex >= 0 ? (
+            <div
+              className="pointer-events-none absolute left-0 right-0 z-20"
+              style={{ top: `${headerH + (nowRowIndex + nowFraction) * rowH}px` }}
+              aria-hidden="true"
+            >
+              <div className="relative">
+                <div className="absolute left-[72px] top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-rose-500 shadow-sm" />
+                <div className="ml-[72px] h-px bg-rose-500/80" />
+              </div>
+            </div>
+          ) : null}
+
           {/* Top-left corner */}
           <div
             className="sticky left-0 top-0 z-30 border-b border-r border-slate-200 bg-white"
@@ -1139,7 +1460,7 @@ export default function ProfessionalWeekViewClient({ initialData }) {
           />
 
           {/* Day headers */}
-          {days.map((day, idx) => {
+          {weekDays.map((day, idx) => {
             const iso = day?.isoDate;
             const label = iso ? fmtDayHeaderPt(iso) : "";
             const isToday = iso === todayIso;
@@ -1170,6 +1491,8 @@ export default function ProfessionalWeekViewClient({ initialData }) {
             return (
               <div
                 key={`t-${m}`}
+                data-time-row={m}
+                ref={isTodayWeek && rIdx === nowRowIndex ? nowRowRef : null}
                 className="sticky left-0 z-10 border-b border-r border-slate-200 bg-white px-2 text-[11px] text-slate-600"
                 style={{ gridColumn: 1, gridRow: rIdx + 2 }}
               >
@@ -1179,7 +1502,7 @@ export default function ProfessionalWeekViewClient({ initialData }) {
           })}
 
           {/* Background grid cells */}
-          {days.map((day, cIdx) => {
+          {weekDays.map((day, cIdx) => {
             const iso = day?.isoDate;
             const dayRanges = Array.isArray(day?.dayRanges) ? day.dayRanges : [];
             const isClosed = !dayRanges.length;
@@ -1219,7 +1542,7 @@ export default function ProfessionalWeekViewClient({ initialData }) {
           })}
 
           {/* Events overlay */}
-          {days.map((day, cIdx) => {
+          {weekDays.map((day, cIdx) => {
             const iso = day?.isoDate;
             const occ = Array.isArray(day?.occurrences) ? day.occurrences : [];
             const mainOcc = occ
@@ -1247,6 +1570,10 @@ export default function ProfessionalWeekViewClient({ initialData }) {
 
               const labelForIcon = isHold ? "Reserva" : status;
 
+              const matchesFilter = matchesStatusFilter({ status, isHold }, statusFilter);
+              const keepStrong = detail?.occId === o.id && detail?.isoDate === iso;
+              const dimOcc = statusFilter !== "all" && !matchesFilter && !keepStrong;
+
               return (
                 <button
                   key={o.id}
@@ -1256,7 +1583,7 @@ export default function ProfessionalWeekViewClient({ initialData }) {
                   className={`z-20 m-0.5 flex h-full flex-col justify-between overflow-hidden rounded-xl border px-2 py-1 text-left text-[11px] leading-tight shadow-sm hover:shadow-md ${statusBlockClass({
                     status,
                     isHold,
-                  })}`}
+                  })} ${dimOcc ? "opacity-25" : ""}`}
                   style={{
                     gridColumn: cIdx + 2,
                     gridRow: `${rowStart} / span ${rowSpan}`,
@@ -1367,6 +1694,7 @@ export default function ProfessionalWeekViewClient({ initialData }) {
             setDetail(null);
             setDeleteOcc(occ || null);
           }}
+          onEditPatient={(pid) => setPatientProfilePatientId(String(pid || ""))}
         />
       ) : null}
 

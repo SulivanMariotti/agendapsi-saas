@@ -1,227 +1,209 @@
-# AgendaPsi — Arquivo para iniciar um novo chat (HANDOFF)
+# AgendaPsi — HANDOFF para novo chat
 
-Data: **2026-03-02**  
-Última atualização: **2026-03-02** (refino do detalhe do agendamento em overlay + WhatsApp + “Salvar alterações” unificado)
-
-## 1) Objetivo do projeto
-Construir o **AgendaPsi (SaaS)** em **Next.js (App Router) + Firebase (Firestore/Auth/Storage/FCM quando aplicável)**, em subdomínio separado: **agendapsi.msgflow.app.br**, com foco na rotina do profissional e constância do cuidado.
-
-O sistema tem 3 painéis:
-- **Admin** (desktop completo)
-- **Profissional** (agenda otimizada para mobile e desktop)
-- **Paciente** (**sem CTA** de cancelar/remarcar; foco em constância)
+Data: **2026-03-05**  
+Timezone: **America/Sao_Paulo**  
+Objetivo deste arquivo: permitir retomar o desenvolvimento **exatamente de onde paramos** (sem depender do histórico do chat).
 
 ---
 
-## 2) Separação total do Lembrete Psi (decisão crítica)
-O **Lembrete Psi** permanece separado em **agenda.msgflow.app.br** com Firebase próprio.
+## 1) Identidade do projeto
 
-O **AgendaPsi é um sistema novo e separado**, com:
-- Firebase Project próprio
-- Firestore/RULES próprios
-- deploy/URL próprios (**agendapsi.msgflow.app.br**)
+- Projeto: **AgendaPsi (SaaS)**
+- Stack: **Next.js (App Router) + Firebase (Firestore/Auth/Storage)** (+ FCM quando aplicável)
+- Domínio: **agendapsi.msgflow.app.br**
+- Regra crítica: **separação total do Lembrete Psi** (deploy/Firebase/dados/rules separados). Reuso permitido apenas de **código/UI/padrões**.
 
-✅ Reuso permitido: **apenas** código/UI/lógica/padrões do Lembrete Psi.  
-❌ Reuso proibido: deploy/URL, Firebase Project, coleções/rules, claims/políticas, dados.
+---
+
+## 2) Objetivo do produto
+
+Agenda clínica com foco na rotina do profissional, organização e constância do cuidado.
+
+Painéis:
+1) **Admin** (desktop completo)
+2) **Profissional** (mobile + desktop)
+3) **Paciente** (portal informativo **sem CTA de cancelar/remarcar**)
+
+Premissas oficiais:
+- **Sem importação por CSV**.
+- Portal do paciente **sem Firestore no client** (tudo via **APIs server-side**).
+- Sessões isoladas no mesmo navegador: paciente usa **Firebase App secundário** (`patientApp`).
 
 ---
 
 ## 3) Estado atual (onde paramos)
 
 ### 3.1 Fundamentos ✅
-- Seed do Firestore funcionando (tenant `tn_JnA5yU`, paciente teste, série + ocorrências).
-- Login do profissional funcionando com **sessão server-side**.
-- Isolamento por tenant via índice `userTenantIndex/{uid}` (sem `collectionGroup`).
+- Seed do Firestore (tenant demo + paciente teste + séries + ocorrências).
+- Login do profissional com **sessão server-side**.
+- Isolamento por tenant via `userTenantIndex/{uid}` (sem `collectionGroup`).
 
-### 3.2 Admin ✅
-- Menu em **Menus + Submenus**:
-  - **Dashboard** (default)
-  - **Lembretes** (placeholders; **não** integra com o Firebase do Lembrete Psi)
-  - **AgendaPsi** → Agenda do Profissional + Códigos de Ocorrência
-  - **Pacientes**
-- Schedule configurável e persistido em: `tenants/{tenantId}/settings/schedule`
-  - `slotIntervalMin` (30/45/60), ranges por dia, `bufferMin`, almoço opcional, duração padrão em blocos.
-- Catálogo de **Códigos de Ocorrência** (Admin) em: `tenants/{tenantId}/occurrenceCodes/{codeId}`.
-- Evitado listener client de coleções “legadas” que geravam `permission-denied` no Admin.
+### 3.2 SaaS (Super Admin) ✅
+- Admin → **SaaS → Tenants**:
+  - criar/listar/suspender/reativar tenant
+  - vincular **Owner** ao tenant (cria membership + `userTenantIndex/{uid}`)
+- Suspensão tem efeito real:
+  - Portal paciente bloqueia (`/api/paciente/*`) com **403 TENANT_SUSPENDED**
+  - Profissional bloqueia sessão (`/api/auth/session`) com **403 TENANT_SUSPENDED**
+- Auditoria mínima em `audit_logs` (ações de SaaS).
 
-### 3.3 Profissional (/profissional) ✅
+### 3.3 Admin ✅
+- `tenants/{tenantId}/settings/schedule` configurável.
+- `tenants/{tenantId}/occurrenceCodes/{codeId}` catálogo.
+- **Portal do Paciente (settings)** por tenant em `tenants/{tenantId}/settings/patientPortal`
+  - `termsText`, `termsVersion`
+  - flags: `libraryEnabled`, `notesEnabled`, `remindersEnabled`
+- **Templates WhatsApp** por tenant em `tenants/{tenantId}/whatsappTemplates` (CRUD).
 
-#### Visões (Agenda)
-- **Dia**: grade compacta; cards com cor suave por status.
-- **Semana**: grade semanal (coluna horas + 7 dias), blocos posicionados.
-- **Mês**: grade mensal com itens compactos por dia (fundo na cor do status).
+### 3.4 Profissional (/profissional) ✅ (com upgrades recentes)
+- Visões: **Dia / Semana / Mês**.
+- Overlay de detalhe com chips/abas clínicas e salvar unificado (status + evolução + ocorrência extra).
+- Recorrência (plano 1..30), holds e conversão; reagendar/excluir: “só esta” vs “esta e futuras”.
+- WhatsApp no detalhe com **templates selecionáveis** (Admin gerencia; Profissional escolhe).
 
-#### Detalhe do agendamento/hold (refino UX ✅)
-- Detalhes abrem em **overlay (tela por cima)** com **ícone X** (fechar).  
-  A agenda fica **limpa** quando nada está selecionado.
-- **Topo do overlay (header)**: chips informativos na mesma linha do X (ex.: **Atendimento**, **Plano**, **Status** / ícone de **Cancelado**).
-- **Status**: editor compacto (não ocupa largura desnecessária).
-- **Ações** no rodapé do overlay: **Reagendar**, **Excluir (ícone)** e **Salvar alterações**.
-- **Registros clínicos** no detalhe em **abas**: **Evolução** / **Ocorrências (extra)** (evita rolagem excessiva).
-- **Salvar alterações (unificado)**: salva em 1 clique as mudanças feitas no detalhe:
-  - status
-  - evolução (texto livre)
-  - ocorrência extra em rascunho (código + descrição)
-- Após salvar ocorrência extra, o rascunho é limpo automaticamente (código volta para “Selecione…”) e o modal não fica “preso” em alterações pendentes.
-- “Histórico recente (evolução)” foi removido do detalhe (menos ruído).
+**Header da Agenda — Variante A (Clean Premium) ✅**
+- Sticky + 2 camadas:
+  - Camada 1 (sempre visível): período em destaque (clicável → “Ir para data”), navegação Anterior/Hoje/Próximo, ações (+Novo, Próximo atendimento, Ir para agora, Busca, Sair).
+  - Camada 2 (colapsável): toggle Dia/Semana/Mês, busca por paciente nesta visão, badges de contagem **clicáveis** (filtro rápido).
+- **Ir para agora** aparece só quando a tela está longe do horário atual (~>2h).
+- **Próximo atendimento** (Dia/Semana): pula para o próximo agendamento/hold (ignora Cancelado) e abre o detalhe.
+- Badges **Confirmados/Agendados/Holds** podem virar filtro:
+  - itens fora do filtro ficam **apagados** (não somem) para não “parecer horário livre”.
 
-#### Interações (Agenda)
-- Clique em agendamento/hold abre detalhes (overlay).
-- Semana:
-  - clique em horário livre → escolher **Agendar** ou **Reservar (Hold)**
-- Mês:
-  - clique em **área livre do dia** → modal “Ações do dia” (**Agendar / Reservar / Abrir no Dia / Abrir Semana**)
-  - clique no **número do dia** → abre o Dia
-- Botão **Próximos horários**: lista **3 próximos** horários livres; ao escolher, abre o fluxo de agendar.
+**ÉPICO J — Cadastro Completo do Paciente (MVP) ✅**
+- Pré-cadastro rápido no agendamento (CPF opcional; mínimo Nome + Celular).
+- Modal “Editar cadastro” no detalhe (Dia/Semana/Mês).
+- Badge “Cadastro incompleto” quando `profileStatus="incomplete"` ou `profileCompleted=false`.
+- Detalhe do agendamento exibe `generalNotes` (fallback `notes`).
 
-#### Regras aplicadas ✅
-- Multi-bloco (compromisso ocupa N slots consecutivos).
-- Buffer respeitado (não “encosta” compromissos).
-- Correção de dia da semana (timezone) para não deslocar sábado/domingo.
-- Conflitos (MVP): criação/alteração recorrente é **atômica** (sem criação parcial).
+### 3.5 Paciente (/paciente) ✅
+Módulos MVP:
+- Agenda (informativo)
+- Seu cadastro (subset)
+- Contrato/Termo (visualizar + aceitar)
+- Ativar lembretes (opt-in/opt-out)
+- Biblioteca (somente publicados do Admin)
+- Anotações do paciente (CRUD com exclusão lógica)
 
-#### Recorrência e “plano” de sessões ✅
-- Fluxo de **Agendar** e **Reservar**:
-  - quantidade 01..30 + “Mais…”
-  - frequência: Diário / Semanal / Quinzenal / Mensal
-- Cria `appointmentSeries` e materializa `appointmentOccurrences` com `sessionIndex` e `plannedTotalSessions`.
-
-#### Reserva/Hold como negociação → converter em plano real ✅
-- Criar hold curto (ex.: 2 sessões) e depois **“Agendar a partir desta reserva”**:
-  - converte as sessões existentes sem conflito
-  - pode estender para um plano maior materializando o restante
-- Conflitos: operação atômica.
-
-#### Reagendar (recorrente) ✅
-- Ação Reagendar na ocorrência:
-  - **Só esta ocorrência**
-  - **Esta e futuras**
-- Week picker (seg→dom) com legenda: **L** livre, **R** hold, **—** ocupado.
-
-#### Excluir ocorrência (agenda) ✅
-- Botão **Excluir** em detalhes de Agendamento/Hold:
-  - **Só esta ocorrência**
-  - **Esta e futuras**
-- Exclusão libera a data/horário na agenda.
-- Observação: prontuário/evolução e ocorrências “extra” são dados do paciente e **não** devem ser apagados por essa ação.
-
-#### WhatsApp (Profissional) ✅ (parcial)
-- Botão único de WhatsApp no detalhe, com **logo branco (transparente)** em botão verde.
-- Template + prévia existem no detalhe (UX compacta).
-- **Pendente**: gerenciar templates via Admin (persistência e catálogo), se desejado para produção.
-
-### 3.4 Registros clínicos: Evolução vs Ocorrência (separação) ✅
-- **Evolução / prontuário por sessão**:
-  - texto livre
-  - armazenado no paciente, referenciado pela sessão
-- **Ocorrência (registro extra)**:
-  - registro estruturado com **código + descrição**
-  - para fatos fora do âmbito da sessão
-  - armazenado em subcoleção da ocorrência e espelhado no paciente (evita índice composto)
+Regras do portal:
+- Sem CTA de cancelar/remarcar
+- Sem Firestore no client (APIs server-side)
+- Auth isolado (`patientApp`)
+- Rotas com `enforceSameOrigin` + `rateLimit`.
 
 ---
 
 ## 4) Modelo de dados (essencial)
 
-### Coleções principais (por tenant)
+Por tenant:
 - `tenants/{tenantId}`
 - `tenants/{tenantId}/users/{uid}` (membership)
-- `userTenantIndex/{uid}` (índice global do login)
 - `tenants/{tenantId}/patients/{patientId}`
 - `tenants/{tenantId}/appointmentSeries/{seriesId}`
-- `tenants/{tenantId}/appointmentOccurrences/{occurrenceId}` (**hold via `isHold`**)
-- `tenants/{tenantId}/occurrenceCodes/{codeId}` (catálogo Admin)
+- `tenants/{tenantId}/appointmentOccurrences/{occurrenceId}` (hold via `isHold`)
+- `tenants/{tenantId}/occurrenceCodes/{codeId}`
 - `tenants/{tenantId}/settings/schedule`
+- `tenants/{tenantId}/settings/patientPortal`
+- `tenants/{tenantId}/whatsappTemplates/{templateId}`
 
-### Subcoleções clínicas (MVP)
-- Evolução (texto livre por sessão, **docId=occurrenceId**):
-  - `tenants/{tenantId}/patients/{patientId}/sessionEvolutions/{occurrenceId}`
-- Ocorrências “extra” (sem exigir índice composto):
-  - `tenants/{tenantId}/appointmentOccurrences/{occurrenceId}/occurrenceLogs/{logId}`
-  - espelho para histórico do paciente:
-    - `tenants/{tenantId}/patients/{patientId}/occurrenceLogs/{logId}`
+Índice global:
+- `userTenantIndex/{uid}`
+
+Subcoleções clínicas:
+- `patients/{patientId}/sessionEvolutions/{occurrenceId}` (docId=occurrenceId)
+- `appointmentOccurrences/{occurrenceId}/occurrenceLogs/{logId}` + espelho em `patients/{patientId}/occurrenceLogs/{logId}`
+
+Portal do paciente:
+- Preferências/aceite em `patients/{patientId}.portal.*`
+- Anotações: `patients/{patientId}/patientNotes/{noteId}` (exclusão lógica)
+- Biblioteca: `library_articles/{articleId}` (global; paciente vê só published via API)
 
 ---
 
-## 5) Como rodar localmente
-1. `npm install`
-2. `.env.local` deve ter:
-   - `SERVICE_ACCOUNT_JSON_PATH=C:\secrets\agendapsi-admin.json`
-   - `NEXT_PUBLIC_FIREBASE_*` (web config do Firebase do AgendaPsi)
-   - `ADMIN_PASSWORD=...`
-   - `ADMIN_UID=...` (**opcional** em dev)
-3. `npm run dev`
-4. Acessar:
-   - `http://localhost:3000/login` → login profissional → `/profissional`
+## 5) Segurança e permissões (alto nível)
+
+Papéis:
+- **Super Admin SaaS**: claim `role="admin"` (global)
+- **Admin/Owner do tenant**: membership em `tenants/{tenantId}/users/{uid}` (`role="owner"`/`admin`)
+- **Profissional**: membership (`role="professional"`)
+- **Paciente**: portal via API; token/claims carregam `tenantId` e `patientId`
+
+Regras importantes:
+- Princípio do menor privilégio
+- Tenant isolation por path `tenants/{tenantId}/...`
+- Portal do paciente permanece via API (sem listener Firestore no client)
+
+---
+
+## 6) Variáveis de ambiente (relevantes)
+
+Além de `SERVICE_ACCOUNT_JSON_PATH`, `NEXT_PUBLIC_FIREBASE_*`, `ADMIN_PASSWORD`:
+- `ENABLE_PATIENT_DEV_TOKEN=true` (somente dev)
+- `NEXT_PUBLIC_ENABLE_PATIENT_DEV_DEMO=true` (somente dev)
+- `PATIENT_ACCESS_CODE_TTL_MIN=15`
+
+---
+
+## 7) Como rodar localmente
+
+1) `npm install`
+2) `.env.local` com as variáveis do projeto
+3) `npm run dev`
+4) Acessos:
+   - `http://localhost:3000/login` → profissional → `/profissional`
    - `http://localhost:3000/admin` → admin
+   - `http://localhost:3000/paciente` → portal do paciente
 
 ---
 
-## 6) Checklist de validação rápida (atual)
-### Auth
-- [ ] `/admin` entra com senha (`POST /api/auth` retorna 200)
-- [ ] `/login` redireciona para `/profissional`
+## 8) Checklist de validação (rápido)
 
-### Schedule
-- [ ] Admin salva schedule em `tenants/{tenantId}/settings/schedule`
-- [ ] Profissional (Dia/Semana/Mês) respeita horário aberto + almoço + buffer
+### Profissional — Agenda
+- [ ] Dia/Semana/Mês abre sem erros
+- [ ] Header: sticky + “Ir para data”
+- [ ] “Ir para agora” aparece só quando longe do horário atual e rola corretamente
+- [ ] “Próximo atendimento” pula e abre detalhe (Dia/Semana)
+- [ ] Badges (Confirmados/Agendados/Holds) filtram e mantêm itens fora do filtro apagados (slots continuam ocupados)
 
-### Agenda
-- [ ] Criar Hold/Agendar multi-bloco bloqueia slots seguintes
-- [ ] Buffer impede criar item “encostado”
-- [ ] “Próximos horários” lista 3 opções e abre fluxo
-- [ ] Semana: clique em horário livre abre Agendar/Reservar
-- [ ] Mês: clique em área livre do dia abre Ações do dia; número do dia abre o Dia
-- [ ] Holds aparecem em cinza e não permitem mudança de status
-- [ ] Excluir: “só esta” vs “esta e futuras” funciona para agendamento e hold
+### ÉPICO J — Cadastro completo
+- [ ] Pré-cadastro rápido: agendar sem CPF (Nome + Celular)
+- [ ] “Editar cadastro” abre modal e salva ficha
+- [ ] `generalNotes` aparece no detalhe do agendamento
+- [ ] Badge “Cadastro incompleto” some após completar
 
-### Detalhe do agendamento (overlay)
-- [ ] Abrir detalhe → overlay com **X**; chips informativos no header (Atendimento/Plano/Status)
-- [ ] Status editor é compacto
-- [ ] Rodapé concentra: **Reagendar / Excluir / Salvar alterações**
-- [ ] Abas clínicas: **Evolução / Ocorrências (extra)**
-- [ ] “Salvar alterações” salva (status + evolução + ocorrência extra)
-- [ ] Após salvar ocorrência extra, campo **Código** volta para “Selecione…” e o modal deixa de marcar alterações pendentes
-- [ ] “Histórico recente (evolução)” **não** aparece mais
+### Admin / SaaS
+- [ ] Admin → SaaS → Tenants: criar/suspender/reativar
+- [ ] Suspender tenant bloqueia profissional e paciente com UX amigável
+- [ ] Templates WhatsApp CRUD
+- [ ] Patient Portal settings salva corretamente
 
-### Recorrência / converter / reagendar
-- [ ] Criar reserva com recorrência cria `1/2`, `2/2`
-- [ ] “Agendar a partir desta reserva” converte e pode estender (sem conflito)
-- [ ] Conflito em qualquer futura bloqueia (sem criação parcial)
-- [ ] Reagendar “Só esta” move só a sessão selecionada
-- [ ] Reagendar “Esta e futuras” move a partir da selecionada (sem afetar anteriores)
-- [ ] Week picker: seg→dom; L livre; R hold; — ocupado; header fixo ao rolar
-
-### Registros
-- [ ] Evolução por sessão salva no paciente com docId=occurrenceId
-- [ ] Ocorrência extra salva com código + descrição e aparece:
-  - na ocorrência (subcoleção)
-  - no histórico do paciente (espelho)
+### Paciente
+- [ ] `/paciente` abre sem `permission-denied`
+- [ ] Contrato: aceitar funciona; bump `termsVersion` volta a pendente
+- [ ] Lembretes: toggle persiste após F5
+- [ ] Biblioteca: só published
+- [ ] Anotações: criar/listar/remover (exclusão lógica)
 
 ---
 
-## 7) Checklist rápido de Git (evitar push no repositório errado)
-1. `git remote -v`
-   - Esperado: `origin https://github.com/SulivanMariotti/agendapsi-saas.git (fetch/push)`
-2. `git branch --show-current` → esperado: `main`
-3. `git status`
-4. `git log -1`
-5. `git status -sb` (deve mostrar `[origin/main]` quando sincronizado)
+## 9) Próximos passos sugeridos
+
+1) **Persistir preferências do profissional** (visão, filtro, header compacto) — localStorage (Sugestão 3).
+2) **Busca inteligente**: “Nesta visão” vs “Todos os pacientes” (Sugestão 4).
+3) **Modo compacto Semana** (densidade: compacto/confortável) (Sugestão 5).
+4) **Aviso sutil de conflitos** em sobreposição de horários (Sugestão 6).
+5) Tenant Admin (Owner) no Admin sem depender do Super Admin.
 
 ---
 
-## 8) Próximos passos sugeridos (ordem recomendada)
-1. Painel **Paciente** (sem CTA de cancelar/remarcar).
-2. **WhatsApp templates (Admin)**: CRUD + persistência no Firestore + seleção no detalhe do Profissional.
-3. Firestore Rules: tenant isolation + hardening de produção (incluindo subcoleções clínicas).
-4. **[PÓS-MVP]** Relatório por código de ocorrência (agregações/export).
+## 10) Documentos de apoio
 
----
-
-## 9) O que anexar no próximo chat
-Obrigatório:
-1. ZIP do projeto atual do AgendaPsi (sem `node_modules/` e sem `.next/`)
-2. Este arquivo (`docs/00_HANDOFF_PARA_NOVO_CHAT.md`) atualizado
-
-Opcional:
-3. ZIP do lembrete-psi apenas como referência de UI/código (nunca como base de dados)
+- `docs/05_UI_UX_MAPA_TELAS.md`
+- `docs/31_PATCHES_ZIPS_APLICADOS.md`
+- `docs/42_CADASTRO_COMPLETO_PACIENTE.md`
+- `docs/26_SUPER_ADMIN_SAAS_TENANTS.md`
+- `docs/27_SUPER_ADMIN_SAAS_TENANT_SUSPENSION.md`
+- `docs/29_WHATSAPP_TEMPLATES.md`
+- Referências base (v0):
+  - `docs/01_REFERENCIA_MODELO_DADOS_v0.md`
+  - `docs/02_REFERENCIA_SEGURANCA_PERMISSOES_v0.md`

@@ -15,10 +15,12 @@ import { BadgeCheck,
   X,
   KeyRound,
   Copy,
-  Loader2,
-} from "lucide-react";
+Settings,
+  Loader2,} from "lucide-react";
 
 import { Button } from "@/components/DesignSystem";
+import WhatsAppIcon from "@/components/Icons/WhatsAppIcon";
+import ProfessionalAgendaHeader from "@/components/Professional/ProfessionalAgendaHeader";
 import SessionEvolutionPanel from "./SessionEvolutionPanel";
 import OccurrenceLogPanel from "./OccurrenceLogPanel";
 
@@ -26,6 +28,15 @@ import OccurrenceLogPanel from "./OccurrenceLogPanel";
 function normalizePhone(phone) {
   const digits = String(phone || "").replace(/\D+/g, "");
   return digits;
+}
+
+
+function applyTemplate(body, vars) {
+  let out = String(body || "");
+  for (const [k, v] of Object.entries(vars || {})) {
+    out = out.replaceAll(`{${k}}`, String(v ?? ""));
+  }
+  return out;
 }
 
 function buildWhatsappUrl(phone, text) {
@@ -178,8 +189,19 @@ function fmtDateShortPt(iso) {
   }).format(d);
 }
 
-export default function ProfessionalMonthViewClient({ initialData }) {
+export default function ProfessionalMonthViewClient({initialData, canTenantAdmin = false}) {
   const router = useRouter();
+
+
+  async function logout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // ignore
+    } finally {
+      window.location.href = "/login";
+    }
+  }
 
   const [data, setData] = useState(initialData);
   useEffect(() => {
@@ -187,13 +209,28 @@ export default function ProfessionalMonthViewClient({ initialData }) {
   }, [initialData]);
 
   const [detail, setDetail] = useState(null); // { isoDate, occId }
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [deleteOcc, setDeleteOcc] = useState(null); // occurrence object for delete confirmation
+
+  useEffect(() => {
+    if (detail?.occId) setSelectedTemplateId("");
+  }, [detail?.occId]);
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [patientSearch, setPatientSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const evolutionRef = useRef(null);
+  const logsRef = useRef(null);
+  const [isEvoDirty, setIsEvoDirty] = useState(false);
+  const [isLogDraftDirty, setIsLogDraftDirty] = useState(false);
 const [clinicalTab, setClinicalTab] = useState("evolution"); // "evolution" | "logs"
 
 useEffect(() => {
-  if (detail?.occId) setClinicalTab("evolution");
+  if (detail?.occId) {
+    setClinicalTab("evolution");
+    setIsEvoDirty(false);
+    setIsLogDraftDirty(false);
+  }
 }, [detail?.occId]);
 
 
@@ -209,6 +246,75 @@ useEffect(() => {
     for (let i = 0; i < days.length; i += 7) out.push(days.slice(i, i + 7));
     return out;
   }, [days]);
+
+  const patientSearchItems = useMemo(() => {
+    const items = [];
+    for (const week of Array.isArray(weeks) ? weeks : []) {
+      for (const day of Array.isArray(week) ? week : []) {
+        const iso = day?.isoDate;
+        const occs = Array.isArray(day?.occurrences) ? day.occurrences : [];
+        for (const o of occs) {
+          if (!o?.id || o?.isBlock) continue;
+          const pid = o?.patientId;
+          const label = pid ? String(patientsById?.[pid]?.fullName || "") : String(o?.leadName || "");
+          if (!label) continue;
+          items.push({ key: String(o.id), label, isoDate: iso });
+        }
+      }
+    }
+    const seen = new Set();
+    const out = [];
+    for (const it of items) {
+      const k = it.label.trim().toLowerCase();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push(it);
+    }
+    out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    return out;
+  }, [weeks, patientsById]);
+
+  const patientSearchResults = useMemo(() => {
+    const q = patientSearch.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return patientSearchItems.filter((it) => it.label.toLowerCase().includes(q)).slice(0, 8);
+  }, [patientSearch, patientSearchItems]);
+
+  
+  function matchesStatusFilter(o, filter) {
+    if (!o) return true;
+    const f = String(filter || "all");
+    if (f === "all") return true;
+    if (f === "holds") return Boolean(o.isHold);
+    if (Boolean(o.isHold)) return false;
+    const st = o.status || "Agendado";
+    if (f === "confirmed") return st === "Confirmado";
+    if (f === "scheduled") return st !== "Confirmado";
+    return true;
+  }
+
+const monthStats = useMemo(() => {
+    let scheduled = 0;
+    let confirmed = 0;
+    let holds = 0;
+    for (const week of Array.isArray(weeks) ? weeks : []) {
+      for (const day of Array.isArray(week) ? week : []) {
+        const occs = Array.isArray(day?.occurrences) ? day.occurrences : [];
+        for (const o of occs) {
+          if (!o || o.isBlock) continue;
+          if (o.isHold) {
+            holds += 1;
+            continue;
+          }
+          const st = o.status || "Agendado";
+          if (st === "Confirmado") confirmed += 1;
+          else scheduled += 1;
+        }
+      }
+    }
+    return { scheduled, confirmed, holds };
+  }, [weeks]);
+
 
   const occIndex = useMemo(() => {
     const idx = new Map();
@@ -294,13 +400,16 @@ const handleCopyPatientAccessCode = async () => {
 
   const statusOriginal = currentOcc?.status || "Agendado";
   const isStatusDirty = Boolean(detail) && Boolean(currentOcc) && !currentOcc?.isHold && status !== statusOriginal;
+  const hasAnyDirty = Boolean(isStatusDirty || isEvoDirty || isLogDraftDirty);
 
   function requestCloseDetail() {
-    if (isStatusDirty) {
+    if (hasAnyDirty) {
       const ok = window.confirm("Você tem alterações não salvas neste agendamento. Deseja descartar e fechar?");
       if (!ok) return;
     }
     setDetail(null);
+    setSelectedTemplateId("");
+    setErrorMsg("");
   }
 
   const detailDisplayName = currentPatient?.fullName || currentOcc?.leadName || "";
@@ -312,9 +421,21 @@ const handleCopyPatientAccessCode = async () => {
   const detailProgress =
     Number.isFinite(detailSessionIndex) && Number.isFinite(detailPlannedTotal) && detailPlannedTotal > 0 ? `${detailSessionIndex}/${detailPlannedTotal}` : null;
 
-  const detailWhatsappMsg = detailDisplayName
-    ? `Olá, ${detailDisplayName}! Confirmando sua sessão em ${fmtDateShortPt(detail?.isoDate)} às ${detailStartTime}. Conto com sua presença.`
-    : `Confirmando sua sessão em ${fmtDateShortPt(detail?.isoDate)} às ${detailStartTime}. Conto com sua presença.`;
+  const templates = data?.whatsappTemplates || [];
+  const effectiveTemplateId = selectedTemplateId || templates?.[0]?.id || "";
+  const effectiveTemplate = templates.find((t) => t.id === effectiveTemplateId) || templates?.[0] || null;
+
+  const detailWhatsappMsg = (() => {
+    const nome = detailDisplayName || "tudo bem?";
+    const dataStr = fmtDateShortPt(detail?.isoDate);
+    const hora = detailStartTime || "";
+    if (effectiveTemplate?.body) return applyTemplate(effectiveTemplate.body, { nome, data: dataStr, hora });
+    return detail?.isHold
+      ? `Olá, ${nome}! Segurei um horário em ${dataStr} às ${hora}.`
+      : detailDisplayName
+        ? `Olá, ${nome}! Confirmando sua sessão em ${dataStr} às ${hora}. Conto com sua presença.`
+        : `Confirmando sua sessão em ${dataStr} às ${hora}. Conto com sua presença.`;
+  })();
   const detailWhatsappUrl = buildWhatsappUrl(detailPhone, detailWhatsappMsg);
 
   function openDetailWhatsapp() {
@@ -405,52 +526,34 @@ async function patchStatus(occurrenceId, nextStatus) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-3 py-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white">
-            <CalendarDays className="h-5 w-5 text-slate-700" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-900 capitalize">Mês</p>
-            <p className="text-xs text-slate-600 capitalize">{monthLabel}</p>
-          </div>
-        </div>
+    <div className="mx-auto max-w-7xl px-3 sm:px-6 pb-6 pt-0 text-sm">
+      <ProfessionalAgendaHeader
+        view="month"
+        periodLabel={monthLabel}
+        isoDate={monthAnchorIso || todayIso}
+        tenantId={data?.tenantId || ""}
+        onChangeView={(v) => {
+          if (v === "month") return;
+          if (v === "day") return goDay(monthAnchorIso || todayIso);
+          if (v === "week") return goWeek(monthAnchorIso || todayIso);
+        }}
+        onPrev={() => goMonth(-1)}
+        onNext={() => goMonth(1)}
+        onToday={goToday}
+        onGoToDate={(d) => router.push(`/profissional?view=month&date=${encodeURIComponent(String(d || monthAnchorIso || todayIso))}`)}
+        onLogout={logout}
+        searchValue={patientSearch}
+        onSearchChange={setPatientSearch}
+        searchResults={patientSearchResults}
+        onSelectSearchItem={(it) => {
+          if (it?.isoDate) goDay(it.isoDate);
+          setPatientSearch("");
+        }}
+        stats={monthStats}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+      />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-            <button
-              type="button"
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 hover:bg-slate-50"
-              onClick={() => goDay(monthAnchorIso || todayIso)}
-            >
-              Dia
-            </button>
-            <button
-              type="button"
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 hover:bg-slate-50"
-              onClick={() => goWeek(monthAnchorIso || todayIso)}
-            >
-              Semana
-            </button>
-            <button
-              type="button"
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-600 text-white"
-              onClick={() => {
-                // already on month
-              }}
-            >
-              Mês
-            </button>
-          </div>
-
-          <Button variant="secondary" icon={ChevronLeft} onClick={() => goMonth(-1)} />
-          <Button variant="secondary" onClick={goToday}>
-            Hoje
-          </Button>
-          <Button variant="secondary" icon={ChevronRight} onClick={() => goMonth(1)} />
-        </div>
-      </div>
 
       {errorMsg ? (
         <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-800">
@@ -513,11 +616,14 @@ async function patchStatus(occurrenceId, nextStatus) {
                         const p = o?.patientId ? patientsById?.[o.patientId] : null;
                         const title = p?.fullName || o?.leadName || (o?.isHold ? "Reserva" : "(sem nome)");
                         const line = `${String(o?.startTime || "").slice(0, 5)} · ${title}`;
+                        const matchesFilter = matchesStatusFilter({ status: o?.status, isHold: o?.isHold }, statusFilter);
+                        const keepStrong = detail?.occId === o.id && detail?.isoDate === iso;
+                        const dimOcc = statusFilter !== "all" && !matchesFilter && !keepStrong;
                         return (
                           <button
                             key={o.id}
                             type="button"
-                            className={`w-full rounded-lg px-2 py-1 text-left ${statusItemBgClass({ status: o?.status, isHold: o?.isHold, inMonth })} hover:brightness-[0.99]`}
+                            className={`w-full rounded-lg px-2 py-1 text-left ${statusItemBgClass({ status: o?.status, isHold: o?.isHold, inMonth })} hover:brightness-[0.99] ${dimOcc ? "opacity-25" : ""}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               setDetail({ isoDate: iso, occId: o.id });
@@ -791,7 +897,34 @@ async function patchStatus(occurrenceId, nextStatus) {
                 <div className="mt-3">
                   <p className="text-[11px] font-semibold text-slate-500">WhatsApp</p>
                   <p className="text-xs font-semibold text-slate-800 break-all">{detailPhone || "—"}</p>
+                  
                   <div className="mt-2">
+                    <label className="text-xs text-slate-500 font-semibold">Template</label>
+                    <select
+                      className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs"
+                      value={effectiveTemplateId}
+                      onChange={(e) => setSelectedTemplateId(e.target.value)}
+                      disabled={!templates.length}
+                    >
+                      {templates.length ? (
+                        templates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.title}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">Nenhum template</option>
+                      )}
+                    </select>
+                  </div>
+
+                  <div className="mt-2">
+                    <p className="text-xs text-slate-500 font-semibold">Prévia</p>
+                    <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 whitespace-pre-wrap max-h-24 overflow-y-auto">
+                      {detailWhatsappMsg || "—"}
+                    </div>
+                  </div>
+<div className="mt-2">
                     <Button variant="primary" icon={WhatsAppIcon} onClick={openDetailWhatsapp} disabled={!detailWhatsappUrl} className="w-full">
                       Abrir WhatsApp
                     </Button>

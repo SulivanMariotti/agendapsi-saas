@@ -1,5 +1,7 @@
 // src/lib/server/patientPortalConfig.js
 import admin from "@/lib/firebaseAdmin";
+import { getTenantPlan, featureAllowed } from "@/lib/server/tenantPlan";
+import { getTenantBillingState } from "@/lib/server/tenantBilling";
 
 function toBool(v, fallback = false) {
   if (typeof v === "boolean") return v;
@@ -46,11 +48,23 @@ Ao concordar, você reconhece que leu e compreendeu os termos básicos do acompa
   const notesEnabled = toBool(data.notesEnabled, true); // agora disponível (pode desativar por tenant)
   const remindersEnabled = toBool(data.remindersEnabled, true);
 
+  // Plano (Pós-MVP): aplica gating (settings ∩ plano)
+  const plan = await getTenantPlan(tenantId);
+  const planLibrary = featureAllowed(plan, ["patientPortal", "library"]);
+  const planNotes = featureAllowed(plan, ["patientPortal", "notes"]);
+  const planReminders = featureAllowed(plan, ["patientPortal", "reminders"]);
+
+  const billing = await getTenantBillingState(tenantId);
+  const billingOk = billing?.writeAllowed !== false; // ativo ou trial
+
   return {
     termsVersion,
     termsText,
-    libraryEnabled,
-    notesEnabled,
-    remindersEnabled,
+    // effective flags
+    libraryEnabled: libraryEnabled && planLibrary && billingOk,
+    notesEnabled: notesEnabled && planNotes && billingOk,
+    remindersEnabled: remindersEnabled && planReminders && billingOk,
+    // debug/telemetry (server-side only consumers)
+    planId: plan.planId,
   };
 }

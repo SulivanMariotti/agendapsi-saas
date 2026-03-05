@@ -1,6 +1,6 @@
 # Admin — Estrutura de Menus (AgendaPsi)
 
-Atualizado: **2026-03-02**
+Atualizado: **2026-03-03**
 
 ## Objetivo
 Organizar o painel **/admin** em **menus + submenus**, separando:
@@ -28,6 +28,11 @@ Organizar o painel **/admin** em **menus + submenus**, separando:
 ### Menu: AgendaPsi (submenus)
 - Agenda do Profissional (Schedule) → `agendapsi_schedule`
 - Códigos de Ocorrência → `agendapsi_occurrence_codes`
+- Portal do Paciente (Contrato + Flags) → `agendapsi_patient_portal`
+- Templates WhatsApp → `agendapsi_whatsapp_templates`
+
+### Menu: SaaS (Super Admin)
+- Tenants → `saas_tenants`
 
 ### Menu: Pacientes
 - Tab id: `users` (placeholder/expansão futura)

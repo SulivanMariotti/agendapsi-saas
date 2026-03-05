@@ -83,10 +83,25 @@ Sugestão de ambiente:
 **Esperado**
 - Portal reflete os dados atualizados (subset permitido)
 - Sem duplicidade de nome no topo (apenas título + card)
+- Telefone exibido vem do **cadastro completo** do paciente (campo `patients.mobile` / equivalente)
 
 ---
 
-### T06 — Contrato/Termo + aceite
+### T06 — Biblioteca: paciente vê o que o Admin publica
+1. No Admin: criar/editar artigo e marcar como **Publicado**
+2. No portal do paciente: abrir **Biblioteca**
+
+**Esperado**
+- Artigos publicados aparecem
+- Artigos em rascunho não aparecem
+- Categorias/destaques/ordem seguem a configuração do Admin (quando existente)
+
+**Observação (sessão isolada)**
+- Se o profissional estiver logado no mesmo navegador, o portal precisa usar o **Auth do paciente** (`patientApp`). Se a biblioteca falhar, verificar se o request está enviando `Authorization: Bearer <idToken do paciente>`.
+
+---
+
+### T07 — Contrato/Termo + aceite
 1. No portal do paciente: abrir **Contrato**
 2. Se pendente, clicar “Concordo com o termo”
 3. Reabrir contrato
@@ -100,7 +115,7 @@ Sugestão de ambiente:
 
 ---
 
-### T07 — Lembretes: toggle + persistência + “link ao Admin”
+### T08 — Lembretes: toggle + persistência + “link ao Admin”
 1. No portal do paciente: abrir Preferências / Lembretes
 2. Alternar ON/OFF
 3. Recarregar (F5)
@@ -116,17 +131,6 @@ Sugestão de ambiente:
 
 ---
 
-### T08 — Biblioteca: paciente vê o que o Admin publica
-1. No Admin: criar/editar artigo e marcar como **Publicado**
-2. No portal do paciente: abrir **Biblioteca**
-
-**Esperado**
-- Artigos publicados aparecem
-- Artigos em rascunho não aparecem
-- Categorias/destaques/ordem seguem a configuração do Admin (quando existente)
-
----
-
 ### T09 — Anotações do paciente
 1. Portal: abrir **Anotações**
 2. Criar uma nota e salvar
@@ -139,45 +143,5 @@ Sugestão de ambiente:
 - Remoção é lógica (não precisa apagar o doc fisicamente)
 
 **Checagem Firestore (opcional)**
-- `tenants/{tenantId}/patients/{patientId}/patientNotes/{noteId}`
+- `tenants/{tenantId}/patients/{patientId}/patientNotes/*` (campo `deletedAt` quando removida)
 
----
-
-## 3) Testes negativos (segurança mínima)
-
-### T10 — Paciente não deve acessar APIs de profissional/admin
-- Tentar abrir `/admin` ou `/profissional` logado como paciente
-
-**Esperado**
-- Bloqueio por guard / redirect / 403 conforme implementação
-
-### T11 — Profissional não deve “virar paciente” por engano
-- Estar logado como profissional e abrir `/paciente` sem fazer login do paciente
-
-**Esperado**
-- Solicita login do paciente (código)
-- Não apresenta dados do paciente sem sessão patient
-
----
-
-## 4) Critério de saída (Definition of Done do Step 18)
-
-Considerar “OK” quando:
-- T01..T09 passam
-- Não existem erros recorrentes no console
-- Biblioteca reflete publicação do Admin
-- Lembretes persistem e (se aplicável) sincronizam com a estrutura legada do Admin
-- Portal não expõe clínico e não oferece CTA cancel/remarcar
-
----
-
-## 5) Se algo falhar — checklist rápido
-
-- Reiniciar dev server e limpar cache:
-  - parar `npm run dev`
-  - apagar `.next` (e `.turbo` se existir)
-  - subir novamente
-- Confirmar que o login do paciente está usando o app secundário (sessões isoladas)
-- Se erro for `permission-denied` no portal:
-  - confirmar que portal não está com listeners Firestore no client
-  - validar endpoint que está falhando (Network → 401/403/500)

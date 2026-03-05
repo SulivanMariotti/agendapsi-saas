@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 
-// Protect professional panel routes.
+// Protect professional routes and tenant-admin routes.
 // NOTE: We only check the presence of the session cookie at the Edge.
-// Token verification happens server-side in /profissional.
+// Token verification happens server-side in /profissional and /admin-tenant.
 export function middleware(request) {
   const { pathname } = request.nextUrl;
-  if (!pathname.startsWith("/profissional")) return NextResponse.next();
+
+  const mustProtect = pathname.startsWith("/profissional") || pathname.startsWith("/admin-tenant");
+  if (!mustProtect) return NextResponse.next();
 
   const hasSession = Boolean(request.cookies.get("__session")?.value);
   if (hasSession) return NextResponse.next();
@@ -17,5 +19,5 @@ export function middleware(request) {
 }
 
 export const config = {
-  matcher: ["/profissional/:path*"],
+  matcher: ["/profissional/:path*", "/admin-tenant/:path*"],
 };

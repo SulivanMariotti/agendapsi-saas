@@ -4,6 +4,7 @@ import admin from "@/lib/firebaseAdmin";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { enforceSameOrigin } from "@/lib/server/originGuard";
 import { requireAuth } from "@/lib/server/requireAuth";
+import { ensureTenantActive } from "@/lib/server/tenantStatus";
 import { getPatientPortalConfig } from "@/lib/server/patientPortalConfig";
 import { unauthorized } from "@/lib/server/adminError";
 
@@ -69,8 +70,20 @@ function isPublishedArticle(a) {
 
 export async function GET(req) {
   try {
-    enforceSameOrigin(req);
-    await rateLimit(req, { key: "paciente:library:get", limit: 60, windowMs: 60_000 });
+    const originCheck = enforceSameOrigin(req, {
+      allowNoOrigin: false,
+      allowNoOriginWithAuth: true,
+      message: "Acesso bloqueado (origem inválida).",
+    });
+    if (!originCheck.ok) return originCheck.res;
+
+    const rl = await rateLimit(req, {
+      bucket: "paciente:library:get",
+      limit: 60,
+      windowMs: 60_000,
+      errorMessage: "Muitas requisições. Aguarde um pouco e tente novamente.",
+    });
+    if (!rl.ok) return rl.res;
 
     const auth = await requireAuth(req);
     if (!auth.ok) return auth.res;
@@ -81,6 +94,14 @@ export async function GET(req) {
     const tenantId = String(decoded.tenantId || "");
     const patientId = String(decoded.patientId || "");
     if (!tenantId || !patientId) return unauthorized();
+
+    const tenantCheck = await ensureTenantActive(tenantId);
+    if (!tenantCheck.ok) {
+      return NextResponse.json(
+        { ok: false, error: "tenant-suspended", code: "TENANT_SUSPENDED" },
+        { status: 403 }
+      );
+    }
 
     const portalCfg = await getPatientPortalConfig(tenantId);
     if (portalCfg?.libraryEnabled === false) {
