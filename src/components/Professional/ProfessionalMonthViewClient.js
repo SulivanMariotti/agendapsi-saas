@@ -21,6 +21,8 @@ Settings,
 import { Button } from "@/components/DesignSystem";
 import WhatsAppIcon from "@/components/Icons/WhatsAppIcon";
 import ProfessionalAgendaHeader from "@/components/Professional/ProfessionalAgendaHeader";
+import AppointmentDetailHeader from "@/components/Professional/AppointmentDetailHeader";
+import { STATUSES, statusDotClass, statusItemBgClass, statusPillClass, statusAccentBorderClass } from "@/lib/shared/occurrenceStatusStyles";
 import SessionEvolutionPanel from "./SessionEvolutionPanel";
 import OccurrenceLogPanel from "./OccurrenceLogPanel";
 
@@ -93,49 +95,6 @@ function todayIsoSP() {
   const d = parts.find((p) => p.type === "day")?.value;
   return y && m && d ? `${y}-${m}-${d}` : new Date().toISOString().slice(0, 10);
 }
-
-const STATUSES = ["Agendado", "Confirmado", "Finalizado", "Não comparece", "Cancelado", "Reagendado"];
-
-function statusDotClass(status) {
-  switch (status) {
-    case "Agendado":
-      return "bg-violet-500";
-    case "Confirmado":
-      return "bg-emerald-500";
-    case "Finalizado":
-      return "bg-slate-500";
-    case "Não comparece":
-      return "bg-amber-500";
-    case "Cancelado":
-      return "bg-red-500";
-    case "Reagendado":
-      return "bg-blue-500";
-    default:
-      return "bg-slate-400";
-  }
-}
-
-function statusItemBgClass({ status, isHold, inMonth }) {
-  // Month view: color the whole chip background based on status.
-  // Holds should be visually "muted" (gray ~50%).
-  if (isHold) return `${inMonth ? "" : "opacity-70 "}bg-slate-100/60 border border-slate-200 text-slate-700`;
-  const base =
-    status === "Agendado"
-      ? "bg-violet-100/80 border border-violet-200 text-violet-900"
-      : status === "Confirmado"
-      ? "bg-emerald-100/80 border border-emerald-200 text-emerald-900"
-      : status === "Finalizado"
-      ? "bg-slate-100/80 border border-slate-200 text-slate-700"
-      : status === "Não comparece"
-      ? "bg-amber-100/80 border border-amber-200 text-amber-900"
-      : status === "Cancelado"
-      ? "bg-red-100/80 border border-red-200 text-red-900"
-      : status === "Reagendado"
-      ? "bg-blue-100/80 border border-blue-200 text-blue-900"
-      : "bg-slate-50 border border-slate-200 text-slate-800";
-  return `${inMonth ? "" : "opacity-70 "}${base}`;
-}
-
 
 function ModalShell({ title, children, onClose, footer = null, maxWidthClass = "max-w-md", bodyClass = "p-5" }) {
   return (
@@ -218,6 +177,8 @@ export default function ProfessionalMonthViewClient({initialData, canTenantAdmin
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [patientSearch, setPatientSearch] = useState("");
+  const [searchScope, setSearchScope] = useState("view");
+  const [allPatientsSearchResults, setAllPatientsSearchResults] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const evolutionRef = useRef(null);
   const logsRef = useRef(null);
@@ -280,6 +241,56 @@ useEffect(() => {
     return patientSearchItems.filter((it) => it.label.toLowerCase().includes(q)).slice(0, 8);
   }, [patientSearch, patientSearchItems]);
 
+  useEffect(() => {
+    if (searchScope !== "all") {
+      setAllPatientsSearchResults([]);
+      return;
+    }
+    const q = patientSearch.trim();
+    if (q.length < 2) {
+      setAllPatientsSearchResults([]);
+      return;
+    }
+    const controller = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/professional/patients/search?q=${encodeURIComponent(q)}&includeNext=1`, { signal: controller.signal });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j?.ok) return setAllPatientsSearchResults([]);
+        const pts = Array.isArray(j.patients) ? j.patients : [];
+                const items = pts.slice(0, 8)
+          .map((p) => {
+            const name = String(p?.fullName || p?.preferredName || "").trim();
+            const phone = String(p?.phoneE164 || "").trim();
+            const label = phone ? `${name} — ${phone}` : name;
+
+            const next = p?.nextAppt || null;
+            const iso = String(next?.isoDate || "").trim();
+            const st = String(next?.startTime || "").trim();
+            const subLabel = iso ? `Próximo: ${fmtDateShortPt(iso)}${st ? ` ${st}` : ""}` : "";
+
+            return {
+              key: `p:${p.patientId}`,
+              kind: "patient",
+              patientId: p.patientId,
+              label,
+              subLabel,
+              nextAppt: next,
+            };
+          })
+          .filter((it) => it.label);
+setAllPatientsSearchResults(items);
+      } catch {
+        setAllPatientsSearchResults([]);
+      }
+    }, 250);
+
+    return () => {
+      clearTimeout(t);
+      try { controller.abort(); } catch { /* ignore */ }
+    };
+  }, [searchScope, patientSearch]);
+
   
   function matchesStatusFilter(o, filter) {
     if (!o) return true;
@@ -335,6 +346,11 @@ const monthStats = useMemo(() => {
     const pid = currentOcc?.patientId;
     return pid ? patientsById?.[pid] || null : null;
   }, [currentOcc?.patientId, patientsById]);
+
+  const isProfileIncomplete = Boolean(
+    currentPatient && (currentPatient.profileStatus === "incomplete" || currentPatient.profileCompleted === false)
+  );
+
 
   const currentTitle = useMemo(() => {
     if (!currentOcc) return "";
@@ -542,10 +558,27 @@ async function patchStatus(occurrenceId, nextStatus) {
         onToday={goToday}
         onGoToDate={(d) => router.push(`/profissional?view=month&date=${encodeURIComponent(String(d || monthAnchorIso || todayIso))}`)}
         onLogout={logout}
+        searchScope={searchScope}
+        onSearchScopeChange={(scope) => {
+          setSearchScope(scope === "all" ? "all" : "view");
+          setPatientSearch("");
+        }}
         searchValue={patientSearch}
         onSearchChange={setPatientSearch}
-        searchResults={patientSearchResults}
+        searchResults={searchScope === "all" ? allPatientsSearchResults : patientSearchResults}
         onSelectSearchItem={(it) => {
+          if (it?.kind === "patient" && it?.patientId) {
+            if (it?.action === "next" && it?.nextAppt?.isoDate && it?.nextAppt?.occurrenceId) {
+              const iso = String(it.nextAppt.isoDate);
+              const occId = String(it.nextAppt.occurrenceId);
+              router.push(`/profissional?view=day&date=${encodeURIComponent(iso)}&openOcc=${encodeURIComponent(occId)}`);
+              setPatientSearch("");
+              return;
+            }
+            setPatientProfilePatientId(String(it.patientId));
+            setPatientSearch("");
+            return;
+          }
           if (it?.isoDate) goDay(it.isoDate);
           setPatientSearch("");
         }}
@@ -706,40 +739,40 @@ async function patchStatus(occurrenceId, nextStatus) {
         >
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
             <div className="flex-1 min-w-0 flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-base font-extrabold text-slate-900 truncate">
-                  {fmtDateShortPt(detail.isoDate)} — {String(currentOcc?.startTime || "").slice(0, 5)}
-                </p>
-                <p className="mt-0.5 text-[11px] uppercase tracking-wider text-slate-400 font-bold">
-                  {currentOcc?.isHold ? "Reserva" : "Agendamento"}
-                </p>
-              </div>
-            </div>
+            
+            <AppointmentDetailHeader
+              title={currentTitle || (currentOcc?.isHold ? "Reserva" : "Agendamento")}
+              subtitle={`${fmtDateShortPt(detail.isoDate)} • ${String(currentOcc?.startTime || "").slice(0, 5)}${currentOcc?.endTime ? "–" + String(currentOcc?.endTime || "").slice(0, 5) : ""}`}
+              accentClass={currentOcc?.isHold ? "border-l-slate-300" : statusAccentBorderClass(status)}
+              right={
+                <>
+                  {detailProgress ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-extrabold text-slate-700">
+                      Plano: {detailProgress}
+                    </span>
+                  ) : null}
 
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Paciente</p>
-              <div className="flex flex-wrap items-center justify-end gap-1">
-                {detailProgress ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-extrabold text-slate-700">
-                    Plano: {detailProgress}
-                  </span>
-                ) : null}
+                  {isProfileIncomplete ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-extrabold text-amber-800">
+                      Cadastro incompleto
+                    </span>
+                  ) : null}
 
-                {currentOcc?.isHold ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-extrabold text-slate-700">
-                    <Lock size={14} /> Reserva
-                  </span>
-                ) : (
-                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-extrabold ${statusPillClass(status)}`}>
-                    <BadgeCheck size={14} /> {status}
-                  </span>
-                )}
-              </div>
-            </div>
+                  {currentOcc?.isHold ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-extrabold text-slate-700">
+                      <Lock size={14} /> Reserva
+                    </span>
+                  ) : (
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-extrabold ${statusPillClass(status)}`}>
+                      <BadgeCheck size={14} /> {status}
+                    </span>
+                  )}
+                </>
+              }
+            />
 
             <div>
-              <p className="text-sm font-semibold text-slate-900 truncate">{currentTitle}</p>
+
 
 {currentOcc?.patientId ? (
   <div className="mt-3 rounded-2xl border border-slate-100 bg-white p-3">

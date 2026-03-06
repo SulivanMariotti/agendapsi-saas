@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   CalendarDays,
   Layers,
@@ -29,6 +29,29 @@ import OccurrenceLogPanel from "@/components/Professional/OccurrenceLogPanel";
 import PatientProfileModal from "@/components/Professional/PatientProfileModal";
 import ProfessionalAgendaHeader from "@/components/Professional/ProfessionalAgendaHeader";
 import WhatsAppIcon from "@/components/Icons/WhatsAppIcon";
+import { STATUSES, statusPillClass, statusBarClass, statusCardSoftClass, statusAccentBorderClass, statusIconColorClass } from "@/lib/shared/occurrenceStatusStyles";
+
+// HOTFIX 2026-03-05: StatusIcon was referenced but not defined after refactor/centralização.
+function StatusIcon({ status, size = 12, className = "" }) {
+  const normalized = String(status || "").trim();
+  const Icon =
+    normalized === "Agendado"
+      ? CalendarDays
+      : normalized === "Confirmado"
+      ? BadgeCheck
+      : normalized === "Finalizado"
+      ? CheckCircle
+      : normalized === "Não comparece" || normalized === "Não Compareceu"
+      ? UserX
+      : normalized === "Cancelado"
+      ? XCircle
+      : normalized === "Reagendado"
+      ? RefreshCcw
+      : BadgeCheck;
+
+  return <Icon size={size} className={className} />;
+}
+
 
 function toDateFromIso(iso) {
   const d = new Date(`${iso}T12:00:00.000Z`);
@@ -175,125 +198,6 @@ function buildWhatsappUrl(phone, text) {
   return `https://wa.me/${p}?text=${q}`;
 }
 
-const STATUSES = ["Agendado", "Confirmado", "Finalizado", "Não comparece", "Cancelado", "Reagendado"];
-
-function statusPillClass(status) {
-  switch (status) {
-    case "Agendado":
-      return "bg-violet-50 text-violet-800 border-violet-200";
-    case "Confirmado":
-      return "bg-emerald-50 text-emerald-800 border-emerald-200";
-    case "Finalizado":
-      return "bg-slate-100 text-slate-700 border-slate-200";
-    case "Não comparece":
-      return "bg-amber-50 text-amber-800 border-amber-200";
-    case "Cancelado":
-      return "bg-red-50 text-red-800 border-red-200";
-    case "Reagendado":
-      return "bg-blue-50 text-blue-800 border-blue-200";
-    default:
-      return "bg-slate-50 text-slate-700 border-slate-200";
-  }
-}
-
-function StatusIcon({ status, size = 12, className = "" }) {
-  const Icon =
-    status === "Agendado"
-      ? CalendarDays
-      : status === "Confirmado"
-      ? BadgeCheck
-      : status === "Finalizado"
-      ? CheckCircle
-      : status === "Não comparece"
-      ? UserX
-      : status === "Cancelado"
-      ? XCircle
-      : status === "Reagendado"
-      ? RefreshCcw
-      : BadgeCheck;
-
-  return <Icon size={size} className={className} />;
-}
-
-function statusBarClass(status) {
-  switch (status) {
-    case "Agendado":
-      return "bg-violet-500";
-    case "Confirmado":
-      return "bg-emerald-500";
-    case "Finalizado":
-      return "bg-slate-400";
-    case "Não comparece":
-      return "bg-amber-500";
-    case "Cancelado":
-      return "bg-red-500";
-    case "Reagendado":
-      return "bg-blue-500";
-    default:
-      return "bg-slate-300";
-  }
-}
-
-function statusCardSoftClass(status) {
-  // Softer background for Day view blocks (status color but subtle).
-  switch (status) {
-    case "Agendado":
-      return "bg-violet-50 border-violet-100";
-    case "Confirmado":
-      return "bg-emerald-50 border-emerald-100";
-    case "Finalizado":
-      return "bg-slate-50 border-slate-200";
-    case "Não comparece":
-      return "bg-amber-50 border-amber-100";
-    case "Cancelado":
-      return "bg-red-50 border-red-100";
-    case "Reagendado":
-      return "bg-blue-50 border-blue-100";
-    default:
-      return "bg-white border-slate-100";
-  }
-}
-
-function statusAccentBorderClass(status) {
-  // Left accent border to keep scanning quick even with soft backgrounds.
-  switch (status) {
-    case "Agendado":
-      return "border-l-violet-500";
-    case "Confirmado":
-      return "border-l-emerald-500";
-    case "Finalizado":
-      return "border-l-slate-400";
-    case "Não comparece":
-      return "border-l-amber-500";
-    case "Cancelado":
-      return "border-l-red-500";
-    case "Reagendado":
-      return "border-l-blue-500";
-    default:
-      return "border-l-slate-300";
-  }
-}
-
-function statusIconColorClass(status) {
-  // Icon-only status indicator (no border/pill). Keep a subtle color cue.
-  switch (status) {
-    case "Agendado":
-      return "text-violet-700";
-    case "Confirmado":
-      return "text-emerald-700";
-    case "Finalizado":
-      return "text-slate-600";
-    case "Não comparece":
-      return "text-amber-700";
-    case "Cancelado":
-      return "text-red-700";
-    case "Reagendado":
-      return "text-blue-700";
-    default:
-      return "text-slate-600";
-  }
-}
-
 function occCardSoftClass(occ) {
   if (occ?.isHold) return "bg-slate-100/60 border-slate-200";
   return statusCardSoftClass(occ?.status);
@@ -364,6 +268,23 @@ function ModalShell({
 
 export default function ProfessionalDayViewClient({ initialData }) {
   const router = useRouter();
+  const sp = useSearchParams();
+  const openOcc = sp?.get?.("openOcc") || "";
+
+  useEffect(() => {
+    if (!openOcc) return;
+    setSelectedOccId(String(openOcc));
+    // Clean the URL param to avoid reopening after the user closes the overlay.
+    try {
+      const params = new URLSearchParams(sp?.toString?.() || "");
+      params.delete("openOcc");
+      const qs = params.toString();
+      router.replace(qs ? `/profissional?${qs}` : "/profissional");
+    } catch {
+      // ignore
+    }
+  }, [openOcc]);
+
 
   const [data, setData] = useState(initialData);
   const [selectedOccId, setSelectedOccId] = useState(null);
@@ -384,6 +305,9 @@ export default function ProfessionalDayViewClient({ initialData }) {
   const showToast = (msg, type = "success") => setToast({ msg, type });
   const [patientProfilePatientId, setPatientProfilePatientId] = useState("");
   const [patientSearch, setPatientSearch] = useState("");
+  const [searchScope, setSearchScope] = useState("view");
+  const [allPatientsSearchResults, setAllPatientsSearchResults] = useState([]);
+
   const [statusFilter, setStatusFilter] = useState("all");
 
   const patientSearchItems = useMemo(() => {
@@ -413,6 +337,56 @@ export default function ProfessionalDayViewClient({ initialData }) {
     if (q.length < 2) return [];
     return patientSearchItems.filter((it) => it.label.toLowerCase().includes(q)).slice(0, 8);
   }, [patientSearch, patientSearchItems]);
+
+  useEffect(() => {
+    if (searchScope !== "all") {
+      setAllPatientsSearchResults([]);
+      return;
+    }
+    const q = patientSearch.trim();
+    if (q.length < 2) {
+      setAllPatientsSearchResults([]);
+      return;
+    }
+    const controller = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/professional/patients/search?q=${encodeURIComponent(q)}&includeNext=1`, { signal: controller.signal });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j?.ok) return setAllPatientsSearchResults([]);
+        const pts = Array.isArray(j.patients) ? j.patients : [];
+                const items = pts.slice(0, 8)
+          .map((p) => {
+            const name = String(p?.fullName || p?.preferredName || "").trim();
+            const phone = String(p?.phoneE164 || "").trim();
+            const label = phone ? `${name} — ${phone}` : name;
+
+            const next = p?.nextAppt || null;
+            const iso = String(next?.isoDate || "").trim();
+            const st = String(next?.startTime || "").trim();
+            const subLabel = iso ? `Próximo: ${fmtDateShortPt(iso)}${st ? ` ${st}` : ""}` : "";
+
+            return {
+              key: `p:${p.patientId}`,
+              kind: "patient",
+              patientId: p.patientId,
+              label,
+              subLabel,
+              nextAppt: next,
+            };
+          })
+          .filter((it) => it.label);
+setAllPatientsSearchResults(items);
+      } catch {
+        setAllPatientsSearchResults([]);
+      }
+    }, 250);
+
+    return () => {
+      clearTimeout(t);
+      try { controller.abort(); } catch { /* ignore */ }
+    };
+  }, [searchScope, patientSearch]);
 
   function onSelectPatientSearch(it) {
     if (!it?.occId) return;
@@ -917,10 +891,27 @@ useEffect(() => {
         onNextAppt={scrollToNextAppointment}
         onGoToDate={(d) => router.push(`/profissional?view=day&date=${encodeURIComponent(String(d || isoDate))}`)}
         onLogout={logout}
+        searchScope={searchScope}
+        onSearchScopeChange={(scope) => {
+          setSearchScope(scope === "all" ? "all" : "view");
+          setPatientSearch("");
+        }}
         searchValue={patientSearch}
         onSearchChange={setPatientSearch}
-        searchResults={patientSearchResults}
+        searchResults={searchScope === "all" ? allPatientsSearchResults : patientSearchResults}
         onSelectSearchItem={(it) => {
+          if (it?.kind === "patient" && it?.patientId) {
+            if (it?.action === "next" && it?.nextAppt?.isoDate && it?.nextAppt?.occurrenceId) {
+              const iso = String(it.nextAppt.isoDate);
+              const occId = String(it.nextAppt.occurrenceId);
+              router.push(`/profissional?view=day&date=${encodeURIComponent(iso)}&openOcc=${encodeURIComponent(occId)}`);
+              setPatientSearch("");
+              return;
+            }
+            setPatientProfilePatientId(String(it.patientId));
+            setPatientSearch("");
+            return;
+          }
           onSelectPatientSearch(it);
           setPatientSearch("");
         }}
@@ -983,8 +974,8 @@ useEffect(() => {
                         aria-hidden="true"
                       >
                         <div className="relative">
-                          <div className="absolute left-1 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-rose-500 shadow-sm" />
-                          <div className="h-px bg-rose-500/80" />
+                          <div className="absolute left-1 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-pink-500 shadow-sm" />
+                          <div className="h-px bg-pink-500/80" />
                         </div>
                       </div>
                     ) : null}

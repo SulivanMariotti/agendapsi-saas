@@ -29,7 +29,7 @@ export default async function ProfissionalPage({ searchParams }) {
     return (
       <div className="min-h-[100dvh] bg-slate-50">
         <BillingBannerServer billing={session.billing} canTenantAdmin={canTenantAdmin} context="professional" />
-        <ProfessionalMonthViewClient initialData={data} />
+        <ProfessionalMonthViewClient initialData={data} viewerUid={session.uid} />
       </div>
     );
   }
@@ -39,7 +39,7 @@ export default async function ProfissionalPage({ searchParams }) {
     return (
       <div className="min-h-[100dvh] bg-slate-50">
         <BillingBannerServer billing={session.billing} canTenantAdmin={canTenantAdmin} context="professional" />
-        <ProfessionalWeekViewClient initialData={data} />
+        <ProfessionalWeekViewClient initialData={data} viewerUid={session.uid} />
       </div>
     );
   }
@@ -49,7 +49,7 @@ export default async function ProfissionalPage({ searchParams }) {
   return (
     <div className="min-h-[100dvh] bg-slate-50">
       <BillingBannerServer billing={session.billing} canTenantAdmin={canTenantAdmin} context="professional" />
-      <ProfessionalDayViewClient initialData={data} initialOpenNext={openNext} />
+      <ProfessionalDayViewClient initialData={data} initialOpenNext={openNext} viewerUid={session.uid} />
     </div>
   );
 }

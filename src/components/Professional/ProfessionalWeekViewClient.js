@@ -29,6 +29,7 @@ import OccurrenceLogPanel from "@/components/Professional/OccurrenceLogPanel";
 import PatientProfileModal from "@/components/Professional/PatientProfileModal";
 import ProfessionalAgendaHeader from "@/components/Professional/ProfessionalAgendaHeader";
 import WhatsAppIcon from "@/components/Icons/WhatsAppIcon";
+import { STATUSES, statusBlockClass, statusPillClass, statusIconColorClass } from "@/lib/shared/occurrenceStatusStyles";
 
 function toDateFromIso(iso) {
   const d = new Date(`${iso}T12:00:00.000Z`);
@@ -858,63 +859,8 @@ function timeToMinutes(t) {
   return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
 }
 
-function statusBlockClass({ status, isHold }) {
-  if (isHold) return "bg-slate-100/60 border-slate-200 text-slate-800";
-  switch (status) {
-    case "Agendado":
-      return "bg-violet-100 border-violet-300 text-violet-900";
-    case "Confirmado":
-      return "bg-emerald-100 border-emerald-300 text-emerald-900";
-    case "Finalizado":
-      return "bg-slate-100 border-slate-300 text-slate-700";
-    case "Não comparece":
-      return "bg-amber-100 border-amber-300 text-amber-900";
-    case "Cancelado":
-      return "bg-red-100 border-red-300 text-red-900";
-    case "Reagendado":
-      return "bg-blue-100 border-blue-300 text-blue-900";
-    default:
-      return "bg-slate-50 border-slate-200 text-slate-800";
-  }
-}
 
-function statusPillClass(status) {
-  switch (status) {
-    case "Agendado":
-      return "bg-violet-50 text-violet-800 border-violet-200";
-    case "Confirmado":
-      return "bg-emerald-50 text-emerald-800 border-emerald-200";
-    case "Finalizado":
-      return "bg-slate-100 text-slate-700 border-slate-200";
-    case "Não comparece":
-      return "bg-amber-50 text-amber-800 border-amber-200";
-    case "Cancelado":
-      return "bg-red-50 text-red-800 border-red-200";
-    case "Reagendado":
-      return "bg-blue-50 text-blue-800 border-blue-200";
-    default:
-      return "bg-slate-50 text-slate-700 border-slate-200";
-  }
-}
 
-function statusIconColorClass(status) {
-  switch (status) {
-    case "Agendado":
-      return "text-violet-700";
-    case "Confirmado":
-      return "text-emerald-700";
-    case "Finalizado":
-      return "text-slate-600";
-    case "Não comparece":
-      return "text-amber-700";
-    case "Cancelado":
-      return "text-red-700";
-    case "Reagendado":
-      return "text-blue-700";
-    default:
-      return "text-slate-600";
-  }
-}
 
 function StatusIcon({ status, size = 14, className = "" }) {
   const Icon =
@@ -981,7 +927,6 @@ function ModalShell({ title, onClose, children, footer = null, maxWidthClass = "
   );
 }
 
-const STATUSES = ["Agendado", "Confirmado", "Finalizado", "Não comparece", "Cancelado", "Reagendado"];
 
 function computeWeekBounds(weekDays, slotIntervalMin) {
   const starts = [];
@@ -1078,6 +1023,8 @@ export default function ProfessionalWeekViewClient({initialData, canTenantAdmin 
   const showToast = (msg, type = "success") => setToast({ msg, type });
   const [patientProfilePatientId, setPatientProfilePatientId] = useState("");
   const [patientSearch, setPatientSearch] = useState("");
+  const [searchScope, setSearchScope] = useState("view");
+  const [allPatientsSearchResults, setAllPatientsSearchResults] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all");
 
 
@@ -1120,6 +1067,56 @@ export default function ProfessionalWeekViewClient({initialData, canTenantAdmin 
     if (q.length < 2) return [];
     return patientSearchItems.filter((it) => it.label.toLowerCase().includes(q)).slice(0, 8);
   }, [patientSearch, patientSearchItems]);
+
+  useEffect(() => {
+    if (searchScope !== "all") {
+      setAllPatientsSearchResults([]);
+      return;
+    }
+    const q = patientSearch.trim();
+    if (q.length < 2) {
+      setAllPatientsSearchResults([]);
+      return;
+    }
+    const controller = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/professional/patients/search?q=${encodeURIComponent(q)}&includeNext=1`, { signal: controller.signal });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j?.ok) return setAllPatientsSearchResults([]);
+        const pts = Array.isArray(j.patients) ? j.patients : [];
+                const items = pts.slice(0, 8)
+          .map((p) => {
+            const name = String(p?.fullName || p?.preferredName || "").trim();
+            const phone = String(p?.phoneE164 || "").trim();
+            const label = phone ? `${name} — ${phone}` : name;
+
+            const next = p?.nextAppt || null;
+            const iso = String(next?.isoDate || "").trim();
+            const st = String(next?.startTime || "").trim();
+            const subLabel = iso ? `Próximo: ${fmtDateShortPt(iso)}${st ? ` ${st}` : ""}` : "";
+
+            return {
+              key: `p:${p.patientId}`,
+              kind: "patient",
+              patientId: p.patientId,
+              label,
+              subLabel,
+              nextAppt: next,
+            };
+          })
+          .filter((it) => it.label);
+setAllPatientsSearchResults(items);
+      } catch {
+        setAllPatientsSearchResults([]);
+      }
+    }, 250);
+
+    return () => {
+      clearTimeout(t);
+      try { controller.abort(); } catch { /* ignore */ }
+    };
+  }, [searchScope, patientSearch]);
 
   
   function matchesStatusFilter(o, filter) {
@@ -1418,10 +1415,27 @@ const weekStats = useMemo(() => {
         showNextAppt={Boolean(nextWeekOcc?.occId)}
         onNextAppt={scrollToNextAppointment}
         onLogout={logout}
+        searchScope={searchScope}
+        onSearchScopeChange={(scope) => {
+          setSearchScope(scope === "all" ? "all" : "view");
+          setPatientSearch("");
+        }}
         searchValue={patientSearch}
         onSearchChange={setPatientSearch}
-        searchResults={patientSearchResults}
+        searchResults={searchScope === "all" ? allPatientsSearchResults : patientSearchResults}
         onSelectSearchItem={(it) => {
+          if (it?.kind === "patient" && it?.patientId) {
+            if (it?.action === "next" && it?.nextAppt?.isoDate && it?.nextAppt?.occurrenceId) {
+              const iso = String(it.nextAppt.isoDate);
+              const occId = String(it.nextAppt.occurrenceId);
+              router.push(`/profissional?view=day&date=${encodeURIComponent(iso)}&openOcc=${encodeURIComponent(occId)}`);
+              setPatientSearch("");
+              return;
+            }
+            setPatientProfilePatientId(String(it.patientId));
+            setPatientSearch("");
+            return;
+          }
           if (it?.isoDate) goDay(it.isoDate);
           setPatientSearch("");
         }}
@@ -1447,8 +1461,8 @@ const weekStats = useMemo(() => {
               aria-hidden="true"
             >
               <div className="relative">
-                <div className="absolute left-[72px] top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-rose-500 shadow-sm" />
-                <div className="ml-[72px] h-px bg-rose-500/80" />
+                <div className="absolute left-[72px] top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-pink-500 shadow-sm" />
+                <div className="ml-[72px] h-px bg-pink-500/80" />
               </div>
             </div>
           ) : null}
